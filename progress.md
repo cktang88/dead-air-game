@@ -51,3 +51,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Browser integration result: PASS, 64 seeds and retry case. `npm test`: 30 passed; `node --check` passed for `game.js`, `dungeon.js`, and the browser test module. Reloaded the game, started seed 417, and confirmed a valid 9-room floor.
 - The standalone Playwright client still cannot launch Chromium in this macOS sandbox (Mach port permission denied); the in-app browser ran the integration harness and game check instead.
 - Remaining core quality work: add distinct room roles/branch rewards, tune longer-run balance, improve workbench signaling and weapon-swap feedback, and strengthen gear variety and save controls.
+
+## Enemy projectile dodge tuning
+
+- Gunner rounds now travel at 190 world units per simulation second and Warden rounds at 215, down from a shared 340. This leaves each ranged class distinct while reducing the shot-to-player speed ratio from about 3× to about 1.7–1.9×.
+- Added a rule test that checks the post-launch sidestep distance at idle (0.18×) and action (1.32×) tempo from close range. Because the game scales both motion and projectile time together, the world-space dodge window stays the same at each tempo.
+- Reloaded the playable build in the in-app browser and launched seed 417 successfully. The standalone Playwright runner remains blocked by Chromium's macOS Mach-port permission failure.
+- Next: playtest ranged encounters and tune these values if the new response window makes fights too easy or still feels too tight.

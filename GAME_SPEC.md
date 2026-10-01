@@ -123,7 +123,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ## Combat readability and counterplay
 
 - Every actor carries a visible top-down weapon mesh that follows its aim direction. During reload, the weapon tilts visibly.
-- Ranged enemies telegraph a shot with an aim line, then fire along the direction they committed to at the start of the tell. This gives the player a dodge window in both idle slow time and action speed.
+- Ranged enemies telegraph a shot with an aim line, then fire along the direction they committed to at the start of the tell. Their slower rounds leave a dodge window after launch at both idle slow time and action speed.
 - Damage, stun, death, and other interruption should cancel an enemy's queued shot. Walls must block enemy line of sight and projectiles.
 - Longer playtesting should tune tell timing, enemy fire rhythm, and the visual readability of weapons at different zoom levels.
 

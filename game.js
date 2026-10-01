@@ -250,7 +250,7 @@ function playerShoot(){
   hud();state.lastAction=performance.now()/1000;
 }
 function enemyShoot(enemy,dx,dy){
-  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:340,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1);
+  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1);
 }
 function burst(x,y,color,count=10,power=1){
   for(let i=0;i<count;i++){const angle=random()*TAU,speed=(2+random()*8)*power,life=.18+random()*.4;const mesh=new THREE.Mesh(new THREE.BoxGeometry(rand(1.1,3.3),rand(1,3),rand(1,3)),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.95}));mesh.position.set(x,rand(1,5),y);scene.add(mesh);state.particles.push({mesh,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life,max:life,color});}

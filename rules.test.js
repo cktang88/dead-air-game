@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE_CARRY_CAPACITY, GUNS} from './catalog.js';
+import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
@@ -15,6 +15,20 @@ test('time is slow while waiting, fast during action, and held still in menus',(
   assert.equal(timeScale({...base,paused:true}),0);
   assert.equal(timeScale({...base,loadoutOpen:true}),0);
   assert.equal(timeScale({...base,mode:'dead'}),0);
+});
+
+test('ranged enemy shots leave time for a sidestep at idle and action tempo',()=>{
+  const playerSpeed=progressionStats(emptyProgress()).moveSpeed;
+  const ranged=[ENEMY_TYPES.gunner,ENEMY_TYPES.guard];
+  for(const enemy of ranged){
+    assert.ok(enemy.projectileSpeed<playerSpeed*2,`${enemy.name} rounds should stay below twice player speed`);
+    for(const scale of [.18,1.32]){
+      const projectileTravel=65-13-10;
+      const flightSeconds=projectileTravel/(enemy.projectileSpeed*scale);
+      const sidestep=playerSpeed*scale*flightSeconds;
+      assert.ok(sidestep>=18,`${enemy.name} should allow an 18-unit sidestep at ${scale}×`);
+    }
+  }
 });
 
 test('gun mods change the weapon values consumed by combat',()=>{
