@@ -25,3 +25,12 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Tune the weapon roster, throwable strength, enemy warning time, and rare merchant frequency in longer runs.
 - Add a deterministic seed test path; check wall and crate occlusion, dodges at both tempo speeds, merchant stock, and weight-limited purchases.
 - Add compact browser integration checks when the local browser test runner can launch in this environment.
+
+## Recent map and enemy AI update
+
+- ROT.js door tiles are kept as walkable openings, widened to two cells, and given visible lintels and posts. Straight generated halls widen from one tile to three tiles without cutting through room perimeter walls.
+- Close aligned rooms gain a short two-cell-wide shortcut through their shared wall or a one-tile connector; the original Digger halls remain as alternate routes. Disconnected floor is removed from the entry room's reachable component instead of being cut by a distance heuristic.
+- Ranged enemies now keep distance, strafe, retreat when pressured, seek protected positions while reloading or hurt, and flank when walls or smoke block sight. All enemy types predict nearby player shots and dodge into open space. Grid routing steers them around walls, crates, and pillars; pillars also block sight and bullets.
+- Added `layout.js` and `layout.test.js` for deterministic map shaping and route invariants, plus `enemy-tactics.js` and `enemy-tactics.test.js` for independently tested combat choices. `render_game_to_text` now includes each enemy's current tactical intent.
+- `node --check` passed for the changed JavaScript modules and `npm test` passed all 29 tests. The in-app browser rendered fresh generated floors after correcting a door-frame geometry typo; the latest check showed no new console errors. Playwright headless remains unavailable because Chromium cannot register its Mach port in this macOS sandbox.
+- Next: tune door/hall appearance and tactical movement after a longer browser play session; check that enemy routes remain fluid around busy rooms and that short room shortcuts occur often enough in generated floors.
