@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100e19" />
+    <title>DEAD AIR — Slowmo Dungeon</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <div id="game"></div>
+      <div id="vignette"></div>
+      <header id="topbar">
+        <div class="brand"><span class="brand-mark">✳</span> DEAD AIR <small>SECTOR 09</small></div>
+        <div id="room-name">FLOOR 01 · ENTRY</div>
+        <div id="run-clock">00:00</div>
+      </header>
+      <section id="hud" aria-live="polite">
+        <div class="vitals"><div class="eyebrow">VITALS</div><div id="health" class="hearts"></div></div>
+        <div class="gun-readout"><div class="eyebrow">WEAPON · <span id="gun-mods">BARE BONES</span></div><div id="gun-name">MACHINE PISTOL</div><div class="ammo"><span id="ammo">18 / 72</span><span id="weapon-note">FAST · CLOSE</span></div></div>
+        <div class="run-stats"><div class="eyebrow">RUN</div><div><span id="kills">00</span> KILLS <i>·</i> <span id="scrap">000</span> SCRAP</div><div class="eyebrow second">SECTOR <span id="sector-count">01 / 10</span></div></div>
+      </section>
+      <div id="tempo"><div class="tempo-dot"></div><span id="tempo-label">LISTENING</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span></div>
+      <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
+      <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
+      <div id="toast" role="status"></div>
+      <section id="overlay" class="show">
+        <div class="title-card">
+          <div class="eyebrow">A STOP-AND-GO DUNGEON SHOOTER</div>
+          <h1>DEAD<br /><em>AIR</em></h1>
+          <p>The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
+          <button id="start-button">ENTER THE SECTOR <span>↗</span></button>
+          <div class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / PICKUP</i></span><span>SHIFT <i>RELOAD</i></span><span>TAB <i>LOADOUT</i></span></div>
+        </div>
+      </section>
+      <section id="loadout" aria-hidden="true">
+        <div class="loadout-card">
+          <button id="close-loadout" class="close">×</button>
+          <div class="eyebrow">FIELD MODIFICATION STATION</div>
+          <h2>MAKE IT <em>YOURS.</em></h2>
+          <p class="loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
+          <div id="carry-readout" class="eyebrow"></div>
+          <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · PICK A GUN TO SWAP YOUR SECONDARY</div><div id="loadout-gun" class="loadout-gun"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
+          <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>1–2 SWITCH SLOTS &nbsp;·&nbsp; TAB TO RETURN</span></div>
+        </div>
+      </section>
+      <footer><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span>ESC PAUSE &nbsp; · &nbsp; F FULLSCREEN</span></footer>
+    </main>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
