@@ -43,15 +43,15 @@ export function chooseEnemyTactic({actor, target, canSee, projectiles = [], cove
 
   const ranged = actor.brain === 'shoot' || actor.brain === 'guard';
   const reloading = actor.reloadTimer > 0;
-  const hurt = actor.hp / actor.maxHp < 0.35;
-  if (ranged && (reloading || hurt)) {
+  const hurt = actor.hp / actor.maxHp < 0.45;
+  if (hurt || (ranged && reloading)) {
     const cover = covers.filter(point => point.protected && distance(actor, point) <= 200 && canMoveTo(point))
       .sort((a, b) => distance(actor, a) - distance(actor, b))[0];
     if (cover) return distance(actor, cover) < 12 ? hold(reloading ? 'reload' : 'cover') : {intent: 'cover', goal: {x: cover.x, y: cover.y}};
-    if (reloading && !canSee) return hold('reload');
+    if (ranged && reloading && !canSee) return hold('reload');
     const goal = offset(actor, forward, -55);
     if (canMoveTo(goal)) return {intent: reloading ? 'reload' : 'retreat', goal};
-    if (reloading) return hold('reload');
+    if (ranged && reloading) return hold('reload');
   }
 
   const separation = distance(actor, target);

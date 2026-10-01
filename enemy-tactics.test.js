@@ -40,10 +40,12 @@ test('reload seeks nearby protected cover and holds when it reaches safety', () 
   assert.deepEqual(decide({actor: {...reloading, x: 40, y: 40}, covers}), {intent: 'reload', goal: null});
 });
 
-test('injured ranged enemies seek cover while rushers continue closing', () => {
+test('injured enemies use cover or retreat; healthy rushers keep pressing', () => {
   const covers = [{x: -30, y: 20, protected: true}];
   assert.equal(decide({actor: {...actor, hp: 10}, covers}).intent, 'cover');
-  assert.deepEqual(decide({actor: {...actor, brain: 'rush', range: 19, hp: 10}, covers}), {intent: 'approach', goal: {x: 180, y: 0}});
+  assert.deepEqual(decide({actor: {...actor, brain: 'rush', range: 19, hp: 10}, covers}), {intent: 'cover', goal: {x: -30, y: 20}});
+  assert.deepEqual(decide({actor: {...actor, brain: 'rush', range: 19, hp: 10}}), {intent: 'retreat', goal: {x: -55, y: 0}});
+  assert.deepEqual(decide({actor: {...actor, brain: 'rush', range: 19}}), {intent: 'approach', goal: {x: 180, y: 0}});
 });
 
 test('ranged enemies flank blocked sight and spread across opposite sides', () => {

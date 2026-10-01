@@ -29,8 +29,8 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 
 ## Time and combat rules
 
-- Idle or careful aiming: 0.18× simulation speed.
-- Moving, firing, or recent action: 1.32× simulation speed.
+- Idle or careful aiming: 0.18× simulation speed, giving the player time to read threats and plan.
+- Moving, firing, or recent action: 1.32× simulation speed, raising pressure while the player acts.
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.
 - Bullets are physical projectiles with collision checks; walls block shots.
@@ -75,15 +75,15 @@ Use ROT.js Digger for room-and-corridor topology; this is already integrated. No
 
 Current enemy families are the Rusher, Gunner, Brute, and Warden. Expand behavior and tuning before adding many near-duplicates.
 
-- **Rusher:** pressures the player and punishes standing in a doorway too long.
+- **Rusher:** pressures the player and punishes standing in a doorway too long; seeks cover or retreats when badly hurt.
 - **Gunner:** fires readable ranged bursts and relocates when approached.
-- **Brute:** slow, high-health threat with a dangerous close-range attack; vulnerable to kiting and heavy weapons.
+- **Brute:** slow, high-health threat with a dangerous close-range attack; vulnerable to kiting and heavy weapons, and falls back when badly hurt.
 - **Warden:** guards a lane and adjusts distance to hold it.
 - **Later: Flanker:** seeks another route around cover; must telegraph entry.
 - **Later: Suppressor:** denies a corridor with a short volley; never fires continuously without a tell.
 - **Later: Room captain:** modifies nearby enemies or guards a high-value reward. Introduce one new mechanic per encounter.
 
-Room compositions should use a threat budget rather than an unbounded random count. Mix roles so a player must move: ranged threats behind cover, rushers that close gaps, and safe lanes that can be used for counterplay. Give every enemy a visible health/impact response and a short post-hit stagger where appropriate.
+Room compositions should use a threat budget rather than an unbounded random count. Mix roles so a player must move: ranged threats behind cover, no more than half the group rushing at once, and safe lanes that can be used for counterplay. Give every enemy a visible health/impact response and a short post-hit stagger where appropriate.
 
 ## Weapons, attachments, and carry weight
 

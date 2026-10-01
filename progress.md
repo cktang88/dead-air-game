@@ -58,3 +58,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added a rule test that checks the post-launch sidestep distance at idle (0.18×) and action (1.32×) tempo from close range. Because the game scales both motion and projectile time together, the world-space dodge window stays the same at each tempo.
 - Reloaded the playable build in the in-app browser and launched seed 417 successfully. The standalone Playwright runner remains blocked by Chromium's macOS Mach-port permission failure.
 - Next: playtest ranged encounters and tune these values if the new response window makes fights too easy or still feels too tight.
+
+## Time-flow clarity and enemy survival
+
+- Replaced the unclear tempo labels with `STILL · SLOW` and `ACTION · FAST`; added a persistent hint that stopping/releasing fire slows the world and moving/firing speeds it up. The title card teaches the same control. The displayed 0.16× is the player's Still Mind upgrade reducing the base idle rate from 0.18×.
+- Encounter composition now limits rushers (Rusher + Brute) to at most half of any group of two or more, guaranteeing ranged support in small combat groups.
+- Hurt enemies now seek reachable cover or retreat below 45% health, including melee rushers. Healthy melee enemies retain their aggressive role.
+- Added unit coverage for hundreds of seeded encounter mixes and injured/healthy enemy choices. Next: playtest how often hurt enemies break off and whether mixed enemy packs improve the pressure curve.

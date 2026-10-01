@@ -23,7 +23,7 @@
       </section>
       <div id="throwable-readout" aria-live="polite" aria-label="Selected throwable"></div>
       <div id="throwable-hint">Q SELECT &nbsp;·&nbsp; G THROW</div>
-      <div id="tempo"><div class="tempo-dot"></div><span id="tempo-label">LISTENING</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span></div>
+      <div id="tempo" title="The number is world speed: 1.00× is normal, 0.16× is very slow, and 1.32× is faster than normal. Stand still without firing to read threats and plan; move or fire to act."><div class="tempo-dot"></div><span id="tempo-label">STILL · SLOW</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span><small id="tempo-hint">WORLD SPEED · 1.00× = NORMAL · STOP TO PLAN</small></div>
       <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
       <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
       <div id="toast" role="status"></div>
@@ -32,6 +32,7 @@
           <div class="eyebrow">A STOP-AND-GO DUNGEON SHOOTER</div>
           <h1>DEAD<br /><em>AIR</em></h1>
           <p>The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
+          <p class="tempo-explainer">The speed number is world time: 1.00× is normal. Stand still without firing to read threats and plan; move or fire to act faster.</p>
           <label class="seed-control" for="seed-input">RUN SEED <input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
           <p id="run-result" hidden></p>
           <button id="start-button">ENTER THE SECTOR ↗</button>

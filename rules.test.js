@@ -88,6 +88,10 @@ test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{
   assert.notDeepEqual(chooseEncounterTypes(4,302),first);
   assert.equal(first.length,4);
   assert.ok(first.every(type=>['chaser','gunner','guard','brute'].includes(type)));
+  for(let count=2;count<=4;count++)for(let seed=1;seed<=256;seed++){
+    const encounter=chooseEncounterTypes(count,seed),rushers=encounter.filter(type=>type==='chaser'||type==='brute').length;
+    assert.ok(rushers<=Math.floor(count/2),`${count} enemies at seed ${seed} should include ranged support`);
+  }
 });
 
 test('crate durability loses health per hit and never drops below zero',()=>{

@@ -55,10 +55,23 @@ export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastA
 
 export function chooseEncounterTypes(count, seed) {
   const types=['chaser','gunner','guard','brute'];
+  const rushers=new Set(['chaser','brute']);
   let value=seed>>>0;
   const random=()=>{value=(Math.imul(value,1664525)+1013904223)>>>0;return value/0x100000000;};
   const result=[];
   for(let i=0;i<count;i++)result.push(types[Math.floor(random()*types.length)]);
   if(count>=3&&!result.includes('brute')&&seed%4===0)result[result.length-1]='brute';
+  if(count>=2){
+    let rushCount=result.filter(type=>rushers.has(type)).length;
+    let bruteCount=result.filter(type=>type==='brute').length;
+    const maxRushers=Math.floor(count/2);
+    for(let i=result.length-1;i>=0&&rushCount>maxRushers;i--){
+      if(!rushers.has(result[i]))continue;
+      if(result[i]==='brute'&&bruteCount<=1)continue;
+      if(result[i]==='brute')bruteCount--;
+      result[i]=random()<.5?'gunner':'guard';
+      rushCount--;
+    }
+  }
   return result;
 }
