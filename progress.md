@@ -12,6 +12,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate adds one health and competes with heavier weapon choices. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - Four enemy types, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
+- Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
 ## Verification
 
@@ -34,3 +35,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added `layout.js` and `layout.test.js` for deterministic map shaping and route invariants, plus `enemy-tactics.js` and `enemy-tactics.test.js` for independently tested combat choices. `render_game_to_text` now includes each enemy's current tactical intent.
 - `node --check` passed for the changed JavaScript modules and `npm test` passed all 29 tests. The in-app browser rendered fresh generated floors after correcting a door-frame geometry typo; the latest check showed no new console errors. Playwright headless remains unavailable because Chromium cannot register its Mach port in this macOS sandbox.
 - Next: tune door/hall appearance and tactical movement after a longer browser play session; check that enemy routes remain fluid around busy rooms and that short room shortcuts occur often enough in generated floors.
+
+## Seeded run update
+
+- Added a numeric seed field to the title and active-run header. Entering the same seed on another run selects the same ROT.js map RNG sequence; leaving it empty chooses a fresh seed.
+- Routed game randomness through ROT.js's existing seeded RNG so props, merchant placement, encounters, pickups, enemy direction/timing, combat rolls, and particles follow the run seed. The only remaining `Math.random()` call chooses a seed for unseeded runs.
+- Added range/whole-number validation tests for accepted seeds. `npm test` now passes 30 tests. Opened two browser runs with seed 417; both displayed the chosen seed and showed the same entry layout, with no console errors. The Playwright runner still cannot launch Chromium in this macOS sandbox.
+- Remaining core quality work: verify generated entry-to-exit connectivity over a batch of seeds, add distinct room roles/branch rewards, improve workbench signaling and weapon-swap feedback, and tune the full run through longer play.

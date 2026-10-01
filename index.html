@@ -12,7 +12,7 @@
       <div id="game"></div>
       <div id="vignette"></div>
       <header id="topbar">
-        <div class="brand"><span class="brand-mark">✳</span> DEAD AIR <small>SECTOR 09</small></div>
+        <div class="brand"><span class="brand-mark">✳</span> DEAD AIR <small>SEED <span id="seed-display">—</span></small></div>
         <div id="room-name">FLOOR 01 · ENTRY</div>
         <div id="run-clock">00:00</div>
       </header>
@@ -32,6 +32,7 @@
           <div class="eyebrow">A STOP-AND-GO DUNGEON SHOOTER</div>
           <h1>DEAD<br /><em>AIR</em></h1>
           <p>The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
+          <label class="seed-control" for="seed-input">RUN SEED <input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
           <p id="run-result" hidden></p>
           <button id="start-button">ENTER THE SECTOR ↗</button>
           <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">0</span> COINS</button>

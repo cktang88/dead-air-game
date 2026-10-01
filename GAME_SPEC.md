@@ -239,7 +239,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ### Next: finish core run quality
 
-- [ ] Add seed selection/display and deterministic placement for props, pickups, and enemy spawns.
+- [x] Add seed selection/display and deterministic placement for props, pickups, and enemy spawns.
 - [ ] Validate every room layout for a path from entry to exit and reachable doorways.
 - [ ] Add room roles, locked/reward doors, branch rooms, and one secret room type.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
