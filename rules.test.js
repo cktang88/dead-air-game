@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
+import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
@@ -53,6 +53,18 @@ test('gun mods change the weapon values consumed by combat',()=>{
   assert.equal(reloadSeconds(new Set()),1.65);
   assert.equal(reloadSeconds(new Set(['extended'])),1.85);
   assert.equal(reloadSeconds(new Set(['stabilizer'])),1.25);
+});
+
+test('the weighted ammo harness speeds reloads for every carried gun and stacks with mods',()=>{
+  const harness=GEAR.find(item=>item.id==='ammo-harness');
+  assert.ok(harness);
+  assert.equal(harness.weight,1);
+  assert.equal(harness.reloadMultiplier,.85);
+  for(const gun of GUNS){
+    const normal=reloadSeconds(new Set(),gun);
+    assert.ok(Math.abs(reloadSeconds(new Set(),gun,harness.reloadMultiplier)-normal*.85)<1e-10,`${gun.name} should reload 15% faster`);
+    if(gun.attachments.includes('stabilizer'))assert.ok(Math.abs(reloadSeconds(new Set(['stabilizer']),gun,harness.reloadMultiplier)-1.25*.85)<1e-10,`${gun.name} should combine the harness and stabilizer`);
+  }
 });
 
 test('the roster covers the requested classes with distinct, complete weapon profiles',()=>{

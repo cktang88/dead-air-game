@@ -117,7 +117,8 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ### Inventory behavior
 
 - The armor plate is implemented as a one-health buffer with 1.5 carry weight.
-- The gear screen previews total load, capacity, health change, and scrap cost before confirming an armor change.
+- The gear screen previews total load, capacity, health change, and scrap cost before confirming an armor or ammo-harness change.
+- The ammo harness weighs 1.0 and reduces manual and automatic reload time by 15% for either carried weapon; it competes with the 1.5-weight armor plate.
 - Permanent carry-rig upgrades increase capacity through metaprogression.
 - Decide whether temporary attachments have weight. If they do, show the added weight in the same total. Avoid hidden weight penalties.
 - Add a third weapon slot only as a later carry-rig unlock with a real weight and opportunity cost. Two slots are the default and should remain useful.
@@ -130,7 +131,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 - Smoke should break enemy sight/targeting. Flash should briefly stun enemies with line of sight. Frag should deal radial damage and knockback, with walls stopping the blast. Incendiary should create a timed damaging area.
 - `tactical.js` defines item stats, inventory consumption, radius checks, and occlusion rules with unit tests. Q cycles the selected throwable; G throws it with physics-based travel and a fuse.
 - Smoke blocks ranged enemies' sight, flash stuns, frag deals radial damage and knockback, and incendiary creates a timed damaging area. Walls and intact crates block direct effects.
-- A rare merchant room replaces its usual enemies with a shopkeeper. Its paused panel offers a gun, compatible attachment, armor, health, or throwable refill for scrap. Gun purchases replace the secondary and check carry capacity.
+- A rare merchant room replaces its usual enemies with a shopkeeper. Its paused panel offers a gun, compatible attachment, weighted gear, health, or throwable refill for scrap. Gun and gear purchases check carry capacity.
 
 ## Combat readability and counterplay
 
@@ -276,7 +277,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Add one armor plate with weight and a +1 health effect.
 - [x] Show weapons, armor, and total weight at the workbench; block overweight swaps.
-- [ ] Add a healing item, scanner, ammo harness, and armor durability.
+- [x] Add the ammo harness as weighted gear; it reduces reload time for both carried weapons.
+- [ ] Add a scanner and tune healing and armor durability as separate systems.
 - [x] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.

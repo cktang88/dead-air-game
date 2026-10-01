@@ -38,7 +38,8 @@ export const GUNS = [
 export const BASE_CARRY_CAPACITY = 7;
 
 export const GEAR = [
-  {id:'armor',name:'ARMOR PLATE',description:'+1 hit before the run ends',weight:1.5,cost:25},
+  {id:'armor',name:'ARMOR PLATE',description:'+1 hit before the run ends',weight:1.5,cost:25,healthBonus:1},
+  {id:'ammo-harness',name:'AMMO HARNESS',description:'Reload both weapons 15% faster',weight:1,cost:30,reloadMultiplier:.85},
 ];
 
 export const ENEMY_TYPES = {

@@ -11,6 +11,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate adds one health and competes with heavier weapon choices. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
+- The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
 - Four enemy types, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
@@ -18,6 +19,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - Firing uses the geometric mean of idle and normal time whether stationary or moving. At the default 0.18× idle rate, firing is about 0.42×; idle-only movement remains 1×.
 - Added regression cases for held fire with simultaneous movement, a recent movement action, and a metaprogression-adjusted idle rate. All 55 unit tests pass. In the live in-app browser, one shot changed the HUD from 0.18× to 0.42×. Playwright headless remains unavailable here because Chromium cannot register its Mach port in this macOS sandbox.
+- The ammo harness uses the gear carry slot, appears in the workbench preview, and applies its multiplier to both manual and empty-magazine reload paths. Its tests cover all 13 guns and stacking with the stabilizer attachment; `npm test` passes 59 tests. The live browser preview confirmed the 1.0-weight tradeoff and successful equip.
 
 - `node --check game.js`; `npm test` — 14 tests pass.
 - In-app browser at `http://127.0.0.1:8765/`: started a run, threw frag and incendiary, cycled throwables, moved and fired, opened the workbench, and bought an extended magazine. Scrap went from 40 to 5; magazine capacity rose from 18 to 27 (26 after firing).

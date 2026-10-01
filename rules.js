@@ -12,15 +12,18 @@ export function weaponStats(gun, mods) {
   };
 }
 
-export function reloadSeconds(mods, gun) {
+export function reloadSeconds(mods, gun, reloadMultiplier=1) {
+  let seconds=1.65;
   if (!gun) {
-    if (mods.has('stabilizer')) return 1.25;
-    return mods.has('extended') ? 1.85 : 1.65;
+    if(mods.has('stabilizer'))seconds=1.25;
+    else if(mods.has('extended'))seconds=1.85;
+  } else {
+    const compatible=new Set(gun.attachments||[]);
+    if(mods.has('stabilizer')&&compatible.has('stabilizer'))seconds=1.25;
+    else if(mods.has('extended')&&compatible.has('extended'))seconds=(gun.reload??1.65)*1.22;
+    else seconds=gun.reload??1.65;
   }
-  const compatible=new Set(gun?.attachments||[]);
-  if (mods.has('stabilizer')&&compatible.has('stabilizer')) return 1.25;
-  if (mods.has('extended')&&compatible.has('extended')) return (gun?.reload??1.65)*1.22;
-  return gun?.reload??(mods.has('extended')&&compatible.has('extended')?1.85:1.65);
+  return seconds*reloadMultiplier;
 }
 
 export function compatibleAttachments(gun, attachments) {
