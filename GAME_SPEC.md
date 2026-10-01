@@ -255,7 +255,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Add seed selection/display and deterministic placement for props, pickups, and enemy spawns.
 - [x] Validate every room layout for a path from entry to exit and reachable doorways. Browser integration checks cover 64 deterministic ROT.js seeds twice, plus the low-room-count larger-map retry.
 - [x] Add seeded room roles that change enemy counts and provide guaranteed cache, armory, and clinic rewards.
-- [ ] Add deliberate branch rooms, locked/reward doors, rest/miniboss rooms, and one secret room type.
+- [x] Detect rooms that can be bypassed on the entry-to-extraction route and prefer one for the cache; label it SIDE CACHE. If a generated floor has no bypassable room, place the cache in a reachable middle room.
+- [ ] Add locked/reward doors, rest/miniboss rooms, and one secret room type.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
 - [ ] Improve workbench signposting and add a preview before replacing a gun or gear item.
 - [ ] Add crate health feedback (small health state/crack stages), unique break sound, and confirm every room has at least one crate.

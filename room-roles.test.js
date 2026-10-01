@@ -30,6 +30,13 @@ test('short floors do not assign a middle role over entry or extraction',()=>{
   assert.deepEqual(roles,['entry','cache','extraction']);
 });
 
+test('the cache prefers a reachable room outside the entry-to-extraction route',()=>{
+  const branchRooms=rooms.map((room,index)=>({...room,branch:index===4}));
+  const assigned=assignRoomRoles(branchRooms,417);
+  assert.equal(assigned[4].role,'cache');
+  assert.equal(assigned.filter(room=>room.role==='cache').length,1);
+});
+
 test('room roles control safe rewards and combat pressure',()=>{
   assert.equal(roomEnemyCount('cache'),2);
   assert.equal(roomEnemyCount('clinic'),0);

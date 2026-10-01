@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
 
 const blank = (width, height) => Array.from({length:height}, () => Array(width).fill(1));
 const room = (x1,x2,y1,y2) => ({x1,x2,y1,y2});
@@ -77,6 +77,35 @@ test('replanning at each tile carries an enemy around a corner to its goal',()=>
     current=path[1];
   }
   assert.deepEqual(current,{x:5,y:3});
+});
+
+test('a branch room stays reachable while the entry-to-extraction route can avoid it',()=>{
+  const cells=blank(17,12);
+  const rooms=[
+    {...room(1,3,4,6),cx:2,cy:5},
+    {...room(7,9,4,6),cx:8,cy:5},
+    {...room(7,9,1,3),cx:8,cy:2},
+    {...room(13,15,4,6),cx:14,cy:5},
+  ];
+  for(const {x1,x2,y1,y2} of rooms)for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)cells[y][x]=0;
+  for(let x=4;x<=6;x++)cells[5][x]=0;
+  for(let x=10;x<=12;x++)cells[5][x]=0;
+  for(let y=3;y<=4;y++)cells[y][8]=0;
+
+  assert.deepEqual(roomsAvoidableOnRoute(cells,rooms),[2]);
+  assert.ok(shortestFloorPath(cells,{x:2,y:5},{x:14,y:5}).length>0,'the extraction route should bypass the optional room');
+  assert.ok(shortestFloorPath(cells,{x:2,y:5},{x:8,y:2}).length>0,'the optional room should remain reachable');
+});
+
+test('rooms on the only route to extraction are not marked optional',()=>{
+  const cells=blank(12,9),rooms=[
+    {...room(1,3,3,5),cx:2,cy:4},
+    {...room(5,7,3,5),cx:6,cy:4},
+    {...room(9,11,3,5),cx:10,cy:4},
+  ];
+  for(const {x1,x2,y1,y2} of rooms)for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)cells[y][x]=0;
+  for(let x=4;x<=8;x++)cells[4][x]=0;
+  assert.deepEqual(roomsAvoidableOnRoute(cells,rooms),[]);
 });
 
 test('L, U, and C rooms carve different outlines while keeping their centers and doors connected',()=>{

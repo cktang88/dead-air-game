@@ -1,4 +1,4 @@
-import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
 import {assignRoomRoles} from './room-roles.js';
 
 const ROOM_NAMES = ['ENTRY', 'FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
@@ -37,10 +37,11 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       .sort((a, b) => a.pathLength - b.pathLength);
 
     if (rooms.length < 6) continue;
-    const roleRooms=assignRoomRoles(rooms,seed);
+    const branchRooms=new Set(roomsAvoidableOnRoute(shaped.cells,rooms));
+    const roleRooms=assignRoomRoles(rooms.map((room,index)=>({...room,branch:branchRooms.has(index)})),seed);
     roleRooms[0].name = 'ENTRY';
     roleRooms[0].visited = true;
-    for(const room of roleRooms.slice(1,-1))if(room.role!=='combat')room.name=({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX'})[room.role];
+    for(const room of roleRooms.slice(1,-1))if(room.role!=='combat')room.name=({cache:room.branch?'SIDE CACHE':'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX'})[room.role];
     roleRooms.at(-1).name='EXTRACTION';
     return {cells: shaped.cells, doors: shaped.doors, rooms:roleRooms, start: roleRooms[0], width: mapWidth, height: mapHeight};
   }

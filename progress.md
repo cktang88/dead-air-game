@@ -112,3 +112,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Room names identify special roles in the HUD. The integration harness now checks role stability and reserved entry/extraction while keeping its 64-seed route checks.
 - Verification: `npm test` passes 41 tests. The browser generation harness passes across 64 seeds and the fallback map, checking reachable role rooms and reward tiles clear of props. Seed 417 starts in the in-app browser with no console errors. Full combat and role-reward collection still need a longer playtest.
 - Next: validate reward spawn placement in all generated room shapes, then add intentional branch and secret-room topology or tune role frequency and enemy budgets.
+
+## Optional cache branch rooms
+
+- Mark rooms optional only when a floor route to extraction still exists with that room's full bounds blocked. This keeps the cache off the required route while preserving a walkable branch; the cache falls back to a reachable middle room if no bypass exists.
+- The special-room HUD name is `SIDE CACHE` when its cache occupies a bypassable room.
+- Verification: the generated-floor browser harness passes 64 seeded maps twice each plus the fallback map. All 64 seeds had a bypassable branch, and every cache used one; deterministic markers, routes, rewards, and doors passed. `npm test` passes 44 tests, including bypass and sole-route cases. JavaScript syntax and diff checks pass.
+- Tempo follow-up: confirmed sustained mouse fire keeps `input.firing` true between automatic shots, and the time-scale rule stays at `sqrt(idleScale)` (about 0.42× at 0.18× idle); movement remains 1×. `npm test` includes the tempo test and passes.
+- Next: playtest tempo feel and cache branch reward collection during a longer run; locked reward doors, rest/miniboss rooms, and secrets remain unimplemented.

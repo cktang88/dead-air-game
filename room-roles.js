@@ -18,7 +18,9 @@ export function assignRoomRoles(rooms,seed){
   if(!middle.length)return roles;
   const utilityCount=Math.min(UTILITY_ROLES.length,Math.floor(Math.max(0,middle.length-2)/2));
   const selectedRoles=['cache',...shuffled(UTILITY_ROLES,seed).slice(0,utilityCount)];
-  selectedRoles.forEach((role,index)=>{roles[middle[index]].role=role;});
+  const branchRooms=middle.filter(index=>roles[index].branch),cacheIndex=branchRooms.length?shuffled(branchRooms,seed)[0]:middle[0];
+  const roleRooms=[cacheIndex,...middle.filter(index=>index!==cacheIndex).slice(0,utilityCount)];
+  selectedRoles.forEach((role,index)=>{roles[roleRooms[index]].role=role;});
   return roles;
 }
 

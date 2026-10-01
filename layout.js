@@ -149,3 +149,11 @@ export function shortestFloorPath(cells, start, goal, canPass = (x, y) => isWalk
   }
   return path.reverse();
 }
+
+export function roomsAvoidableOnRoute(cells,rooms){
+  if(rooms.length<3)return [];
+  const start={x:rooms[0].cx,y:rooms[0].cy},exit={x:rooms.at(-1).cx,y:rooms.at(-1).cy};
+  return rooms.map((room,index)=>({room,index})).filter(({room,index})=>index>0&&index<rooms.length-1&&
+    shortestFloorPath(cells,start,exit,(x,y)=>cells[y]?.[x]===0&&
+      (x<room.x1||x>room.x2||y<room.y1||y>room.y2)).length>0).map(({index})=>index);
+}
