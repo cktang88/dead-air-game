@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#100e19" />
     <title>DEAD AIR — Slowmo Dungeon</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=2" />
   </head>
   <body>
     <main id="game-shell">
@@ -21,6 +21,8 @@
         <div class="gun-readout"><div class="eyebrow">WEAPON · <span id="gun-mods">BARE BONES</span></div><div id="gun-name">MACHINE PISTOL</div><div class="ammo"><span id="ammo">18 / 72</span><span id="weapon-note">FAST · CLOSE</span></div></div>
         <div class="run-stats"><div class="eyebrow">RUN</div><div><span id="kills">00</span> KILLS <i>·</i> <span id="scrap">000</span> SCRAP</div><div class="eyebrow second">SECTOR <span id="sector-count">01 / 10</span></div></div>
       </section>
+      <div id="throwable-readout" aria-live="polite" aria-label="Selected throwable"></div>
+      <div id="throwable-hint">Q SELECT &nbsp;·&nbsp; G THROW</div>
       <div id="tempo"><div class="tempo-dot"></div><span id="tempo-label">LISTENING</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span></div>
       <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
       <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
@@ -53,6 +55,16 @@
           <div id="carry-readout" class="eyebrow"></div>
           <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · PICK A GUN TO SWAP YOUR SECONDARY</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
           <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>1–2 SWITCH SLOTS &nbsp;·&nbsp; TAB TO RETURN</span></div>
+        </div>
+      </section>
+      <section id="merchant-panel" class="merchant-panel" hidden aria-hidden="true" aria-labelledby="merchant-title" role="dialog" aria-modal="true">
+        <div class="merchant-card">
+          <button id="close-merchant" class="close" type="button" aria-label="Close merchant">×</button>
+          <div class="eyebrow">RARE FIELD TRADER · RUN SCRAP</div>
+          <h2 id="merchant-title">BLACK <em>MARKET.</em></h2>
+          <p class="merchant-copy">Spend scrap to prepare for the next room.</p>
+          <div id="merchant-stock" class="merchant-stock" aria-live="polite"></div>
+          <div class="merchant-footer">E OR ESC TO LEAVE</div>
         </div>
       </section>
       <footer><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span>ESC PAUSE &nbsp; · &nbsp; F FULLSCREEN</span></footer>

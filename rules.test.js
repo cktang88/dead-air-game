@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, GUNS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, damageDurability, reloadSeconds, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('time is slow while waiting, fast during action, and held still in menus',()=>{
@@ -25,11 +25,47 @@ test('gun mods change the weapon values consumed by combat',()=>{
   assert.equal(upgraded.magazine,27);
   assert.equal(upgraded.damage,29.700000000000003);
   assert.equal(upgraded.fireRate,0.1394);
-  assert.equal(upgraded.projectileSpeed,745.2);
+  assert.equal(upgraded.projectileSpeed,690);
+  assert.equal(upgraded.range,GUNS[0].range*1.35);
   assert.equal(upgraded.spread,0.0385);
   assert.equal(reloadSeconds(new Set()),1.65);
   assert.equal(reloadSeconds(new Set(['extended'])),1.85);
   assert.equal(reloadSeconds(new Set(['stabilizer'])),1.25);
+});
+
+test('the roster covers the requested classes with distinct, complete weapon profiles',()=>{
+  const counts=Object.groupBy(GUNS,gun=>gun.category);
+  assert.equal(counts['ASSAULT RIFLE'].length,3);
+  assert.equal(counts.SMG.length,4);
+  assert.equal(counts.PISTOL.length,2);
+  assert.equal(counts.SNIPER.length+counts['ANTI-MATERIEL'].length,3);
+  assert.equal(new Set(GUNS.map(gun=>gun.id)).size,GUNS.length);
+  for(const gun of GUNS){
+    for(const field of ['damage','rate','speed','range','mag','reserve','spread','reload','weight','color'])
+      assert.ok(Number.isFinite(gun[field])&&gun[field]>0,`${gun.id} needs positive ${field}`);
+    assert.ok(gun.visual.length>0&&gun.visual.width>0,`${gun.id} needs a readable weapon profile`);
+    assert.ok(gun.attachments.length>0,`${gun.id} needs compatible attachments`);
+    assert.ok(gun.attachments.every(id=>['extended','suppressor','hollow','stabilizer','longbarrel'].includes(id)));
+  }
+  assert.deepEqual(GUNS.slice(0,3).map(gun=>gun.id),['machine','shotgun','rifle']);
+  assert.ok(new Set(GUNS.map(gun=>`${gun.damage}/${gun.rate}/${gun.mag}/${gun.spread}`)).size===GUNS.length,
+    'each gun should have its own combat tradeoff profile');
+});
+
+test('attachment compatibility gates the actual weapon stats and shop options',()=>{
+  const mule=GUNS.find(gun=>gun.id==='sniper_mule');
+  const owned=new Set(['extended','hollow','longbarrel','suppressor']);
+  const stats=weaponStats(mule,owned);
+  assert.equal(stats.magazine,mule.mag,'Mule cannot take an extended magazine');
+  assert.equal(stats.damage,mule.damage*1.35);
+  assert.equal(stats.spread,mule.spread,'Mule cannot take a suppressor');
+  assert.equal(stats.projectileSpeed,mule.speed);
+  assert.equal(stats.range,mule.range*1.35);
+  assert.deepEqual(compatibleAttachments(mule,[
+    {id:'extended'},{id:'hollow'},{id:'suppressor'},{id:'longbarrel'}
+  ]).map(item=>item.id),['hollow','longbarrel']);
+  assert.equal(reloadSeconds(new Set(),mule),mule.reload);
+  assert.equal(reloadSeconds(new Set(['stabilizer']),GUNS[0]),1.25);
 });
 
 test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{
@@ -47,6 +83,14 @@ test('crate durability loses health per hit and never drops below zero',()=>{
   hp=damageDurability(hp,50);
   assert.equal(hp,0);
   assert.equal(damageDurability(60,-10),60);
+});
+
+test('cover circles intersect a sight or blast path, including endpoints and edge contact',()=>{
+  const start={x:0,y:0},end={x:100,y:0};
+  assert.equal(segmentIntersectsCircle(start,end,{x:50,y:15},15),true);
+  assert.equal(segmentIntersectsCircle(start,end,{x:50,y:16},15),false);
+  assert.equal(segmentIntersectsCircle(start,end,{x:108,y:0},8),true);
+  assert.equal(segmentIntersectsCircle(start,end,{x:50,y:1},-1),false);
 });
 
 test('weapon choices use a visible carry budget',()=>{

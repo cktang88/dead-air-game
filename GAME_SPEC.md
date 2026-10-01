@@ -89,10 +89,10 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 ### Current weapon baseline
 
-- Machine pistol: fast, light, short range.
-- Street Sweeper: wide, heavy, close range.
-- Hardline rifle: precise, heavier, longer range.
-- Attachments change magazine size, reload, spread, damage, projectile speed, or penetration. They cost run scrap today.
+- The catalog now defines 13 guns: three assault rifles, four SMGs (including the original machine pistol), two pistols, three precision/anti-materiel rifles, and one shotgun.
+- Gun definitions have distinct fire stats, weight, ammo, and visual dimensions. These catalog entries exist, but they are not all reachable or fully integrated into combat/loadout yet.
+- Five attachment definitions exist, and each gun lists which attachment IDs it accepts. Per-gun installed attachment state, compatibility filtering in the interface, and firing/reload effects remain to be integrated.
+- The implemented run still starts with the original machine pistol and Street Sweeper. The Hardline rifle remains in the current workbench/pickup flow.
 
 ### Inventory rules
 
@@ -102,14 +102,30 @@ Room compositions should use a threat budget rather than an unbounded random cou
 - Show slot, weapon, ammo, per-item weight, total weight, and capacity. Explain an overweight selection directly.
 - The capacity is an intentional tradeoff: leave weight free for armor or utility gear once those systems exist. Do not silently discard gear when swapping a weapon.
 
-### Next inventory milestones
+### Inventory behavior
 
-- Add armor and gear items with explicit weight and one clear effect each: armor plate (health buffer), utility belt (extra consumables), scanner (room preview), or ammo harness (reserve capacity).
+- The armor plate is implemented as a one-health buffer with 1.5 carry weight.
 - A gear screen should compare total load to capacity before confirming a swap.
-- Add permanent carry-rig upgrades through metaprogression. Start with +1 capacity per tier and a small maximum; test whether it meaningfully opens different builds.
+- Permanent carry-rig upgrades increase capacity through metaprogression.
 - Decide whether temporary attachments have weight. If they do, show the added weight in the same total. Avoid hidden weight penalties.
 - Add a third weapon slot only as a later carry-rig unlock with a real weight and opportunity cost. Two slots are the default and should remain useful.
-- Add weapons with distinct tactical identity before increasing the catalog size. Prefer one strong choice per role over many stat-only variants.
+- The 13 catalogued guns are selectable, have independent ammunition and distinct combat profiles, and declare their compatible attachments.
+- Attachments belong to individual guns. The workbench shows only compatible attachments and applies magazine, damage, fire-rate, spread, range, penetration, and reload changes.
+
+## Tactical items and merchants
+
+- Planned throwables: smoke, flash, frag, and incendiary. Each should have a visible throw arc/landing point, fuse, effect radius, inventory count, and clear area feedback.
+- Smoke should break enemy sight/targeting. Flash should briefly stun enemies with line of sight. Frag should deal radial damage and knockback, with walls stopping the blast. Incendiary should create a timed damaging area.
+- `tactical.js` defines item stats, inventory consumption, radius checks, and occlusion rules with unit tests. Q cycles the selected throwable; G throws it with physics-based travel and a fuse.
+- Smoke blocks ranged enemies' sight, flash stuns, frag deals radial damage and knockback, and incendiary creates a timed damaging area. Walls and intact crates block direct effects.
+- A rare merchant room replaces its usual enemies with a shopkeeper. Its paused panel offers a gun, compatible attachment, armor, health, or throwable refill for scrap. Gun purchases replace the secondary and check carry capacity.
+
+## Combat readability and counterplay
+
+- Every actor carries a visible top-down weapon mesh that follows its aim direction. During reload, the weapon tilts visibly.
+- Ranged enemies telegraph a shot with an aim line, then fire along the direction they committed to at the start of the tell. This gives the player a dodge window in both idle slow time and action speed.
+- Damage, stun, death, and other interruption should cancel an enemy's queued shot. Walls must block enemy line of sight and projectiles.
+- Longer playtesting should tune tell timing, enemy fire rhythm, and the visual readability of weapons at different zoom levels.
 
 ## Loot and room rewards
 
@@ -213,7 +229,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Browser playable with Three.js rendering, Rapier 2D physics, and ROT.js room generation.
 - [x] Idle/action tempo shift, aim, fire, reload, pause, and restart.
-- [x] Three distinct guns and five temporary attachments.
+- [ ] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into gameplay; distinct catalog stats are present.
+- [x] Apply compatible attachments per weapon; restrict workbench options and retain attachments when switching guns.
 - [x] Primary and secondary slots; `1` / `2` switching; weapon weight and capacity at the workbench.
 - [x] Four enemy roles, knockback, hit stop, screen shake, particles, and short corpse slide.
 - [x] Multi-room run, minimap, loot, room clear reward, and extraction.
@@ -248,6 +265,14 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
 - [ ] Make weapon pickups accept, swap, or decline without losing items or ammo.
 
+### Combat and run services
+
+- [x] Add visible player/enemy weapons that track aim and tilt during reload.
+- [x] Add enemy aim telegraphs and committed projectile directions so shots can be dodged at both tempo speeds.
+- [x] Connect smoke, flash, frag, and incendiary throwables to input, counts, physics, effects, and enemy behavior.
+- [x] Add rare shopkeeper rooms and scrap purchases for guns, per-gun attachments, armor/health, and throwable refills.
+- [ ] Playtest and tune line of sight, enemy interruptions, throw fuses, rare shop frequency, and carry limits.
+
 ### Next: polish and maintainability
 
 - [ ] Split seeded map generation from the renderer once it has its own tested inputs/outputs.
@@ -259,4 +284,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate luck, and carry capacity. Next work is richer weighted gear, deterministic room validation, and sound/accessibility polish.
+A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, and carry capacity. Remaining work focuses on balance, repeated-run testing, and the other roadmap items above.
