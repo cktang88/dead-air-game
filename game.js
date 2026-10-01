@@ -6,6 +6,7 @@ import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDura
 import {META_UPGRADES, awardCoins, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout, SAVE_KEY} from './progression.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
@@ -134,11 +135,13 @@ function makeLevel(){
   const pillarGeo=new THREE.CylinderGeometry(7,8,11,6);const pillarMat=new THREE.MeshStandardMaterial({color:0x36313f,roughness:.8});
   for(const room of state.rooms){
     const center={x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE};
-    spawnCrate((room.x1+1)*TILE+TILE/2,(room.y1+1)*TILE+TILE/2);
-    for(let i=0;i<Math.floor((room.x2-room.x1)*(room.y2-room.y1)/95);i++){
-      const px=rand(room.x1+1,room.x2)*TILE,pz=rand(room.y1+1,room.y2)*TILE;if(Math.hypot(px-center.x,pz-center.y)<60)continue;
-      if(random()<.25){const p=new THREE.Mesh(pillarGeo,pillarMat);p.position.set(Math.round(px/TILE)*TILE,5.5,Math.round(pz/TILE)*TILE);scene.add(p);state.props.push(p);state.colliders.push({body:makeBody({x:p.position.x,y:p.position.z},7,true)});state.cover.push({x:p.position.x,y:p.position.z,radius:9,kind:'pillar'});}
-      else if(random()<.78)spawnCrate(Math.round(px/TILE)*TILE+TILE/2,Math.round(pz/TILE)*TILE+TILE/2);
+    const pickRoomProp=()=>findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:state.cover,tileSize:TILE,random});
+    const guaranteedCrate=pickRoomProp();
+    if(guaranteedCrate)spawnCrate(guaranteedCrate.x,guaranteedCrate.y);
+    for(let i=0;i<Math.floor((room.x2-room.x1)*(room.y2-room.y1)/52);i++){
+      const position=pickRoomProp();if(!position)continue;
+      if(random()<.3){const p=new THREE.Mesh(pillarGeo,pillarMat);p.position.set(position.x,5.5,position.y);scene.add(p);state.props.push(p);state.colliders.push({body:makeBody({x:position.x,y:position.y},7,true)});state.cover.push({x:position.x,y:position.y,radius:9,kind:'pillar'});}
+      else if(random()<.9)spawnCrate(position.x,position.y);
     }
   }
   const merchantRoom=state.rooms.find(room=>room.merchant);if(merchantRoom)makeMerchantVisual((merchantRoom.cx+.5)*TILE,(merchantRoom.cy+.5)*TILE);
@@ -147,8 +150,8 @@ function makeLevel(){
     if(room.merchant)continue;
     const count=2+Math.floor(random()*3),encounter=chooseEncounterTypes(count,state.seed+i*7919);
     for(let j=0;j<count;j++){
-      const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
-      spawnEnemy(encounter[j],x,y);
+      const point=findEnemySpawn(room,encounter[j]);
+      if(point)spawnEnemy(encounter[j],point.x,point.y);
     }
     if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
     if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE);}
@@ -204,6 +207,21 @@ function spawnCrate(x,y){
   physics.createCollider(RAPIER.ColliderDesc.cuboid(12,12),body);state.colliders.push({body});
   const crate={x,y,hp:60,maxHp:60,mesh,body,cracked:false};state.crates.push(crate);state.cover.push({x,y,radius:17,kind:'crate',crate});return crate;
 }
+function findEnemySpawn(room,type){
+  const radius=type==='brute'?10:8;
+  const clear=(x,y)=>state.tileMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]===0&&
+    state.doors.every(door=>Math.hypot(x-(door.x+.5)*TILE,y-(door.y+.5)*TILE)>=TILE*1.2)&&
+    !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
+    !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+(enemy.type==='brute'?10:8)+4);
+  for(let attempt=0;attempt<48;attempt++){
+    const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
+    if(clear(x,y))return {x,y};
+  }
+  for(let ty=room.y1+1;ty<=room.y2;ty++)for(let tx=room.x1+1;tx<=room.x2;tx++){
+    const x=(tx+.5)*TILE,y=(ty+.5)*TILE;if(clear(x,y))return {x,y};
+  }
+  return null;
+}
 function crackCrate(crate){
   const points=[new THREE.Vector3(-8,7,-12),new THREE.Vector3(-2,7,-2),new THREE.Vector3(-6,7,3),new THREE.Vector3(1,7,12)];
   const crack=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0x211a19}));
@@ -257,7 +275,7 @@ function burst(x,y,color,count=10,power=1){
 }
 function disposeObject(object){scene.remove(object);object.traverse(child=>{child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose();});}
 function killEnemy(enemy,bullet){
-  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.aimLine.visible=false;disposeObject(enemy.aimLine);enemy.body.setLinvel({x:bullet.vx*.17,y:bullet.vy*.17},true);enemy.hp=0;
+  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.aimLine.visible=false;disposeObject(enemy.aimLine);for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);enemy.body.setLinvel({x:bullet.vx*.17,y:bullet.vy*.17},true);enemy.hp=0;
   enemy.mesh.userData.body.rotation.z=Math.PI/2;enemy.mesh.userData.body.material.color.setHex(0x542d42);enemy.mesh.userData.body.material.emissive.setHex(0x260d1a);enemy.mesh.userData.body.material.transparent=true;enemy.mesh.userData.body.material.opacity=.76;
   state.kills++;state.scrap+=6+Math.floor(random()*8);state.shake=Math.max(state.shake,3.8);state.hitstop=.045;burst(enemy.x,enemy.y,enemy.def.color,17,1.4);
   if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
@@ -376,14 +394,15 @@ function routedEnemyGoal(e,goal){
   const start={x:Math.floor(e.x/TILE),y:Math.floor(e.y/TILE)},end={x:Math.floor(goal.x/TILE),y:Math.floor(goal.y/TILE)};
   if(start.x===end.x&&start.y===end.y)return goal;
   const path=shortestFloorPath(state.tileMap,start,end,(x,y)=>enemyPassableTile(e,x,y));
-  if(path.length<2)return goal;
+  if(path.length===0)return null;
+  if(path.length===1)return goal;
   const next=path[1];return {x:(next.x+.5)*TILE,y:(next.y+.5)*TILE};
 }
 function updateEnemies(dt){
   const player=state.player;
   const playerShots=state.bullets.filter(b=>b.owner==='player');
   for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.fire-=dt;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
-    const ranged=e.def.brain==='shoot'||e.def.brain==='guard',actor={x:e.x,y:e.y,brain:e.def.brain,range:e.def.range,hp:e.hp,maxHp:e.maxHp,reloadTimer:e.reloadTimer,side:e.side,radius:e.type==='brute'?10:8};
+    const ranged=e.def.brain==='shoot'||e.def.brain==='guard',actor={x:e.x,y:e.y,brain:e.def.brain,minRange:e.def.minRange,range:e.def.range,hp:e.hp,maxHp:e.maxHp,reloadTimer:e.reloadTimer,side:e.side,radius:e.type==='brute'?10:8};
     e.tacticTimer-=dt;
     if(e.tacticTimer<=0||hasIncomingProjectile(actor,playerShots)){
       const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y);
@@ -395,10 +414,15 @@ function updateEnemies(dt){
       const tactic=chooseEnemyTactic({actor,target:{x:player.x,y:player.y},canSee,projectiles:playerShots,covers,canMoveTo:goal=>enemyCanMoveTo(e,goal)});
       if(tactic.intent==='dodge'||e.tacticTimer<=0){e.intent=tactic.intent;e.intentGoal=tactic.goal;e.navGoal=tactic.intent==='dodge'?tactic.goal:routedEnemyGoal(e,tactic.goal);e.tacticTimer=tactic.intent==='dodge'?.14:.42;}
     }
-    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),canAcquire=ranged&&d<e.def.range&&canSee&&e.reloadTimer<=0;
+    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),canAcquire=ranged&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
     let vx=0,vy=0;
-    if(e.navGoal){const gx=e.navGoal.x-e.x,gy=e.navGoal.y-e.y,length=Math.hypot(gx,gy);if(length>9){vx=gx/length*e.def.speed;vy=gy/length*e.def.speed;}else e.navGoal=null;}
-    if(e.aimTimer>0){e.aimTimer-=dt;const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;if(e.aimTimer<=0){e.aimTimer=0;e.aimLine.visible=false;if(e.stun<=0){enemyShoot(e,e.aim.x,e.aim.y);e.ammo--;}if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;e.fire=0;}else e.fire=e.def.brain==='guard'?rand(1.7,2.7):rand(1.1,2.2);}}
+    if(e.intentGoal&&e.navGoal&&Math.hypot(e.navGoal.x-e.x,e.navGoal.y-e.y)<=10){
+      if(Math.hypot(e.intentGoal.x-e.x,e.intentGoal.y-e.y)<=14){e.intentGoal=null;e.navGoal=null;}
+      else e.navGoal=routedEnemyGoal(e,e.intentGoal);
+    }
+    if(e.intentGoal&&!e.navGoal)e.navGoal=routedEnemyGoal(e,e.intentGoal);
+    if(e.navGoal){const gx=e.navGoal.x-e.x,gy=e.navGoal.y-e.y,length=Math.hypot(gx,gy);if(length>9){vx=gx/length*e.def.speed;vy=gy/length*e.def.speed;}else if(!e.intentGoal)e.navGoal=null;}
+    if(e.aimTimer>0){e.aimTimer-=dt;const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;if(e.aimTimer<=0){e.aimTimer=0;e.aimLine.visible=false;const fired=e.stun<=0&&d>=e.def.minRange&&d<e.def.range&&canSee;if(fired){enemyShoot(e,e.aim.x,e.aim.y);e.ammo--;}if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;e.fire=0;}else e.fire=fired?(e.def.brain==='guard'?rand(1.7,2.7):rand(1.1,2.2)):.18;}}
     else if(canAcquire&&e.fire<=0&&e.stun<=0){e.aim={x:nx,y:ny};e.aimTimer=e.def.brain==='guard'?.62:.48;}
     if(e.stun>0){vx=0;vy=0;e.navGoal=null;e.aimTimer=0;e.aimLine.visible=false;}
     for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}

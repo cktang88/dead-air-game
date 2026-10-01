@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
 
-const actor = {x: 0, y: 0, brain: 'shoot', range: 300, hp: 52, maxHp: 52, reloadTimer: 0, side: 1};
+const actor = {x: 0, y: 0, brain: 'shoot', minRange: 100, range: 300, hp: 52, maxHp: 52, reloadTimer: 0, side: 1};
 const decide = overrides => chooseEnemyTactic({actor, target: {x: 180, y: 0}, canSee: true, ...overrides});
 
 test('dodges a predicted hit before movement or reload and chooses an open escape side', () => {
@@ -58,8 +58,11 @@ test('ranged enemies flank blocked sight and spread across opposite sides', () =
 });
 
 test('range bands retreat, advance, and strafe; blocked lateral paths hold', () => {
-  assert.equal(decide({target: {x: 60, y: 0}}).intent, 'retreat');
-  assert.equal(decide({target: {x: 400, y: 0}}).intent, 'approach');
+  const tooClose=decide({target:{x:60,y:0}});
+  assert.equal(tooClose.intent,'retreat');
+  assert.ok(Math.hypot(tooClose.goal.x-60,tooClose.goal.y)>100,'retreat should restore the minimum firing gap');
+  assert.equal(decide({target:{x:400,y:0}}).intent,'approach');
+  assert.equal(decide({target:{x:140,y:0}}).intent,'strafe');
   assert.equal(decide({}).intent, 'strafe');
   assert.deepEqual(decide({canMoveTo: () => false}), {intent: 'hold', goal: null});
 });

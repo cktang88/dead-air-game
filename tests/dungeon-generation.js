@@ -10,7 +10,7 @@ const stableMap = dungeon => JSON.stringify({
   height: dungeon.height,
   cells: dungeon.cells,
   doors: dungeon.doors,
-  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name})),
+  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape})),
 });
 
 try {
@@ -25,6 +25,8 @@ try {
       throw new Error(`Seed ${seed} produced an invalid map boundary`);
     }
     if (dungeon.rooms.length < 6) throw new Error(`Seed ${seed} produced fewer than six reachable rooms`);
+    if (!dungeon.rooms.some(room => room.shape !== 'rectangle')) throw new Error(`Seed ${seed} produced only rectangular rooms`);
+    if (dungeon.rooms.some(room => !['rectangle','L','U','C'].includes(room.shape))) throw new Error(`Seed ${seed} has an unknown room shape`);
 
     const entry = dungeon.rooms[0];
     const exit = dungeon.rooms[dungeon.rooms.length - 1];

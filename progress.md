@@ -71,3 +71,19 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Reviewed SUPERHOT Team interviews and the GDC session summary. The developers describe the core as fluid turn-based action in which the player controls the pace; its strongest combat moments come from readable enemy aim, dodging, close spaces, and improvising with available items.
 - Added design guidance to `GAME_SPEC.md`: preserve player-paced time, visible threat tells, improvisational rooms, close but legible spaces, and tactical AI that cannot stall encounters by hiding forever.
 - The existing build already has idle/action time states, visible enemy aim lines, fixed-path dodgeable bullets, cover seeking, and low-health retreat. This comparison does not call for copying SUPERHOT's FPS controls or treating its enemy AI as a realistic self-preservation model.
+
+## Ranged spacing, routes, and room cover
+
+- Ranged roles now have explicit engagement bands: Gunners hold 105–300 world units; Wardens hold 88–210. They retreat or sidestep inside their minimum range, and they do not start or finish a shot outside their firing band. Rushers and Brutes remain melee.
+- Enemies now advance their route goal when they reach each tile waypoint instead of waiting for the next tactical decision before moving again. This reuses the existing grid search; a new pathfinding library was not needed for these small maps.
+- Dead enemies keep their short visual corpse animation, but Rapier colliders are disabled on death so bullets and actors pass through them.
+- Room prop placement now adds more crates and pillars, avoids the center, doors, and existing cover, snaps props to tile centers, and avoids spawning enemies inside props or doorways.
+- Added tests for ranged minimum/maximum ranges, following a route around a blocking corner, and seeded cover placement/clearance. `npm test` passes 34 tests; `node --check` and `git diff --check` pass. In-app browser seed 417 rendered successfully with no browser console errors; long combat playtest is still limited by the headless Chromium launch restriction.
+- Next: playtest more seeds and check whether ranged units reliably hold their ranges while enemies route around the denser cover.
+
+## Varied room outlines and enemy navigation follow-up
+
+- Room generation now assigns deterministic rectangular, L, U, and C footprints. The start room stays rectangular; other shapes keep their center clear and protect doorway approaches so connected rooms remain reachable.
+- Increased crate and pillar placement while selecting legal floor tiles away from doors, the center, and existing cover. Enemy spawns also avoid those obstructions.
+- Enemies continue along grid waypoints around corners; ranged enemies maintain their minimum and maximum firing distances; dead enemies no longer block bullets or actors.
+- Verification: `npm test` passes 35 tests; JavaScript syntax checks and `git diff --check` pass. The browser generation harness passes 64 deterministic seeds (generated twice each) plus the low-room-count fallback.

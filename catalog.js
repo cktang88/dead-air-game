@@ -43,7 +43,7 @@ export const GEAR = [
 
 export const ENEMY_TYPES = {
   chaser:{name:'RUSHER', color:0xe95563, hp:42, speed:72, damage:1, range:19, brain:'rush'},
-  gunner:{name:'GUNNER', color:0xe9a45a, hp:52, speed:40, damage:1, range:300, projectileSpeed:190, brain:'shoot'},
+  gunner:{name:'GUNNER', color:0xe9a45a, hp:52, speed:40, damage:1, minRange:105, range:300, projectileSpeed:190, brain:'shoot'},
   brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush'},
-  guard:{name:'WARDEN', color:0x58aeca, hp:65, speed:28, damage:1, range:210, projectileSpeed:215, brain:'guard'},
+  guard:{name:'WARDEN', color:0x58aeca, hp:65, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
 };

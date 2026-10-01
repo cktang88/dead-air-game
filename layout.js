@@ -51,6 +51,32 @@ function openCloseRoomLinks(cells, rooms, doors) {
   }
 }
 
+function carveRoomOutlines(cells, rooms, doors, seed, start) {
+  const roomShapes=[];
+  for(const [roomOrder,room] of rooms.entries()){
+    const index=room.index??roomOrder,cx=room.cx??Math.floor((room.x1+room.x2)/2),cy=room.cy??Math.floor((room.y1+room.y2)/2);
+    let shape='rectangle';
+    if(cx!==start.x||cy!==start.y){
+      const variant=((seed>>>0)+index*3)%5;
+      shape=variant<2?'rectangle':['L','U','C'][variant-2];
+    }
+    roomShapes.push({index,shape});
+    if(shape==='rectangle')continue;
+    const midX=Math.floor((room.x1+room.x2)/2),midY=Math.floor((room.y1+room.y2)/2);
+    for(let y=room.y1;y<=room.y2;y++)for(let x=room.x1;x<=room.x2;x++){
+      if(cells[y]?.[x]!==0||Math.hypot(x-midX,y-midY)<1.5)continue;
+      if(doors.some(door=>Math.hypot(x-door.x,y-door.y)<2))continue;
+      const cut=shape==='L'
+        ?x>midX&&y>midY
+        :shape==='U'
+          ?Math.abs(x-midX)<=1&&y<midY
+          :x>midX&&Math.abs(y-midY)<=1;
+      if(cut)cells[y][x]=1;
+    }
+  }
+  return roomShapes;
+}
+
 function widenCorridors(cells, rooms) {
   const source = cells.map(row => row.slice());
   const height = cells.length, width = cells[0]?.length || 0;
@@ -78,7 +104,7 @@ function reachableCells(cells, start) {
   return seen;
 }
 
-export function shapeDungeon(input, rooms, start) {
+export function shapeDungeon(input, rooms, start, seed=0) {
   const cells = input.map(row => row.slice());
   const doors = [];
   const originalDoors = [];
@@ -91,6 +117,7 @@ export function shapeDungeon(input, rooms, start) {
     carveDoor(cells, x, y, horizontal ? 'y' : 'x', 'corridor', doors);
   }
   openCloseRoomLinks(cells, rooms, doors);
+  const roomShapes=carveRoomOutlines(cells,rooms,doors,seed,start);
   widenCorridors(cells, rooms);
   const reachable = reachableCells(cells, start);
   for (let y = 0; y < cells.length; y++) for (let x = 0; x < cells[y].length; x++) {
@@ -98,7 +125,7 @@ export function shapeDungeon(input, rooms, start) {
     else if (cells[y][x] === 2) cells[y][x] = 0;
   }
   const usableDoors = doors.filter(door => reachable.has(`${Math.floor(door.x)},${Math.floor(door.y)}`));
-  return {cells, doors:usableDoors};
+  return {cells, doors:usableDoors, roomShapes};
 }
 
 export function shortestFloorPath(cells, start, goal, canPass = (x, y) => isWalkable(cells[y]?.[x])) {

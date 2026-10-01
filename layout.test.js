@@ -66,3 +66,34 @@ test('enemy navigation can route around blocking cover while keeping the destina
   assert.ok(path.every(point=>!blocked(point.x,point.y)));
   assert.ok(path.some(point=>point.y===0||point.y===6));
 });
+
+test('replanning at each tile carries an enemy around a corner to its goal',()=>{
+  const cells=Array.from({length:7},()=>Array(7).fill(0));
+  const blocked=(x,y)=>x===3&&y>=1&&y<=5;
+  let current={x:1,y:3};
+  for(let step=0;step<20&&(current.x!==5||current.y!==3);step++){
+    const path=shortestFloorPath(cells,current,{x:5,y:3},(x,y)=>cells[y]?.[x]===0&&!blocked(x,y));
+    assert.ok(path.length>1,'each waypoint should have a next step');
+    current=path[1];
+  }
+  assert.deepEqual(current,{x:5,y:3});
+});
+
+test('L, U, and C rooms carve different outlines while keeping their centers and doors connected',()=>{
+  const seeds={L:4,U:0,C:1};
+  for(const [expected,seed] of Object.entries(seeds)){
+    const cells=blank(18,12),rooms=[
+      {...room(2,7,2,9),cx:4,cy:5,index:0},
+      {...room(9,14,2,9),cx:11,cy:5,index:1},
+    ];
+    for(let y=2;y<=9;y++)for(let x=2;x<=7;x++)cells[y][x]=0;
+    for(let y=2;y<=9;y++)for(let x=9;x<=14;x++)cells[y][x]=0;
+    const before=cells.slice(3,9).reduce((count,row)=>count+row.slice(10,14).filter(value=>value===0).length,0);
+    const result=shapeDungeon(cells,rooms,{x:4,y:5},seed);
+    const after=result.cells.slice(3,9).reduce((count,row)=>count+row.slice(10,14).filter(value=>value===0).length,0);
+    assert.equal(result.roomShapes.find(item=>item.index===1).shape,expected);
+    assert.ok(after<before,`${expected} should remove part of the rectangular floor`);
+    assert.equal(result.cells[5][11],0,`${expected} should keep the room center open`);
+    assert.ok(shortestFloorPath(result.cells,{x:4,y:5},{x:11,y:5}).length>0,`${expected} should retain its door route`);
+  }
+});

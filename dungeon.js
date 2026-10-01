@@ -23,11 +23,13 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
     const start = generatedRooms.reduce((best, room) =>
       Math.hypot(room.cx - mapWidth / 2, room.cy - mapHeight / 2) < Math.hypot(best.cx - mapWidth / 2, best.cy - mapHeight / 2) ? room : best,
     generatedRooms[0]);
-    const shaped = shapeDungeon(cells, generatedRooms, {x: start.cx, y: start.cy});
+    const shaped = shapeDungeon(cells, generatedRooms, {x: start.cx, y: start.cy}, seed);
+    const roomShapes=new Map(shaped.roomShapes.map(item=>[item.index,item.shape]));
     const rooms = generatedRooms
       .filter(room => shaped.cells[room.cy]?.[room.cx] === 0)
       .map(room => ({
         ...room,
+        shape:roomShapes.get(room.index)||'rectangle',
         pathLength: shortestFloorPath(shaped.cells, {x: start.cx, y: start.cy}, {x: room.cx, y: room.cy}).length,
       }))
       .filter(room => room.pathLength > 0)

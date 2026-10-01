@@ -56,13 +56,19 @@ export function chooseEnemyTactic({actor, target, canSee, projectiles = [], cove
 
   const separation = distance(actor, target);
   if (!ranged) return separation <= actor.range ? hold('attack') : {intent: 'approach', goal: {x: target.x, y: target.y}};
+  const minRange = actor.minRange ?? actor.range * 0.42;
+  if (separation < minRange) {
+    const retreat = offset(actor, forward, -(minRange - separation + 40));
+    if (canMoveTo(retreat)) return {intent: 'retreat', goal: retreat};
+    for (const sign of [1, -1]) {
+      const sidestep = offset(actor, perpendicular, sign * 48);
+      if (canMoveTo(sidestep)) return {intent: 'retreat', goal: sidestep};
+    }
+    return hold('hold');
+  }
   if (!canSee) {
     const flank = offset(offset(target, forward, -actor.range * 0.6), perpendicular, 75);
     return {intent: 'flank', goal: canMoveTo(flank) ? flank : {x: target.x, y: target.y}};
-  }
-  if (separation < actor.range * 0.42) {
-    const retreat = offset(actor, forward, -55);
-    if (canMoveTo(retreat)) return {intent: 'retreat', goal: retreat};
   }
   if (separation > actor.range * 0.82) return {intent: 'approach', goal: offset(target, forward, -actor.range * 0.65)};
   for (const sign of [1, -1]) {

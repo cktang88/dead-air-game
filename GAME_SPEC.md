@@ -49,6 +49,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
 - Each room gets a role: combat, cache, armory, clinic, hazard, rest, miniboss, or extraction. Roles affect enemy budget, props, lights, and loot.
 - Combat room size and enemy budget scale with distance from entry. A room may be small and dangerous or large with scattered guards.
+- Room footprints vary between rectangles and L, U, or C outlines. Keep the center and door approaches clear, and preserve a walkable route between all connected rooms.
 - Prevent spawning enemies, pickups, crates, or the player inside solid walls or on top of another required object.
 - Seed generation for reproducible bug reports and automated checks. Display the run seed on the result screen.
 
@@ -86,14 +87,14 @@ Use ROT.js Digger for room-and-corridor topology; this is already integrated. No
 Current enemy families are the Rusher, Gunner, Brute, and Warden. Expand behavior and tuning before adding many near-duplicates.
 
 - **Rusher:** pressures the player and punishes standing in a doorway too long; seeks cover or retreats when badly hurt.
-- **Gunner:** fires readable ranged bursts and relocates when approached.
+- **Gunner:** fires readable ranged bursts from 105–300 world units and retreats or sidesteps if the player closes inside its minimum range.
 - **Brute:** slow, high-health threat with a dangerous close-range attack; vulnerable to kiting and heavy weapons, and falls back when badly hurt.
-- **Warden:** guards a lane and adjusts distance to hold it.
+- **Warden:** guards a lane and fires from 88–210 world units, adjusting distance to hold that band.
 - **Later: Flanker:** seeks another route around cover; must telegraph entry.
 - **Later: Suppressor:** denies a corridor with a short volley; never fires continuously without a tell.
 - **Later: Room captain:** modifies nearby enemies or guards a high-value reward. Introduce one new mechanic per encounter.
 
-Room compositions should use a threat budget rather than an unbounded random count. Mix roles so a player must move: ranged threats behind cover, no more than half the group rushing at once, and safe lanes that can be used for counterplay. Give every enemy a visible health/impact response and a short post-hit stagger where appropriate.
+Room compositions should use a threat budget rather than an unbounded random count. Mix roles so a player must move: ranged threats behind cover, no more than half the group rushing at once, and safe lanes that can be used for counterplay. Ranged enemies define both a minimum and maximum firing range; melee enemies close to their contact range. Give every enemy a visible health/impact response and a short post-hit stagger where appropriate. Navigation should keep following tile routes around cover instead of stopping at each waypoint, and prop/spawn placement must leave doors and paths open.
 
 ## Weapons, attachments, and carry weight
 
@@ -245,6 +246,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Four enemy roles, knockback, hit stop, screen shake, particles, and short corpse slide.
 - [x] Multi-room run, minimap, loot, room clear reward, and extraction.
 - [x] Room props include permanent cover and health-based destructible crates.
+- [x] Procedural rooms include rectangular, L, U, and C floor plans while preserving door links and room centers.
 - [x] Small pure rules module and Node unit tests.
 
 ### Next: finish core run quality
