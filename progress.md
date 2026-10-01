@@ -41,4 +41,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added a numeric seed field to the title and active-run header. Entering the same seed on another run selects the same ROT.js map RNG sequence; leaving it empty chooses a fresh seed.
 - Routed game randomness through ROT.js's existing seeded RNG so props, merchant placement, encounters, pickups, enemy direction/timing, combat rolls, and particles follow the run seed. The only remaining `Math.random()` call chooses a seed for unseeded runs.
 - Added range/whole-number validation tests for accepted seeds. `npm test` now passes 30 tests. Opened two browser runs with seed 417; both displayed the chosen seed and showed the same entry layout, with no console errors. The Playwright runner still cannot launch Chromium in this macOS sandbox.
-- Remaining core quality work: verify generated entry-to-exit connectivity over a batch of seeds, add distinct room roles/branch rewards, improve workbench signaling and weapon-swap feedback, and tune the full run through longer play.
+- Remaining core quality work: add distinct room roles/branch rewards, improve workbench signaling and weapon-swap feedback, and tune the full run through longer play.
+
+## Real dungeon generation verification
+
+- Extracted the production ROT.js Digger pipeline into `dungeon.js`, shared by game runs and the browser integration check. It keeps the existing seeded settings, shapes/widens rooms and halls, filters unreachable rooms, and retries once with a larger map when fewer than six rooms survive. A second failure now reports a clear error instead of recursing forever.
+- Added `tests/dungeon-generation.html` and `tests/dungeon-generation.js`. They load the same ROT.js 2.1.3 browser import as the game and run the production generator across 64 deterministic seeds twice each. Checks compare serialized maps, verify map bounds, route every room center and extraction from entry, and confirm each returned doorway is walkable.
+- Forced a low-room-count first attempt (48×38) to cover the retry branch; it passed on the expected 108×82 fallback.
+- Browser integration result: PASS, 64 seeds and retry case. `npm test`: 30 passed; `node --check` passed for `game.js`, `dungeon.js`, and the browser test module. Reloaded the game, started seed 417, and confirmed a valid 9-room floor.
+- The standalone Playwright client still cannot launch Chromium in this macOS sandbox (Mach port permission denied); the in-app browser ran the integration harness and game check instead.
+- Remaining core quality work: add distinct room roles/branch rewards, tune longer-run balance, improve workbench signaling and weapon-swap feedback, and strengthen gear variety and save controls.

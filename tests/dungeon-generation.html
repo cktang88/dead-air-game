@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DEAD AIR dungeon generation checks</title>
+    <style>
+      body { margin: 2rem; background: #100e19; color: #eee8df; font: 16px/1.5 ui-monospace, monospace; }
+      h1 { color: #f5cb76; } pre { white-space: pre-wrap; }
+      .pass { color: #70e5b2; } .fail { color: #ed5a68; }
+    </style>
+  </head>
+  <body>
+    <h1>Generated floor integration checks</h1>
+    <p>Runs the production dungeon generator with ROT.js across a deterministic seed set.</p>
+    <pre id="result" aria-live="polite">Running…</pre>
+    <script type="module" src="./dungeon-generation.js"></script>
+  </body>
+</html>

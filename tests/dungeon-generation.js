@@ -1,0 +1,57 @@
+import * as ROT from 'https://esm.sh/rot-js@2.1.3';
+import {generateDungeon} from '../dungeon.js';
+import {shortestFloorPath} from '../layout.js';
+
+const result = document.querySelector('#result');
+const seeds = Array.from({length: 64}, (_, index) => 1 + index * 3571);
+const isFloor = (cells, x, y) => cells[y]?.[x] === 0;
+const stableMap = dungeon => JSON.stringify({
+  width: dungeon.width,
+  height: dungeon.height,
+  cells: dungeon.cells,
+  doors: dungeon.doors,
+  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name})),
+});
+
+try {
+  let largestRoomCount = 0;
+  let largestMap = '';
+  let largestArea = 0;
+  for (const seed of seeds) {
+    const dungeon = generateDungeon(ROT, seed);
+    const secondRun = generateDungeon(ROT, seed);
+    if (stableMap(dungeon) !== stableMap(secondRun)) throw new Error(`Seed ${seed} did not reproduce the same map`);
+    if (dungeon.cells.length !== dungeon.height || dungeon.cells.some(row => row.length !== dungeon.width)) {
+      throw new Error(`Seed ${seed} produced an invalid map boundary`);
+    }
+    if (dungeon.rooms.length < 6) throw new Error(`Seed ${seed} produced fewer than six reachable rooms`);
+
+    const entry = dungeon.rooms[0];
+    const exit = dungeon.rooms[dungeon.rooms.length - 1];
+    for (const room of dungeon.rooms) {
+      if (!isFloor(dungeon.cells, room.cx, room.cy)) throw new Error(`Seed ${seed} has a blocked room center`);
+      const path = shortestFloorPath(dungeon.cells, {x: entry.cx, y: entry.cy}, {x: room.cx, y: room.cy});
+      if (path.length === 0 || path.length !== room.pathLength) throw new Error(`Seed ${seed} has an unreachable or mismeasured room route`);
+    }
+    const exitPath = shortestFloorPath(dungeon.cells, {x: entry.cx, y: entry.cy}, {x: exit.cx, y: exit.cy});
+    if (exitPath.length === 0) throw new Error(`Seed ${seed} has no route to its extraction room`);
+    for (const door of dungeon.doors) {
+      if (!isFloor(dungeon.cells, Math.floor(door.x), Math.floor(door.y))) throw new Error(`Seed ${seed} has a blocked door tile`);
+    }
+    largestRoomCount = Math.max(largestRoomCount, dungeon.rooms.length);
+    if (dungeon.width * dungeon.height > largestArea) {
+      largestArea = dungeon.width * dungeon.height;
+      largestMap = `${dungeon.width}×${dungeon.height}`;
+    }
+  }
+  const fallback = generateDungeon(ROT, 417, 48, 38);
+  if (fallback.width !== 108 || fallback.height !== 82) throw new Error('A map with too few initial rooms did not retry at the larger size');
+  if (fallback.rooms.length < 6 || shortestFloorPath(fallback.cells, {x:fallback.rooms[0].cx,y:fallback.rooms[0].cy}, {x:fallback.rooms.at(-1).cx,y:fallback.rooms.at(-1).cy}).length === 0) {
+    throw new Error('The larger fallback map did not preserve the extraction route');
+  }
+  result.className = 'pass';
+  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
+} catch (error) {
+  result.className = 'fail';
+  result.textContent = `FAIL\n${error.stack || error.message}`;
+}

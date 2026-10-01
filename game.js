@@ -6,6 +6,7 @@ import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDura
 import {META_UPGRADES, awardCoins, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout, SAVE_KEY} from './progression.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 
@@ -96,24 +97,10 @@ function makeDoorFrames(){
   }
 }
 function createRoomMap(){
-  ROT.RNG.setSeed(state.seed);
-  const generator=new ROT.Map.Digger(state.mapW,state.mapH,{roomWidth:[10,22],roomHeight:[9,18],corridorLength:[3,8],dugPercentage:0.29});
-  const cells=Array.from({length:state.mapH},()=>Array(state.mapW).fill(1));
-  generator.create((x,y,value)=>{cells[y][x]=value;});
-  let rooms=generator.getRooms().map((room,index)=>{
-    const [cx,cy]=room.getCenter();
-    return {cx,cy,x1:room.getLeft(),x2:room.getRight(),y1:room.getTop(),y2:room.getBottom(),index,name:['ENTRY','FURNACE','THE GALLERY','COLD STORAGE','RED HALL','MOTOR POOL','THE VAULT','NIGHT SHIFT'][index%8],cleared:false,visited:false};
-  });
-  const start=rooms.reduce((best,r)=>Math.hypot(r.cx-state.mapW/2,r.cy-state.mapH/2)<Math.hypot(best.cx-state.mapW/2,best.cy-state.mapH/2)?r:best,rooms[0]);
-  const shaped=shapeDungeon(cells,rooms,{x:start.cx,y:start.cy});
-  rooms=rooms.filter(room=>shaped.cells[room.cy]?.[room.cx]===0)
-    .map(room=>({...room,pathLength:shortestFloorPath(shaped.cells,{x:start.cx,y:start.cy},{x:room.cx,y:room.cy}).length}))
-    .filter(room=>room.pathLength>0)
-    .sort((a,b)=>a.pathLength-b.pathLength);
-  state.tileMap=shaped.cells;state.doors=shaped.doors;
-  state.rooms=rooms;
-  if(state.rooms.length<6){state.mapW=108;state.mapH=82;return createRoomMap();}
-  state.rooms[0].name='ENTRY'; state.rooms[0].visited=true; state.currentRoom=0;
+  const dungeon=generateDungeon(ROT,state.seed);
+  state.tileMap=dungeon.cells;state.doors=dungeon.doors;
+  state.mapW=dungeon.width;state.mapH=dungeon.height;
+  state.rooms=dungeon.rooms;state.currentRoom=0;
   state.rooms.forEach(room=>room.merchant=false);
   const merchantRooms=state.rooms.map((room,index)=>({room,index})).filter(item=>item.index>=2&&item.index<state.rooms.length-1);
   if(merchantRooms.length&&random()<.18){const {room}=choose(merchantRooms);room.merchant=true;room.name='BLACK MARKET';room.stock=[];}
