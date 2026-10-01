@@ -47,10 +47,17 @@ export function canCarryWeapons(weapons, guns, capacity) {
   return weaponLoadoutWeight(weapons, guns) <= capacity;
 }
 
-export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, idleScale = 0.18}) {
+export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, lastActionKind = 'other', idleScale = 0.18}) {
   if (mode !== 'play' || paused || loadoutOpen) return 0;
-  if (moving || firing || now - lastAction < 0.35) return 1.32;
-  return idleScale;
+  const stillScale = Math.max(0, Math.min(1, idleScale));
+  const firingScale = Math.sqrt(stillScale);
+  if (moving) return 1;
+  if (firing) return firingScale;
+  if (now - lastAction < 0.35) {
+    if (lastActionKind === 'move') return 1;
+    if (lastActionKind === 'fire') return firingScale;
+  }
+  return stillScale;
 }
 
 export function chooseEncounterTypes(count, seed) {

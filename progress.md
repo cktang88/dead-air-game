@@ -5,7 +5,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Current playable build
 
 - Three.js renders the arena; Rapier 2D handles actor, cover, wall, and projectile physics; ROT.js Digger generates connected rooms and halls.
-- Waiting slows the simulation; moving or firing speeds it up. Menus pause the run.
+- Waiting slows the simulation; movement runs at 1.00× and firing alone blends idle and normal time. Menus pause the run.
 - Thirteen guns cover 3 assault rifles, 4 SMGs, 2 pistols, 3 sniper/anti-materiel rifles, and 1 shotgun. Two weighted slots keep independent ammunition. Attachments are compatible per gun and affect the active gun only.
 - Player and enemy weapons visibly follow aim. Player reload and enemy reload poses tilt their weapons. Ranged enemies show a committed direction before shooting; their bullets travel on that fixed path and can be dodged.
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
@@ -55,7 +55,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Enemy projectile dodge tuning
 
 - Gunner rounds now travel at 190 world units per simulation second and Warden rounds at 215, down from a shared 340. This leaves each ranged class distinct while reducing the shot-to-player speed ratio from about 3× to about 1.7–1.9×.
-- Added a rule test that checks the post-launch sidestep distance at idle (0.18×) and action (1.32×) tempo from close range. Because the game scales both motion and projectile time together, the world-space dodge window stays the same at each tempo.
+- Added a rule test that checks the post-launch sidestep distance at idle (0.18×) and then-current action (1.32×) tempo from close range. Because the game scales both motion and projectile time together, the world-space dodge window stays the same at each tempo.
 - Reloaded the playable build in the in-app browser and launched seed 417 successfully. The standalone Playwright runner remains blocked by Chromium's macOS Mach-port permission failure.
 - Next: playtest ranged encounters and tune these values if the new response window makes fights too easy or still feels too tight.
 
@@ -87,3 +87,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Increased crate and pillar placement while selecting legal floor tiles away from doors, the center, and existing cover. Enemy spawns also avoid those obstructions.
 - Enemies continue along grid waypoints around corners; ranged enemies maintain their minimum and maximum firing distances; dead enemies no longer block bullets or actors.
 - Verification: `npm test` passes 35 tests; JavaScript syntax checks and `git diff --check` pass. The browser generation harness passes 64 deterministic seeds (generated twice each) plus the low-room-count fallback.
+
+## Player-paced firing tempo
+
+- Movement now runs at 1.00×. Firing alone uses the geometric mean of idle time and normal speed (about 0.42× at the default 0.18× idle rate), so automatic fire stays slower than normal. Moving and firing together stays at 1.00×.
+- The short post-input grace preserves each action's tempo: a released shot stays at firing speed briefly, while releasing movement returns to idle after its brief grace period. Other actions no longer trigger full-speed time.
+- Updated the tempo meter, tooltip, title instructions, and spec to explain all three speeds. Added unit checks for simultaneous movement/fire, recent fire/movement, and meta-upgrade idle rates.
+- Verification: `npm test` passes 35 tests, including dodge windows at idle, firing, and movement rates; syntax and diff checks pass. The preview loads the new instructions, but Playwright gameplay capture is blocked by Chromium's macOS Mach-port permission error.
+- Next: playtest the new firing pace and report any feel changes before further tuning.

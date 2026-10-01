@@ -4,14 +4,19 @@ import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
-test('time is slow while waiting, fast during action, and held still in menus',()=>{
+test('movement runs at normal speed, firing blends idle and normal time, and menus pause',()=>{
   const base={mode:'play',paused:false,loadoutOpen:false,moving:false,firing:false,now:10,lastAction:5};
   assert.equal(timeScale(base),0.18);
-  assert.equal(timeScale({...base,moving:true}),1.32);
-  assert.equal(timeScale({...base,firing:true}),1.32);
-  assert.equal(timeScale({...base,lastAction:9.8}),1.32);
+  assert.equal(timeScale({...base,moving:true}),1);
+  assert.equal(timeScale({...base,firing:true}),Math.sqrt(.18));
+  assert.equal(timeScale({...base,moving:true,firing:true}),1);
+  assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'move'}),1);
+  assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'fire'}),Math.sqrt(.18));
+  assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'other'}),.18);
   assert.equal(timeScale({...base,lastAction:9.5}),0.18);
-  assert.equal(timeScale({...base,idleScale:0.15}),0.15);
+  assert.equal(timeScale({...base,idleScale:0.15,firing:true}),Math.sqrt(.15));
+  assert.equal(timeScale({...base,idleScale:.12,firing:true}),Math.sqrt(.12));
+  assert.equal(timeScale({...base,idleScale:.18,firing:true,lastAction:9.9,lastActionKind:'fire'}),Math.sqrt(.18));
   assert.equal(timeScale({...base,paused:true}),0);
   assert.equal(timeScale({...base,loadoutOpen:true}),0);
   assert.equal(timeScale({...base,mode:'dead'}),0);
@@ -23,7 +28,7 @@ test('ranged enemy shots leave time for a sidestep at idle and action tempo',()=
   for(const enemy of ranged){
     assert.ok(enemy.minRange>0&&enemy.minRange<enemy.range,`${enemy.name} needs a useful minimum and maximum firing range`);
     assert.ok(enemy.projectileSpeed<playerSpeed*2,`${enemy.name} rounds should stay below twice player speed`);
-    for(const scale of [.18,1.32]){
+    for(const scale of [.18,Math.sqrt(.18),1]){
       const projectileTravel=65-13-10;
       const flightSeconds=projectileTravel/(enemy.projectileSpeed*scale);
       const sidestep=playerSpeed*scale*flightSeconds;
