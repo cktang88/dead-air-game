@@ -259,7 +259,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Add locked/reward doors, rest/miniboss rooms, and one secret room type.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
 - [ ] Improve workbench signposting and add a preview before replacing a gun or gear item.
-- [ ] Add crate health feedback (small health state/crack stages), unique break sound, and confirm every room has at least one crate.
+- [x] Give every room a safely placed destructible crate. Show its remaining health on hit, deepen crack marks at damage thresholds, and remove its collision plus leave a scrap chance when it breaks.
+- [ ] Add a unique crate-break sound.
 - [x] Show extraction or death, rooms cleared, kills, and coins earned.
 
 ### Next: account and metaprogression

@@ -32,6 +32,12 @@ export function damageDurability(current, damage) {
   return Math.max(0, current - Math.max(0, damage));
 }
 
+export function crateDamageStage(hp, maxHp) {
+  if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) return 2;
+  const ratio=Math.max(0,Math.min(1,hp/maxHp));
+  return ratio<=.35?2:ratio<=.7?1:0;
+}
+
 export function segmentIntersectsCircle(start, end, center, radius) {
   if (![start.x,start.y,end.x,end.y,center.x,center.y,radius].every(Number.isFinite)||radius<0) return false;
   const dx=end.x-start.x,dy=end.y-start.y,lengthSquared=dx*dx+dy*dy;

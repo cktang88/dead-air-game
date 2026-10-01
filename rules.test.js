@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('movement runs at normal speed, firing blends idle and normal time, and menus pause',()=>{
@@ -107,6 +107,15 @@ test('crate durability loses health per hit and never drops below zero',()=>{
   hp=damageDurability(hp,50);
   assert.equal(hp,0);
   assert.equal(damageDurability(60,-10),60);
+});
+
+test('crate damage stages progress at clear health thresholds and clamp invalid ratios',()=>{
+  assert.equal(crateDamageStage(60,60),0);
+  assert.equal(crateDamageStage(42,60),1);
+  assert.equal(crateDamageStage(21,60),2);
+  assert.equal(crateDamageStage(100,60),0);
+  assert.equal(crateDamageStage(-4,60),2);
+  assert.equal(crateDamageStage(10,0),2);
 });
 
 test('cover circles intersect a sight or blast path, including endpoints and edge contact',()=>{

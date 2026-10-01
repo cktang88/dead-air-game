@@ -2,11 +2,11 @@ import * as THREE from 'https://esm.sh/three@0.180.0';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, TAU, TILE, WALL_H} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout, SAVE_KEY} from './progression.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon, shortestFloorPath} from './layout.js';
-import {findRoomPropPosition} from './room-props.js';
+import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
 import {roomEnemyCount, roomPickupKinds} from './room-roles.js';
@@ -142,6 +142,10 @@ function placeRoleRewards(room){
     reserved.push({...point,radius:18});
   }
 }
+function findRoomCratePosition(room){
+  const occupied=[...state.cover,...state.pickups.map(pickup=>({...pickup,radius:18}))];
+  return findGuaranteedRoomCratePosition({room,cells:state.tileMap,doors:state.doors,occupied,tileSize:TILE,random});
+}
 function createRoomMap(){
   const dungeon=generateDungeon(ROT,state.seed);
   state.tileMap=dungeon.cells;state.doors=dungeon.doors;
@@ -177,12 +181,14 @@ function makeLevel(){
     makeFixedBox(run.x*TILE+width/2,run.y*TILE+TILE/2,width/2,TILE/2);
   });wallMesh.instanceMatrix.needsUpdate=true;scene.add(wallMesh);state.walls.push(wallMesh);
   makeDoorFrames();
-  for(const room of state.rooms)placeRoleRewards(room);
   const pillarGeo=new THREE.CylinderGeometry(7,8,11,6);const pillarMat=new THREE.MeshStandardMaterial({color:0x36313f,roughness:.8});
   for(const room of state.rooms){
+    const point=findRoomCratePosition(room);
+    if(!point)throw new Error(`Room ${room.index} has no safe crate position`);
+    spawnCrate(point.x,point.y);placeRoleRewards(room);
+  }
+  for(const room of state.rooms){
     const pickRoomProp=()=>findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...state.pickups.map(pickup=>({...pickup,radius:18}))],tileSize:TILE,random});
-    const guaranteedCrate=pickRoomProp();
-    if(guaranteedCrate)spawnCrate(guaranteedCrate.x,guaranteedCrate.y);
     for(let i=0;i<Math.floor((room.x2-room.x1)*(room.y2-room.y1)/52);i++){
       const position=pickRoomProp();if(!position)continue;
       if(random()<.3){const p=new THREE.Mesh(pillarGeo,pillarMat);p.position.set(position.x,5.5,position.y);scene.add(p);state.props.push(p);state.colliders.push({body:makeBody({x:position.x,y:position.y},7,true)});state.cover.push({x:position.x,y:position.y,radius:9,kind:'pillar'});}
@@ -250,9 +256,13 @@ function makeMerchantVisual(x,y){
 function spawnCrate(x,y){
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(24,14,24),new THREE.MeshStandardMaterial({color:0x76543f,roughness:.88}));
   mesh.position.set(x,7,y);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);state.props.push(mesh);
+  const healthBar=new THREE.Group();healthBar.position.set(x,15.2,y-22);healthBar.visible=false;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(28,1,6),new THREE.MeshBasicMaterial({color:0x211820}));
+  const fill=new THREE.Mesh(new THREE.BoxGeometry(24,1.2,3.5),new THREE.MeshBasicMaterial({color:0x83ddae}));fill.position.y=.7;
+  healthBar.add(back,fill);scene.add(healthBar);
   const body=physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x,y));
   physics.createCollider(RAPIER.ColliderDesc.cuboid(12,12),body);state.colliders.push({body});
-  const crate={x,y,hp:60,maxHp:60,mesh,body,cracked:false};state.crates.push(crate);state.cover.push({x,y,radius:17,kind:'crate',crate});return crate;
+  const crate={x,y,hp:60,maxHp:60,mesh,body,healthBar,healthFill:fill,healthBarTimer:0,damageStage:0,cracks:[]};state.crates.push(crate);state.cover.push({x,y,radius:17,kind:'crate',crate});return crate;
 }
 function findEnemySpawn(room,type){
   const radius=type==='brute'?10:8;
@@ -270,15 +280,30 @@ function findEnemySpawn(room,type){
   }
   return null;
 }
-function crackCrate(crate){
-  const points=[new THREE.Vector3(-8,7,-12),new THREE.Vector3(-2,7,-2),new THREE.Vector3(-6,7,3),new THREE.Vector3(1,7,12)];
-  const crack=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0x211a19}));
-  crack.position.copy(crate.mesh.position);scene.add(crack);state.props.push(crack);crate.crack=crack;
+function crackCrate(crate,stage){
+  const patterns=[
+    [[-9,7.15,-10],[0,7.15,0],[0,7.15,0],[7,7.15,9],[0,7.15,0],[-5,7.15,5]],
+    [[8,7.2,-10],[0,7.2,0],[0,7.2,0],[-9,7.2,9],[0,7.2,0],[4,7.2,7]],
+  ];
+  for(let i=crate.cracks.length;i<stage;i++){
+    const points=patterns[i].map(([x,y,z])=>new THREE.Vector3(x,y,z));
+    const crack=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:i?0x180f13:0x211a19}));
+    crack.position.copy(crate.mesh.position);scene.add(crack);state.props.push(crack);crate.cracks.push(crack);
+  }
+}
+function updateCrateDamageVisual(crate){
+  const ratio=crate.hp/crate.maxHp,stage=crateDamageStage(crate.hp,crate.maxHp);
+  crate.healthBarTimer=2.4;crate.healthBar.visible=true;crate.healthFill.scale.x=ratio;crate.healthFill.position.x=-12*(1-ratio);
+  crate.healthFill.material.color.setHex(stage===2?0xff5266:stage===1?0xf2a45f:0x83ddae);
+  if(stage>crate.damageStage){crackCrate(crate,stage);crate.damageStage=stage;crate.mesh.material.color.setHex(stage===2?0x4d3330:0x654634);}
+}
+function updateCrateVisuals(dt){
+  for(const crate of state.crates){if(crate.healthBarTimer<=0)continue;crate.healthBarTimer=Math.max(0,crate.healthBarTimer-dt);if(crate.healthBarTimer===0)crate.healthBar.visible=false;}
 }
 function breakCrate(crate){
   physics.removeRigidBody(crate.body);scene.remove(crate.mesh);crate.mesh.geometry.dispose();crate.mesh.material.dispose();
-  if(crate.crack){scene.remove(crate.crack);crate.crack.geometry.dispose();crate.crack.material.dispose();}
-  state.props=state.props.filter(prop=>prop!==crate.mesh&&prop!==crate.crack);state.colliders=state.colliders.filter(item=>item.body!==crate.body);state.crates=state.crates.filter(item=>item!==crate);state.cover=state.cover.filter(item=>item.crate!==crate);
+  for(const crack of crate.cracks){disposeObject(crack);state.props=state.props.filter(prop=>prop!==crack);}
+  disposeObject(crate.healthBar);state.props=state.props.filter(prop=>prop!==crate.mesh);state.colliders=state.colliders.filter(item=>item.body!==crate.body);state.crates=state.crates.filter(item=>item!==crate);state.cover=state.cover.filter(item=>item.crate!==crate);
   state.shake=Math.max(state.shake,1.8);burst(crate.x,crate.y,0xb98258,11,1.1);
   if(random()<progressionStats(state.progress).crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(random()*13));
 }
@@ -494,7 +519,7 @@ function updateBullets(dt){
       }}if(hit){removeBullet(i);continue;}
     }
     const crate=state.crates.find(item=>Math.abs(b.x-item.x)<15&&Math.abs(b.y-item.y)<15);
-    if(crate){crate.hp=damageDurability(crate.hp,b.damage);burst(crate.x,crate.y,0xb98258,4,.65);if(!crate.cracked){crate.cracked=true;crackCrate(crate);}if(crate.hp===0)breakCrate(crate);removeBullet(i);continue;}
+    if(crate){crate.hp=damageDurability(crate.hp,b.damage);updateCrateDamageVisual(crate);burst(crate.x,crate.y,0xb98258,4,.65);if(crate.hp===0)breakCrate(crate);removeBullet(i);continue;}
     if(state.cover.some(cover=>!cover.crate&&segmentIntersectsCircle(previous,b,cover,cover.radius+2))){burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);removeBullet(i);continue;}
     if(b.owner==='enemy'&&distance(b,state.player)<10){hitPlayer(b.damage,b.x,b.y);removeBullet(i);continue;}
     const tx=Math.floor(b.x/TILE),ty=Math.floor(b.y/TILE);if(state.tileMap[ty]?.[tx]!==0||Math.abs(b.x)>state.mapW*TILE||Math.abs(b.y)>state.mapH*TILE){burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);removeBullet(i);}
@@ -506,7 +531,7 @@ function updateCorpses(dt){for(const e of state.enemies){if(e.alive||!e.corpseTi
 function update(dt){
   if(state.mode!=='play'||state.paused||state.loadoutOpen||state.merchantOpen||state.pendingGunPickup)return;
   const scale=getTimeScale();const step=dt*scale;if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)physics.step();}else{physics.timestep=Math.min(step,1/30);physics.step();}
-  state.time+=step;state.elapsed+=step;updatePlayer(step);updateEnemies(step);updateBullets(step);updateThrown(step);updateEffects(step);updateCorpses(step);updateParticles(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
+  state.time+=step;state.elapsed+=step;updatePlayer(step);updateEnemies(step);updateBullets(step);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);updateParticles(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
   const now=performance.now()/1000,recent=now-state.lastAction<.35,moving=hasMovementInput()||(recent&&state.lastActionKind==='move'),firing=input.firing||(recent&&state.lastActionKind==='fire');
   const tempoLabel=moving?'MOVE · NORMAL':firing?'FIRE · SLOW':'STILL · SLOW';const meter=$('tempo-fill').parentElement;
   $('tempo-label').textContent=tempoLabel;$('tempo-speed').textContent=`${scale.toFixed(2)}×`;$('tempo-fill').style.width=`${Math.round(clamp(scale,0,1)*100)}%`;meter.classList.toggle('fast',moving);meter.classList.toggle('firing',firing&&!moving);$('tempo').querySelector('.tempo-dot').style.background=moving?'#fe5669':firing?'#e4b267':'#65dca8';
@@ -550,7 +575,7 @@ function setupControls(){
   addEventListener('keyup',e=>input.keys.delete(e.key.toLowerCase()));
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
-  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
+  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
   $('start-button').addEventListener('click',()=>{input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>{toggleLoadout(false);renderer.domElement.focus();});
   $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);
   $('meta-list').addEventListener('click',event=>{const button=event.target.closest('[data-upgrade]');if(!button)return;const result=purchaseUpgrade(state.progress,button.dataset.upgrade);if(result.purchased){state.progress=result.progress;saveProgress();}renderMeta();});

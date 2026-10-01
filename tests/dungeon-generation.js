@@ -2,7 +2,7 @@ import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {TILE} from '../catalog.js';
 import {generateDungeon} from '../dungeon.js';
 import {roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
-import {findRoomPropPosition} from '../room-props.js';
+import {findRoomCratePosition, findRoomPropPosition} from '../room-props.js';
 
 const result = document.querySelector('#result');
 const seeds = Array.from({length: 64}, (_, index) => 1 + index * 3571);
@@ -41,15 +41,20 @@ try {
     if(bypassable.size&&!bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} did not place its cache on an optional branch room`);
     for(const [index,room] of dungeon.rooms.entries())if(Boolean(room.branch)!==bypassable.has(index))throw new Error(`Seed ${seed} has an incorrect branch marker`);
     if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
-    for(const room of dungeon.rooms.filter(room=>['cache','armory','clinic'].includes(room.role))){
-      const rewardCount=room.role==='cache'?2:1,reserved=[];
+    for(const room of dungeon.rooms){
+      const reserved=[],placement={room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()};
+      const crate=findRoomCratePosition(placement);
+      if(!crate)throw new Error(`Seed ${seed} room ${room.index} has no safe guaranteed-crate tile`);
+      if(dungeon.cells[Math.floor(crate.y/TILE)]?.[Math.floor(crate.x/TILE)]!==0)throw new Error(`Seed ${seed} placed a room crate off the floor`);
+      reserved.push({...crate,radius:17});
+      const rewardCount=room.role==='cache'?2:['armory','clinic'].includes(room.role)?1:0;
       for(let reward=0;reward<rewardCount;reward++){
-        const point=findRoomPropPosition({room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()});
+        const point=findRoomPropPosition({...placement,random:()=>ROT.RNG.getUniform()});
         if(!point||dungeon.cells[Math.floor(point.y/TILE)]?.[Math.floor(point.x/TILE)]!==0)throw new Error(`Seed ${seed} has no valid ${room.role} reward position`);
         reserved.push({...point,radius:18});
       }
-      const prop=findRoomPropPosition({room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()});
-      if(prop&&reserved.some(point=>Math.hypot(prop.x-point.x,prop.y-point.y)<point.radius+22))throw new Error(`Seed ${seed} placed room cover over a ${room.role} reward`);
+      const prop=findRoomPropPosition({...placement,random:()=>ROT.RNG.getUniform()});
+      if(prop&&reserved.some(point=>Math.hypot(prop.x-point.x,prop.y-point.y)<point.radius+22))throw new Error(`Seed ${seed} placed room cover over a crate or ${room.role} reward`);
     }
     for (const room of dungeon.rooms) {
       if (!isFloor(dungeon.cells, room.cx, room.cy)) throw new Error(`Seed ${seed} has a blocked room center`);
@@ -72,8 +77,12 @@ try {
   if (fallback.rooms.length < 6 || shortestFloorPath(fallback.cells, {x:fallback.rooms[0].cx,y:fallback.rooms[0].cy}, {x:fallback.rooms.at(-1).cx,y:fallback.rooms.at(-1).cy}).length === 0) {
     throw new Error('The larger fallback map did not preserve the extraction route');
   }
+  for(const room of fallback.rooms){
+    const point=findRoomCratePosition({room,cells:fallback.cells,doors:fallback.doors,occupied:[],tileSize:TILE,random:()=>ROT.RNG.getUniform()});
+    if(!point)throw new Error(`Fallback map room ${room.index} has no safe crate tile`);
+  }
   result.className = 'pass';
-  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; each cache uses a branch when available.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
+  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable; every room has a reserved crate tile clear of rewards and doors.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; each cache uses a branch when available.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
 } catch (error) {
   result.className = 'fail';
   result.textContent = `FAIL\n${error.stack || error.message}`;
