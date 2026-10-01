@@ -3,7 +3,8 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, TAU, TILE, WALL_H} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
-import {META_UPGRADES, awardCoins, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout, SAVE_KEY} from './progression.js';
+import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
+import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon, shortestFloorPath} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
@@ -43,8 +44,13 @@ function rand(min,max){ return min+random()*(max-min); }
 function choose(list){ return list[Math.floor(random()*list.length)]; }
 function distance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 function clamp(n,min,max){ return Math.max(min,Math.min(max,n)); }
-function loadProgress(){try{return parseProgress(localStorage.getItem(SAVE_KEY));}catch{return parseProgress(null);}}
-function saveProgress(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state.progress));}catch{toast('PROGRESS COULD NOT BE SAVED');}}
+function loadProgress(){try{return readSavedProgress(localStorage);}catch{return emptyProgress();}}
+function saveProgress(){try{writeSavedProgress(localStorage,state.progress);}catch{toast('PROGRESS COULD NOT BE SAVED');}}
+function resetProgress(){
+  if(!window.confirm('Reset all saved coins and permanent upgrades? This cannot be undone.'))return;
+  try{clearSavedProgress(localStorage);}catch{toast('SAVE COULD NOT BE RESET');return;}
+  state.progress=emptyProgress();renderMeta();toast('SAFEHOUSE SAVE RESET');
+}
 function hud(){
   const gun=GUNS[state.weaponIndex];
   $('health').innerHTML=Array.from({length:state.maxHealth},(_,i)=>`<span class="heart ${i>=state.health?'empty':''}">♥</span>`).join('');
@@ -577,7 +583,7 @@ function setupControls(){
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
   addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
   $('start-button').addEventListener('click',()=>{input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>{toggleLoadout(false);renderer.domElement.focus();});
-  $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);
+  $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);$('reset-save').addEventListener('click',resetProgress);
   $('meta-list').addEventListener('click',event=>{const button=event.target.closest('[data-upgrade]');if(!button)return;const result=purchaseUpgrade(state.progress,button.dataset.upgrade);if(result.purchased){state.progress=result.progress;saveProgress();}renderMeta();});
   $('loadout').addEventListener('click',e=>{if(e.target===$('loadout'))toggleLoadout(false);const gun=e.target.closest('[data-gun]');if(gun)equipWeapon(Number(gun.dataset.gun));const gear=e.target.closest('[data-gear]');if(gear)equipGear(gear.dataset.gear);const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
   $('weapon-pickup').addEventListener('click',event=>{if(event.target===$('weapon-pickup')){closeWeaponPickup(true);return;}const button=event.target.closest('[data-pickup-slot]');if(button)acceptWeaponPickup(Number(button.dataset.pickupSlot));});

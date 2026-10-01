@@ -269,7 +269,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Award coins exactly once on death or extraction; show the run summary payout.
 - [x] Build the between-run upgrade screen and buy capped permanent upgrades.
 - [x] Implement Runner’s Legs, Still Mind, Salvager crate luck, and Carry Rig with capped effects.
-- [ ] Test progress persistence across browser refreshes; add a visible save reset option.
+- [x] Test progress persistence across browser refreshes; add a visible save reset option with a confirmation prompt.
 
 ### Next: inventory and gear
 

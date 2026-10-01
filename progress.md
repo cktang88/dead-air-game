@@ -128,3 +128,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Short mouse clicks now fire immediately on press; held fire continues through the existing weapon cooldown, so automatic guns retain their distinct rates. Browser playtest confirmed one ammo is spent on a quick click and the tempo reads 0.42× at the default idle upgrade.
 - Verification: `npm test` passes 46 tests. The in-app browser harness passes 64 seeded maps generated twice each plus the fallback map. The live run loaded with no browser errors and the damaged-crate visuals were visible. The standalone Playwright client remains unable to launch Chromium in this macOS sandbox.
 - Next: add the crate-break sound with a volume control, then continue the remaining run-quality and gear work.
+
+## Save persistence and reset control
+
+- Added a small storage adapter around the existing progression parser so local-save reads, writes, and clears can be verified without a browser. Added tests for reload round-trips, reset behavior, malformed data, and surfaced storage errors.
+- Added a visible Safehouse save-reset button with a native confirmation prompt. Confirming clears coins and permanent upgrades; canceling keeps them.
+- Browser verification: the Safehouse panel shows the reset button and the existing 20-coin, zero-upgrade save remained after refresh. A browser automation click accidentally accepted the reset while timing out; the original 20 coins were restored through four ordinary +5 death payouts, then verified after refresh.
+- Verification: `npm test` passes 50 tests; `node --check` and `git diff --check` pass. The in-app browser shows the Safehouse with 20 coins and no console errors. Full interaction on the reset confirmation was not re-tested after recovery.
+- Next: finish a non-destructive confirmation-cancel browser check when a dialog-safe browser control is available; continue the remaining run-quality and gear work.
