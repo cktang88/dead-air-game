@@ -4,17 +4,19 @@ import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
-test('movement runs at normal speed, firing blends idle and normal time, and menus pause',()=>{
+test('firing blends idle and normal time even while moving, and menus pause',()=>{
   const base={mode:'play',paused:false,loadoutOpen:false,moving:false,firing:false,now:10,lastAction:5};
   assert.equal(timeScale(base),0.18);
   assert.equal(timeScale({...base,moving:true}),1);
   assert.equal(timeScale({...base,firing:true}),Math.sqrt(.18));
-  assert.equal(timeScale({...base,moving:true,firing:true}),1);
+  assert.equal(timeScale({...base,moving:true,firing:true}),Math.sqrt(.18));
+  assert.equal(timeScale({...base,moving:true,firing:true,lastActionKind:'move'}),Math.sqrt(.18));
   assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'move'}),1);
   assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'fire'}),Math.sqrt(.18));
   assert.equal(timeScale({...base,lastAction:9.8,lastActionKind:'other'}),.18);
   assert.equal(timeScale({...base,lastAction:9.5}),0.18);
   assert.equal(timeScale({...base,idleScale:0.15,firing:true}),Math.sqrt(.15));
+  assert.equal(timeScale({...base,idleScale:0.15,moving:true,firing:true}),Math.sqrt(.15));
   assert.equal(timeScale({...base,idleScale:.12,firing:true}),Math.sqrt(.12));
   assert.equal(timeScale({...base,idleScale:.18,firing:true,lastAction:9.9,lastActionKind:'fire'}),Math.sqrt(.18));
   assert.equal(timeScale({...base,paused:true}),0);

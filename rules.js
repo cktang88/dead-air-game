@@ -66,8 +66,8 @@ export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastA
   if (mode !== 'play' || paused || loadoutOpen) return 0;
   const stillScale = Math.max(0, Math.min(1, idleScale));
   const firingScale = Math.sqrt(stillScale);
-  if (moving) return 1;
   if (firing) return firingScale;
+  if (moving) return 1;
   if (now - lastAction < 0.35) {
     if (lastActionKind === 'move') return 1;
     if (lastActionKind === 'fire') return firingScale;

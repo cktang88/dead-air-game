@@ -16,6 +16,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 ## Verification
 
+- Firing uses the geometric mean of idle and normal time whether stationary or moving. At the default 0.18× idle rate, firing is about 0.42×; idle-only movement remains 1×.
+- Added regression cases for held fire with simultaneous movement, a recent movement action, and a metaprogression-adjusted idle rate. All 55 unit tests pass. In the live in-app browser, one shot changed the HUD from 0.18× to 0.42×. Playwright headless remains unavailable here because Chromium cannot register its Mach port in this macOS sandbox.
+
 - `node --check game.js`; `npm test` — 14 tests pass.
 - In-app browser at `http://127.0.0.1:8765/`: started a run, threw frag and incendiary, cycled throwables, moved and fired, opened the workbench, and bought an extended magazine. Scrap went from 40 to 5; magazine capacity rose from 18 to 27 (26 after firing).
 - Playwright headless could not start in this macOS sandbox because Chromium failed Mach port registration with permission denied. Used the already-open in-app browser for interaction checks.
@@ -144,3 +147,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Verification: browser checked cancel and confirm on a rifle swap, confirmed saved ammo remained on the stored shotgun, then confirmed the Mica 9 + armor loadout (weight 4.6/7.0, scrap 40→15, health 5→6). The browser also showed two heavy guns disabled with their exact resulting weight and the preview focus trap passed. `npm test` passes 50 tests; syntax and diff checks pass; browser console has no errors.
 - Audio-library research found the native Web Audio API is enough for a few short effects and a master volume; Howler.js remains an option if the game adds a larger audio library. No audio dependency was added.
 - Next: add the distinct crate-break sound and master volume control, then add reduced shake/flash settings and continue repeated-run tuning.
+
+## Initial game audio and master volume
+
+- Used the browser's Web Audio API rather than adding an audio package: this slice needs two short procedural sound cues, and the API's gain node supplies the master-volume control.
+- Player shots now have category-shaped gunfire, and broken crates layer a descending thump with filtered crack and splinter noise. The title screen has a 0–100% master-volume slider, defaults to 65%, and saves the validated setting separately from run coins.
+- Audio context starts from the player's Start click to meet browser gesture requirements. Sound nodes share one master gain and are skipped at zero volume.
+- Verification: volume changed from 65% to 50%, survived a refresh, then was restored to 65% and verified after refresh. A live run played three shots into a 60-HP crate until it broke; the crate disappeared and the browser reported no errors. `npm test` passes 55 tests, including malformed/out-of-range settings and persistence; syntax and diff checks pass. Listening-based sound-level and quality tuning remains open.
+- Next: playtest and tune the new sounds, then add reduced shake/flash options and remappable controls.

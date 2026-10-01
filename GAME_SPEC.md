@@ -260,7 +260,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
 - [x] Improve workbench signposting and add a preview before replacing a gun or gear item.
 - [x] Give every room a safely placed destructible crate. Show its remaining health on hit, deepen crack marks at damage thresholds, and remove its collision plus leave a scrap chance when it breaks.
-- [ ] Add a unique crate-break sound.
+- [x] Add a unique crate-break sound.
 - [x] Show extraction or death, rooms cleared, kills, and coins earned.
 
 ### Next: account and metaprogression
@@ -293,7 +293,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [ ] Split seeded map generation from the renderer once it has its own tested inputs/outputs.
 - [ ] Add compact visual/behavior checks for the browser build and a repeatable manual seed.
-- [ ] Add sound, volume controls, reduced shake/flash options, and remappable controls.
+- [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
+- [ ] Add reduced shake/flash options and remappable controls.
 - [ ] Profile a full run; cap particles and dispose every removed geometry/material/body.
 - [ ] Run an architecture review after the next major milestone; remove abstractions that do not own real rules.
 - [ ] Update this document when actual game behavior changes; mark delivered items only after verification.
