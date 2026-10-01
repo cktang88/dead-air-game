@@ -65,3 +65,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Encounter composition now limits rushers (Rusher + Brute) to at most half of any group of two or more, guaranteeing ranged support in small combat groups.
 - Hurt enemies now seek reachable cover or retreat below 45% health, including melee rushers. Healthy melee enemies retain their aggressive role.
 - Added unit coverage for hundreds of seeded encounter mixes and injured/healthy enemy choices. Next: playtest how often hurt enemies break off and whether mixed enemy packs improve the pressure curve.
+
+## SUPERHOT design comparison
+
+- Reviewed SUPERHOT Team interviews and the GDC session summary. The developers describe the core as fluid turn-based action in which the player controls the pace; its strongest combat moments come from readable enemy aim, dodging, close spaces, and improvising with available items.
+- Added design guidance to `GAME_SPEC.md`: preserve player-paced time, visible threat tells, improvisational rooms, close but legible spaces, and tactical AI that cannot stall encounters by hiding forever.
+- The existing build already has idle/action time states, visible enemy aim lines, fixed-path dodgeable bullets, cover seeking, and low-health retreat. This comparison does not call for copying SUPERHOT's FPS controls or treating its enemy AI as a realistic self-preservation model.

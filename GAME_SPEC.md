@@ -70,6 +70,16 @@ Use ROT.js Digger for room-and-corridor topology; this is already integrated. No
 - [Rapier JavaScript rigid bodies](https://rapier.rs/docs/user_guides/javascript/rigid_bodies/) — dynamic actors/projectiles and fixed cover/wall bodies.
 - [ROT.js Digger API](https://unpkg.com/rot-js@2.1.3/doc/modules/_map_digger_.html) — connected procedural rooms and corridors.
 - [Dennaton Games interview on Hotline Miami](https://www.pcgamer.com/hotline-miami-interview-dennaton-games-on-creating-carnage-to-delight-and-disgust/) — design context for dangerous short encounters, readable action, and mastery through replay.
+- [SUPERHOT Team interview](https://gamingbolt.com/superhot-interview-becoming-the-weapon-in-a-turn-based-fps-environment) and [Game Developer interview](https://www.gamedeveloper.com/design/road-to-the-igf-superhot-team-s-i-superhot-i-) — the design starts from fluid turn-based action: the player sets the pace, gets a moment to adjust when pressure rises, then improvises. The team highlights visible enemy aiming, dodging bullets, tight spaces, and unscripted solutions.
+- [GDC session summary: Game Design and Mind Control in SUPERHOT](https://www.gdcvault.com/play/1023483/Game-Design-and-Mind-Control) — the central time rule shaped the rest of the combat, including bullet dodging, grabbing weapons, and using nearby objects.
+
+### SUPERHOT design lessons for DEAD AIR
+
+- Keep time control tied directly to player intent. Standing still should create a readable reaction window, while movement and firing should make the encounter feel urgent. The current slow/action states are a simple version of this rule; tune them by playtesting instead of adding extra time powers by default.
+- Make threat intent readable before it becomes damage. Keep enemy aim tells and fixed-path bullets visible long enough for a player to notice and react at both time scales.
+- Favor improvisation over one correct room solution. Put cover, doors, weapons, and throwable options where players can combine them, and let procedural encounters create their own memorable moments.
+- Keep rooms close and tactically legible. Tight corners and doorways can make small movement choices matter, but retain the wider halls and multiple exits needed for this game's dungeon exploration.
+- Enemy intelligence should create counterplay, not just stronger pressure. Use flanks, cover, retreats, and varied roles with clear tells; avoid endless retreat or hiding that stalls the fight. SUPERHOT's useful lesson here is readable action and player-paced flow, not a claim that its enemies simulate realistic self-preservation.
 
 ## Enemies
 
