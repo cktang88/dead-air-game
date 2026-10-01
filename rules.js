@@ -47,6 +47,15 @@ export function canCarryWeapons(weapons, guns, capacity) {
   return weaponLoadoutWeight(weapons, guns) <= capacity;
 }
 
+export function weaponReplacement(weapons, slot, candidate, guns, capacity, gearWeight = 0) {
+  const nextWeapons=weapons.slice();
+  nextWeapons[slot]=candidate;
+  const totalWeight=weaponLoadoutWeight(nextWeapons,guns)+gearWeight;
+  const alreadyEquipped=weapons.includes(candidate);
+  const hasDuplicate=nextWeapons.some((weapon,index)=>nextWeapons.indexOf(weapon)!==index);
+  return {weapons:nextWeapons,totalWeight,canCarry:!alreadyEquipped&&!hasDuplicate&&totalWeight<=capacity};
+}
+
 export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, lastActionKind = 'other', idleScale = 0.18}) {
   if (mode !== 'play' || paused || loadoutOpen) return 0;
   const stillScale = Math.max(0, Math.min(1, idleScale));

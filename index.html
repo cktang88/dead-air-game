@@ -37,7 +37,7 @@
           <p id="run-result" hidden></p>
           <button id="start-button">ENTER THE SECTOR ↗</button>
           <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">0</span> COINS</button>
-          <div class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / PICKUP</i></span><span>SHIFT <i>RELOAD</i></span><span>TAB <i>LOADOUT</i></span></div>
+          <div class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>SHIFT <i>RELOAD</i></span><span>TAB <i>LOADOUT</i></span></div>
         </div>
         <section id="meta-panel" hidden aria-label="Permanent upgrades">
           <button id="close-meta" class="close">×</button>
@@ -67,6 +67,16 @@
           <p class="merchant-copy">Spend scrap to prepare for the next room.</p>
           <div id="merchant-stock" class="merchant-stock" aria-live="polite"></div>
           <div class="merchant-footer">E OR ESC TO LEAVE</div>
+        </div>
+      </section>
+      <section id="weapon-pickup" class="weapon-pickup" hidden aria-hidden="true" aria-labelledby="weapon-pickup-name" role="dialog" aria-modal="true">
+        <div class="weapon-pickup-card">
+          <div class="eyebrow">FIELD WEAPON · FRESH MAGAZINE</div>
+          <h2 id="weapon-pickup-name"></h2>
+          <p id="weapon-pickup-stats"></p>
+          <div id="weapon-swap-options" class="weapon-swap-options"></div>
+          <button id="decline-weapon-pickup" class="decline-pickup" type="button">LEAVE IT HERE</button>
+          <div class="pickup-footer">1 PRIMARY · 2 SECONDARY · ESC LEAVE IT</div>
         </div>
       </section>
       <footer><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span>ESC PAUSE &nbsp; · &nbsp; F FULLSCREEN</span></footer>

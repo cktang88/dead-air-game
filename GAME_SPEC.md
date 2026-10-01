@@ -101,15 +101,15 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ### Current weapon baseline
 
 - The catalog now defines 13 guns: three assault rifles, four SMGs (including the original machine pistol), two pistols, three precision/anti-materiel rifles, and one shotgun.
-- Gun definitions have distinct fire stats, weight, ammo, and visual dimensions. These catalog entries exist, but they are not all reachable or fully integrated into combat/loadout yet.
-- Five attachment definitions exist, and each gun lists which attachment IDs it accepts. Per-gun installed attachment state, compatibility filtering in the interface, and firing/reload effects remain to be integrated.
-- The implemented run still starts with the original machine pistol and Street Sweeper. The Hardline rifle remains in the current workbench/pickup flow.
+- Gun definitions have distinct fire stats, weight, ammo, and visual dimensions. All 13 are wired into combat and can be selected through the loadout, merchant, or a weight-checked pickup when the carry rig allows them.
+- Five attachment definitions exist; compatibility filtering and per-gun installation are wired into the workbench and weapon stat calculations.
+- A run starts with the machine pistol and Street Sweeper. Other catalog guns can be selected at the workbench, bought from a merchant, or accepted from a specific pickup.
 
 ### Inventory rules
 
 - The player always has a **primary** and **secondary** slot. Keys `1` and `2` switch slots.
 - Current loadout weight is the sum of equipped weapons and gear. Base capacity is 7.0. Machine pistol + shotgun weigh 5.5; adding the 1.5-weight armor plate fills the rig, while a heavier rifle plus armor exceeds capacity.
-- At the workbench, selecting an unequipped gun replaces the secondary if it fits. A gun pickup follows the same rule. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
+- At the workbench, selecting an unequipped gun replaces the secondary if it fits. A gun pickup previews its identity, stats, selected replacement slot, and resulting weight. The player can replace either slot or leave it. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
 - Show slot, weapon, ammo, per-item weight, total weight, and capacity. Explain an overweight selection directly.
 - The capacity is an intentional tradeoff: leave weight free for armor or utility gear once those systems exist. Do not silently discard gear when swapping a weapon.
 
@@ -240,7 +240,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Browser playable with Three.js rendering, Rapier 2D physics, and ROT.js room generation.
 - [x] Idle/action tempo shift, aim, fire, reload, pause, and restart.
-- [ ] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into gameplay; distinct catalog stats are present.
+- [x] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into combat, loadout, merchant, and weight-checked pickup choices.
 - [x] Apply compatible attachments per weapon; restrict workbench options and retain attachments when switching guns.
 - [x] Primary and secondary slots; `1` / `2` switching; weapon weight and capacity at the workbench.
 - [x] Four enemy roles, knockback, hit stop, screen shake, particles, and short corpse slide.
@@ -275,7 +275,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
-- [ ] Make weapon pickups accept, swap, or decline without losing items or ammo.
+- [x] Make weapon pickups show the exact gun and weight, swap either slot when capacity allows, or decline while leaving the pickup in place.
 
 ### Combat and run services
 

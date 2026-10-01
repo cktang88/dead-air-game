@@ -95,3 +95,12 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Updated the tempo meter, tooltip, title instructions, and spec to explain all three speeds. Added unit checks for simultaneous movement/fire, recent fire/movement, and meta-upgrade idle rates.
 - Verification: `npm test` passes 35 tests, including dodge windows at idle, firing, and movement rates; syntax and diff checks pass. The preview loads the new instructions, but Playwright gameplay capture is blocked by Chromium's macOS Mach-port permission error.
 - Next: playtest the new firing pace and report any feel changes before further tuning.
+
+## Weapon pickup choices
+
+- Gun pickups now identify the exact weapon and show its class, damage, fire rate, magazine size, and weight before collection. The player can swap either slot or leave the pickup in the room.
+- Each swap previews the resulting carry load with current gear weight and disables choices that exceed capacity. Accepting a gun equips it with a fresh magazine and reserve; declining keeps the pickup available for later review.
+- Prevented a pickup from equipping the same gun into both slots, including when the player changes loadout after the pickup drops.
+- Updated the spec to match the playable 13-gun catalog and pickup behavior.
+- Verification: `npm test` passes 37 tests; `node --check` and `git diff --check` pass. The in-app browser renders a live run without errors. The required Playwright client still cannot launch Chromium in this macOS sandbox (Mach-port permission denied), so the pickup modal itself has not received a full browser interaction check.
+- Next: exercise the modal through a longer browser playtest once a working automation runtime is available; review workbench gear replacement preview and weapon/ammo edge cases.

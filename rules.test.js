@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('movement runs at normal speed, firing blends idle and normal time, and menus pause',()=>{
@@ -123,6 +123,27 @@ test('weapon choices use a visible carry budget',()=>{
   assert.equal(canCarryWeapons([1,2],GUNS,BASE_CARRY_CAPACITY),false);
   assert.equal(canCarryWeapons([0,1],GUNS,BASE_CARRY_CAPACITY-1.5),true);
   assert.equal(canCarryWeapons([0,2],GUNS,BASE_CARRY_CAPACITY-1.5),false);
+});
+
+test('weapon pickup swaps preview exact slot weight without mutating the current loadout',()=>{
+  const current=[0,1],rifle=GUNS.findIndex(gun=>gun.id==='rifle');
+  const primary=weaponReplacement(current,0,rifle,GUNS,BASE_CARRY_CAPACITY,1.5);
+  assert.deepEqual(primary.weapons,[rifle,1]);
+  assert.equal(primary.totalWeight,9);
+  assert.equal(primary.canCarry,false);
+  const secondary=weaponReplacement(current,1,rifle,GUNS,BASE_CARRY_CAPACITY,1.5);
+  assert.deepEqual(secondary.weapons,[0,rifle]);
+  assert.equal(secondary.totalWeight,7.5);
+  assert.equal(secondary.canCarry,false);
+  assert.deepEqual(current,[0,1]);
+  assert.equal(weaponReplacement(current,1,rifle,GUNS,BASE_CARRY_CAPACITY+1,1.5).canCarry,true);
+});
+
+test('weapon pickup cannot equip the same gun in both slots',()=>{
+  const current=[0,1];
+  assert.equal(weaponReplacement(current,1,current[0],GUNS,BASE_CARRY_CAPACITY).canCarry,false);
+  assert.equal(weaponReplacement(current,0,current[0],GUNS,BASE_CARRY_CAPACITY).canCarry,false);
+  assert.deepEqual(weaponReplacement(current,0,2,GUNS,BASE_CARRY_CAPACITY).weapons,[2,1]);
 });
 
 test('run coins reward death and extraction while upgrades persist as capped levels',()=>{
