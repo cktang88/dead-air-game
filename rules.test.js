@@ -134,7 +134,7 @@ test('weapon choices use a visible carry budget',()=>{
   assert.equal(canCarryWeapons([0,2],GUNS,BASE_CARRY_CAPACITY-1.5),false);
 });
 
-test('weapon pickup swaps preview exact slot weight without mutating the current loadout',()=>{
+test('weapon replacement preview includes gear weight without mutating the current loadout',()=>{
   const current=[0,1],rifle=GUNS.findIndex(gun=>gun.id==='rifle');
   const primary=weaponReplacement(current,0,rifle,GUNS,BASE_CARRY_CAPACITY,1.5);
   assert.deepEqual(primary.weapons,[rifle,1]);

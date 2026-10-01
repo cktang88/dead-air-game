@@ -58,6 +58,15 @@
           <div id="carry-readout" class="eyebrow"></div>
           <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · PICK A GUN TO SWAP YOUR SECONDARY</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
           <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>1–2 SWITCH SLOTS &nbsp;·&nbsp; TAB TO RETURN</span></div>
+          <section id="loadout-confirm" class="loadout-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="loadout-change-title">
+            <div class="loadout-confirm-card">
+              <div class="eyebrow">CHECK YOUR FIELD LOADOUT</div>
+              <h3 id="loadout-change-title"></h3>
+              <p id="loadout-change-copy"></p>
+              <div id="loadout-change-summary" class="loadout-change-summary"></div>
+              <div class="loadout-confirm-actions"><button id="loadout-cancel" type="button">KEEP CURRENT</button><button id="loadout-accept" type="button">CONFIRM CHANGE</button></div>
+            </div>
+          </section>
         </div>
       </section>
       <section id="merchant-panel" class="merchant-panel" hidden aria-hidden="true" aria-labelledby="merchant-title" role="dialog" aria-modal="true">

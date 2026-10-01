@@ -136,3 +136,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Browser verification: the Safehouse panel shows the reset button and the existing 20-coin, zero-upgrade save remained after refresh. A browser automation click accidentally accepted the reset while timing out; the original 20 coins were restored through four ordinary +5 death payouts, then verified after refresh.
 - Verification: `npm test` passes 50 tests; `node --check` and `git diff --check` pass. The in-app browser shows the Safehouse with 20 coins and no console errors. Full interaction on the reset confirmation was not re-tested after recovery.
 - Next: finish a non-destructive confirmation-cancel browser check when a dialog-safe browser control is available; continue the remaining run-quality and gear work.
+
+## Workbench replacement previews
+
+- Unequipped workbench guns now show the secondary slot they would replace, their current ammo, and the exact rig weight after a swap. Overweight guns show the resulting load and stay disabled. Armor explains missing scrap or excess weight.
+- Selecting an eligible gun or armor opens a focused confirmation with stats, the before/after weight, preserved stored ammo, and armor's health/scrap effect. Cancel leaves the loadout unchanged; Escape cancels, Enter confirms, and Tab stays inside the dialog.
+- Verification: browser checked cancel and confirm on a rifle swap, confirmed saved ammo remained on the stored shotgun, then confirmed the Mica 9 + armor loadout (weight 4.6/7.0, scrap 40→15, health 5→6). The browser also showed two heavy guns disabled with their exact resulting weight and the preview focus trap passed. `npm test` passes 50 tests; syntax and diff checks pass; browser console has no errors.
+- Audio-library research found the native Web Audio API is enough for a few short effects and a master volume; Howler.js remains an option if the game adds a larger audio library. No audio dependency was added.
+- Next: add the distinct crate-break sound and master volume control, then add reduced shake/flash settings and continue repeated-run tuning.

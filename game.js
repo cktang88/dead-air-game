@@ -24,7 +24,7 @@ const state = {
   weaponSlots:[0,1], activeSlot:0, get weaponIndex(){return this.weaponSlots[this.activeSlot];}, gear:null, carryCapacity:BASE_CARRY_CAPACITY, weaponAmmo:GUNS.map(g=>g.mag), reserveAmmo:GUNS.map(g=>g.reserve), attachments:new Map(), health:5, maxHealth:5,
   progress:loadProgress(), paidOut:false,
   aim:{x:1,y:0}, lastAction:0, lastActionKind:'other', fireCooldown:0, reloadTimer:0, invuln:0, shake:0, hitstop:0, toastTimer:0, roomToast:'', sector:1,
-  throwableIndex:2, throwables:{smoke:1,flash:1,frag:2,incendiary:1}, merchantOpen:false, merchantRoom:null, pendingGunPickup:null,
+  throwableIndex:2, throwables:{smoke:1,flash:1,frag:2,incendiary:1}, merchantOpen:false, merchantRoom:null, pendingGunPickup:null, pendingLoadoutChange:null,
   scene:null, camera:null, renderer:null, physics:null, floorMesh:null, walls:[], meshRoot:null, actorMeshes:new Map(), pickupMeshes:new Map(), bulletMeshes:new Map(),
 };
 const input = {keys:new Set(), mouseX:innerWidth/2, mouseY:innerHeight/2, firing:false, interact:false};
@@ -72,13 +72,52 @@ function syncHudFrame(){
 }
 function renderLoadout(){
   if(!$('loadout-gun'))return;
-  const gear=GEAR.find(item=>item.id===state.gear),weight=weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0);
-  $('loadout-gun').innerHTML=GUNS.map((gun,i)=>{const slot=state.weaponSlots.indexOf(i),fits=slot>=0||canCarryWeapons([state.weaponSlots[0],i],GUNS,state.carryCapacity-(gear?.weight||0));return `<button class="loadout-weapon ${i===state.weaponIndex?'active':''}" data-gun="${i}" ${!fits?'disabled':''}><strong>${slot>=0?`${slot===state.activeSlot?'ACTIVE':'SLOT '+(slot+1)} · `:'SWAP SECONDARY · '}${gun.name}</strong><span>${gun.weight.toFixed(1)} wt · ${state.weaponAmmo[i]} / ${magSize(gun)} · ${state.reserveAmmo[i]} reserve</span></button>`}).join('');
-  $('gear-list').innerHTML=GEAR.map(item=>{const equipped=state.gear===item.id,canEquip=canCarryWeapons(state.weaponSlots,GUNS,state.carryCapacity-item.weight);return `<div class="mod-row"><span>${item.name}<br><small style="color:#8e8896">${item.description} · ${item.weight.toFixed(1)} wt</small></span><button data-gear="${item.id}" ${equipped?'':state.scrap<item.cost||!canEquip?'disabled':''}>${equipped?'UNEQUIP':`${item.cost} SCRAP`}</button></div>`}).join('');
+  const gear=GEAR.find(item=>item.id===state.gear),gearWeight=gear?.weight||0,weight=weaponLoadoutWeight(state.weaponSlots,GUNS)+gearWeight;
+  $('loadout-gun').innerHTML=GUNS.map((gun,index)=>{
+    const slot=state.weaponSlots.indexOf(index),plan=weaponReplacement(state.weaponSlots,1,index,GUNS,state.carryCapacity,gearWeight);
+    const eligible=slot>=0||plan.canCarry;
+    const status=slot>=0?`${slot===state.activeSlot?'ACTIVE · ':''}SLOT ${slot+1} · `:plan.canCarry?'PREVIEW SECONDARY · ':'UNAVAILABLE · ';
+    const result=slot>=0?`CURRENT RIG ${weight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`:plan.canCarry?`AFTER SWAP ${plan.totalWeight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`:plan.totalWeight>state.carryCapacity?`TOO HEAVY · ${plan.totalWeight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`:'ALREADY IN OTHER SLOT';
+    return `<button class="loadout-weapon ${index===state.weaponIndex?'active':''}" data-gun="${index}" ${eligible?'':`disabled title="${result}"`}><strong>${status}${gun.name}</strong><span>${gun.weight.toFixed(1)} WT · ${state.weaponAmmo[index]} / ${magSize(gun)} · ${state.reserveAmmo[index]} RESERVE<br>${result}</span></button>`;
+  }).join('');
+  $('gear-list').innerHTML=GEAR.map(item=>{
+    const equipped=state.gear===item.id,afterWeight=weaponLoadoutWeight(state.weaponSlots,GUNS)+(equipped?0:item.weight),tooHeavy=!equipped&&afterWeight>state.carryCapacity,shortOnScrap=!equipped&&state.scrap<item.cost;
+    const reason=equipped?`CURRENT RIG ${weight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`:tooHeavy?`TOO HEAVY · ${afterWeight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`:shortOnScrap?`NEED ${item.cost-state.scrap} MORE SCRAP`:`AFTER ARMOR ${afterWeight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT`;
+    return `<div class="mod-row"><span>${item.name}<br><small style="color:#8e8896">${item.description} · ${item.weight.toFixed(1)} WT · ${reason}</small></span><button data-gear="${item.id}" ${equipped?'':tooHeavy||shortOnScrap?'disabled':''}>${equipped?'PREVIEW UNEQUIP':`${item.cost} SCRAP`}</button></div>`;
+  }).join('');
   $('carry-readout').textContent=`WEIGHT ${weight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} · 2 SLOTS`;
   const gun=GUNS[state.weaponIndex],installed=attachmentsFor(gun),available=compatibleAttachments(gun,MODS);
   $('mod-list').innerHTML=available.map(mod=>{const has=installed.has(mod.id);return `<div class="mod-row"><span>${mod.name}<br><small style="color:#8e8896">${mod.info}</small></span><button data-mod="${mod.id}" ${has||state.scrap<mod.cost?'disabled':''}>${has?'INSTALLED':`${mod.cost} SCRAP`}</button></div>`}).join('')||'<div class="mod-row"><span>No compatible attachments for this weapon.</span></div>';
   const item=THROWABLES[state.throwableIndex];if($('throwable-readout'))$('throwable-readout').textContent=`${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;
+}
+function previewLoadoutChange(change){
+  if(change.type==='weapon'){
+    const next=GUNS[change.index],current=GUNS[state.weaponSlots[1]],gearWeight=GEAR.find(item=>item.id===state.gear)?.weight||0;
+    if(!next||state.weaponSlots.includes(change.index))return;
+    const plan=weaponReplacement(state.weaponSlots,1,change.index,GUNS,state.carryCapacity,gearWeight);if(!plan.canCarry)return;
+    $('loadout-change-title').textContent=`REPLACE SECONDARY · ${next.name}`;
+    $('loadout-change-copy').textContent=`${next.category} · ${next.damage} DAMAGE · ${Math.round(60/next.rate)} RPM · ${next.mag} ROUND MAG · ${next.weight.toFixed(1)} WT`;
+    $('loadout-change-summary').textContent=`${current.name} → ${next.name} · RIG ${(weaponLoadoutWeight(state.weaponSlots,GUNS)+gearWeight).toFixed(1)} → ${plan.totalWeight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT · STORED AMMO KEPT`;
+  }else if(change.type==='gear'){
+    const item=GEAR.find(option=>option.id===change.id);if(!item)return;
+    const equipped=state.gear===item.id,currentWeight=weaponLoadoutWeight(state.weaponSlots,GUNS)+(GEAR.find(option=>option.id===state.gear)?.weight||0),total=weaponLoadoutWeight(state.weaponSlots,GUNS)+(equipped?0:item.weight);
+    if(!equipped&&(state.scrap<item.cost||total>state.carryCapacity))return;
+    $('loadout-change-title').textContent=equipped?`STORE ${item.name}`:`EQUIP ${item.name}`;
+    $('loadout-change-copy').textContent=equipped?'Remove the plate to free carry weight. Maximum health returns to 5.':`${item.description} · ${item.weight.toFixed(1)} WT · ${item.cost} SCRAP`;
+    $('loadout-change-summary').textContent=`RIG ${currentWeight.toFixed(1)} → ${total.toFixed(1)} / ${state.carryCapacity.toFixed(1)} WT · ${equipped?'NO SCRAP SPENT':'HEALTH +1 · STORED WEAPONS KEPT'}`;
+  }else return;
+  state.pendingLoadoutChange=change;$('loadout-confirm').hidden=false;$('loadout-cancel').focus();
+}
+function closeLoadoutPreview(){
+  const change=state.pendingLoadoutChange;state.pendingLoadoutChange=null;$('loadout-confirm').hidden=true;
+  if(change?.type==='weapon')$('loadout-gun').querySelector(`[data-gun="${change.index}"]`)?.focus();
+  else if(change?.type==='gear')$('gear-list').querySelector(`[data-gear="${change.id}"]`)?.focus();
+}
+function confirmLoadoutChange(){
+  const change=state.pendingLoadoutChange;if(!change)return;
+  closeLoadoutPreview();
+  if(change.type==='weapon')equipWeapon(change.index);else if(change.type==='gear')equipGear(change.id);
+  renderer?.domElement.focus();
 }
 function renderWeaponPickup(){
   const pickup=state.pendingGunPickup;if(!pickup)return;
@@ -442,7 +481,7 @@ function detonateThrowable(projectile){physics.removeRigidBody(projectile.body);
 function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projectile=state.thrown[i];projectile.fuse-=dt;const p=projectile.body.translation();projectile.x=p.x;projectile.y=p.y;projectile.mesh.position.set(p.x,4+Math.sin(state.time*18)*2,p.y);if(projectile.fuse<=0){detonateThrowable(projectile);state.thrown.splice(i,1);}}}
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;effect.mesh.material.opacity=(effect.id==='smoke'?.27:.17)*Math.min(1,effect.remaining/.45);if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);burst(enemy.x,enemy.y,0xff6a35,3,.6);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){disposeObject(effect.mesh);state.effects.splice(i,1);}}}
 function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`Q ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;}
-function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));}
+function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));}
 function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
@@ -566,6 +605,14 @@ window.advanceTime=(ms)=>{const frames=Math.max(1,Math.ceil(ms/16.667));for(let 
 function setupControls(){
   addEventListener('keydown',e=>{const key=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(key))e.preventDefault();input.keys.add(key);
     if(e.repeat)return;
+    if(state.pendingLoadoutChange){
+      if(key==='escape')closeLoadoutPreview();
+      else if(key==='tab'){
+        e.preventDefault();const first=$('loadout-cancel'),last=$('loadout-accept'),focused=document.activeElement;
+        (e.shiftKey?(focused===first?last:first):(focused===last?first:last)).focus();
+      }
+      return;
+    }
     if(state.pendingGunPickup){if(key==='1'||key==='2')acceptWeaponPickup(Number(key)-1);else if(key==='escape')closeWeaponPickup(true);return;}
     if(state.merchantOpen){if(key==='escape')closeMerchant();return;}
     if(key==='tab'){e.preventDefault();if(!state.merchantOpen)toggleLoadout();markAction();}
@@ -585,7 +632,8 @@ function setupControls(){
   $('start-button').addEventListener('click',()=>{input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>{toggleLoadout(false);renderer.domElement.focus();});
   $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);$('reset-save').addEventListener('click',resetProgress);
   $('meta-list').addEventListener('click',event=>{const button=event.target.closest('[data-upgrade]');if(!button)return;const result=purchaseUpgrade(state.progress,button.dataset.upgrade);if(result.purchased){state.progress=result.progress;saveProgress();}renderMeta();});
-  $('loadout').addEventListener('click',e=>{if(e.target===$('loadout'))toggleLoadout(false);const gun=e.target.closest('[data-gun]');if(gun)equipWeapon(Number(gun.dataset.gun));const gear=e.target.closest('[data-gear]');if(gear)equipGear(gear.dataset.gear);const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
+  $('loadout').addEventListener('click',e=>{if(e.target===$('loadout')){toggleLoadout(false);return;}const gun=e.target.closest('[data-gun]');if(gun){const index=Number(gun.dataset.gun);if(state.weaponSlots.includes(index))equipWeapon(index);else previewLoadoutChange({type:'weapon',index});return;}const gear=e.target.closest('[data-gear]');if(gear){previewLoadoutChange({type:'gear',id:gear.dataset.gear});return;}const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
+  $('loadout-confirm').addEventListener('click',event=>{if(event.target===$('loadout-confirm'))closeLoadoutPreview();});$('loadout-cancel').addEventListener('click',closeLoadoutPreview);$('loadout-accept').addEventListener('click',confirmLoadoutChange);
   $('weapon-pickup').addEventListener('click',event=>{if(event.target===$('weapon-pickup')){closeWeaponPickup(true);return;}const button=event.target.closest('[data-pickup-slot]');if(button)acceptWeaponPickup(Number(button.dataset.pickupSlot));});
   $('decline-weapon-pickup').addEventListener('click',()=>closeWeaponPickup(true));
   $('close-merchant').addEventListener('click',closeMerchant);$('merchant-panel').addEventListener('click',event=>{const button=event.target.closest('[data-merchant]');if(button)buyMerchantOffer(Number(button.dataset.merchant));});

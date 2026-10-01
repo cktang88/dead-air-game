@@ -110,14 +110,14 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 - The player always has a **primary** and **secondary** slot. Keys `1` and `2` switch slots.
 - Current loadout weight is the sum of equipped weapons and gear. Base capacity is 7.0. Machine pistol + shotgun weigh 5.5; adding the 1.5-weight armor plate fills the rig, while a heavier rifle plus armor exceeds capacity.
-- At the workbench, selecting an unequipped gun replaces the secondary if it fits. A gun pickup previews its identity, stats, selected replacement slot, and resulting weight. The player can replace either slot or leave it. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
+- At the workbench, selecting an unequipped gun previews its stats and resulting carry weight before confirmation; cancel leaves the loadout untouched. A gun pickup previews its identity, stats, selected replacement slot, and resulting weight. The player can replace either slot or leave it. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
 - Show slot, weapon, ammo, per-item weight, total weight, and capacity. Explain an overweight selection directly.
 - The capacity is an intentional tradeoff: leave weight free for armor or utility gear once those systems exist. Do not silently discard gear when swapping a weapon.
 
 ### Inventory behavior
 
 - The armor plate is implemented as a one-health buffer with 1.5 carry weight.
-- A gear screen should compare total load to capacity before confirming a swap.
+- The gear screen previews total load, capacity, health change, and scrap cost before confirming an armor change.
 - Permanent carry-rig upgrades increase capacity through metaprogression.
 - Decide whether temporary attachments have weight. If they do, show the added weight in the same total. Avoid hidden weight penalties.
 - Add a third weapon slot only as a later carry-rig unlock with a real weight and opportunity cost. Two slots are the default and should remain useful.
@@ -258,7 +258,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Detect rooms that can be bypassed on the entry-to-extraction route and prefer one for the cache; label it SIDE CACHE. If a generated floor has no bypassable room, place the cache in a reachable middle room.
 - [ ] Add locked/reward doors, rest/miniboss rooms, and one secret room type.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
-- [ ] Improve workbench signposting and add a preview before replacing a gun or gear item.
+- [x] Improve workbench signposting and add a preview before replacing a gun or gear item.
 - [x] Give every room a safely placed destructible crate. Show its remaining health on hit, deepen crack marks at damage thresholds, and remove its collision plus leave a scrap chance when it breaks.
 - [ ] Add a unique crate-break sound.
 - [x] Show extraction or death, rooms cleared, kills, and coins earned.
@@ -276,7 +276,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Add one armor plate with weight and a +1 health effect.
 - [x] Show weapons, armor, and total weight at the workbench; block overweight swaps.
 - [ ] Add a healing item, scanner, ammo harness, and armor durability.
-- [ ] Add a confirmation preview when replacing a weapon or gear item.
+- [x] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
 - [x] Make weapon pickups show the exact gun and weight, swap either slot when capacity allows, or decline while leaving the pickup in place.
