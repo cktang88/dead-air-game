@@ -23,7 +23,7 @@
       </section>
       <div id="throwable-readout" aria-live="polite" aria-label="Selected throwable"></div>
       <div id="throwable-hint">Q SELECT &nbsp;·&nbsp; G THROW</div>
-      <div id="tempo" title="The number is world speed. Standing still slows time, firing moves it partway toward normal, and movement runs at 1.00×."><div class="tempo-dot"></div><span id="tempo-label">STILL · SLOW</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span><small id="tempo-hint">MOVE 1.00× · FIRE PARTWAY · STOP TO SLOW</small></div>
+      <div id="tempo" title="Standing still slows time. Firing blends slow and normal speed, even while moving. Movement alone runs at 1.00×."><div class="tempo-dot"></div><span id="tempo-label">STILL · SLOW</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span><small id="tempo-hint">MOVE ALONE 1× · FIRE STAYS BLENDED · STOP TO SLOW</small></div>
       <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
       <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
       <div id="toast" role="status"></div>
@@ -32,7 +32,7 @@
           <div class="eyebrow">A STOP-AND-GO DUNGEON SHOOTER</div>
           <h1>DEAD<br /><em>AIR</em></h1>
           <p>The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
-          <p class="tempo-explainer">The speed number is world time. Stand still to slow it down, fire to speed it up partway, or move at normal speed.</p>
+          <p class="tempo-explainer">The speed number is world time. Stand still to slow it down. Firing keeps a blended pace even while you move.</p>
           <label class="seed-control" for="seed-input">RUN SEED <input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
           <p id="run-result" hidden></p>
           <button id="start-button">ENTER THE SECTOR ↗</button>

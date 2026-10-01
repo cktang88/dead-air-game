@@ -8,7 +8,7 @@ The game should run in a desktop browser with keyboard and mouse, load directly 
 
 ## Design pillars
 
-1. **Stillness is a tool.** Waiting slows the simulation to the current idle rate (0.18× by default). Shooting alone blends idle and normal speed geometrically (about 0.42× by default), including sustained automatic fire. Movement runs at 1.00×, whether or not the player is also firing.
+1. **Stillness is a tool.** Waiting slows the simulation to the current idle rate (0.18× by default). Firing blends idle and normal speed geometrically (about 0.42× by default), including sustained automatic fire while moving. Movement without firing runs at 1.00×.
 2. **Rooms are decisions.** A doorway reveals enough to plan, but every room has different cover, enemy pressure, loot, and routes.
 3. **Weapons have jobs.** Primary and secondary slots support different ranges and tempos. Ammunition, reloads, recoil, damage, spread, and weight make the choice matter.
 4. **Hits feel physical.** Impacts use hit stop, knockback, particles, screen shake, and brief enemy collapse. Clear feedback should make each shot easy to read.
@@ -30,7 +30,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 ## Time and combat rules
 
 - Idle or careful aiming: 0.18× simulation speed, giving the player time to read threats and plan.
-- Moving: 1.00× simulation speed. Firing alone: the geometric mean of idle and normal speed. Briefly preserve the last movement or firing rate after release so tempo does not flicker.
+- Moving without firing: 1.00× simulation speed. Firing: the geometric mean of idle and normal speed, including while moving. Briefly preserve the last action rate after release so tempo does not flicker.
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.
 - Bullets are physical projectiles with collision checks; walls block shots.
@@ -171,7 +171,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 | Lucky Find | Improve the chance of uncommon/rare loot | Medium, rising | Small changes; avoid guaranteed rare drops |
 | Carry Rig | Add +1 weight capacity per tier | Medium | Cap low enough that heavy loadouts still make choices |
 | Field Medic | Add one starting health buffer or improve a heal | High | Avoid stacking into careless play |
-| Room Sense | Reveal more of adjacent rooms / enemy silhouettes | Medium | Reveal information, never shoot through walls |
+| Room Sense | Reveal nearby room outlines and enemy blips through walls within 15 / 25 / 35 tiles | Medium | Reveal information only; shots still stop at walls |
 | Salvager | Improve scrap from crates and clear rewards | Low/medium | Does not multiply permanent coins |
 | Weapon Familiarity | Small reload or recoil improvement for a chosen class | Medium | One weapon class at a time; respec cost should be modest |
 
@@ -215,7 +215,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ### Unit coverage
 
-- Tempo is slow while idle, between slow and normal while firing alone, 1.00× while moving, and zero in menus.
+- Tempo is slow while idle, between slow and normal while firing (including when moving), 1.00× while moving without firing, and zero in menus.
 - Every attachment changes only the intended weapon values.
 - Carry weight sums correctly; an overweight swap is rejected; a valid replacement preserves the two-slot invariant.
 - Crate health decreases by actual damage, clamps at zero, and cannot become negative.
@@ -269,6 +269,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Award coins exactly once on death or extraction; show the run summary payout.
 - [x] Build the between-run upgrade screen and buy capped permanent upgrades.
 - [x] Implement Runner’s Legs, Still Mind, Salvager crate luck, and Carry Rig with capped effects.
+- [x] Add Room Sense: explored rooms and known threats stay on the minimap; upgrades reveal nearby rooms and enemy blips through walls at increasing ranges.
 - [x] Test progress persistence across browser refreshes; add a visible save reset option with a confirmation prompt.
 
 ### Next: inventory and gear
@@ -301,4 +302,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, and carry capacity. Remaining work focuses on balance, repeated-run testing, and the other roadmap items above.
+A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, and the other roadmap items above.

@@ -2,16 +2,18 @@ import {BASE_CARRY_CAPACITY} from './catalog.js';
 
 export const SAVE_VERSION = 1;
 export const SAVE_KEY = 'dead-air.progress.v1';
+const ROOM_SENSE_RANGE_TILES = [15,25,35];
 
 export const META_UPGRADES = [
   {id:'runner',name:'RUNNER’S LEGS',description:'+6% movement speed per level',costs:[25,50,80]},
   {id:'stillmind',name:'STILL MIND',description:'Idle time slows by 0.015× per level',costs:[30,55,85]},
   {id:'carryrig',name:'CARRY RIG',description:'+1 weapon and gear capacity per level',costs:[35,60,95]},
   {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance per level',costs:[20,45,75]},
+  {id:'roomsense',name:'ROOM SENSE',description:`Reveal room outlines and enemy blips through walls within ${ROOM_SENSE_RANGE_TILES.join(' / ')} tiles`,costs:[35,65,100]},
 ];
 
 export function emptyProgress() {
-  return {version:SAVE_VERSION,coins:0,upgrades:{runner:0,stillmind:0,carryrig:0,salvager:0}};
+  return {version:SAVE_VERSION,coins:0,upgrades:{runner:0,stillmind:0,carryrig:0,salvager:0,roomsense:0}};
 }
 
 export function parseProgress(serialized) {
@@ -52,11 +54,12 @@ export function purchaseUpgrade(progress,id) {
 }
 
 export function progressionStats(progress) {
-  const {runner,stillmind,carryrig,salvager}=progress.upgrades;
+  const {runner,stillmind,carryrig,salvager,roomsense}=progress.upgrades;
   return {
     moveSpeed:112*(1+.06*runner),
     idleScale:Math.max(.12,.18-.015*stillmind),
     carryCapacity:BASE_CARRY_CAPACITY+carryrig,
     crateDropChance:Math.min(.65,.35+.1*salvager),
+    scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*32,
   };
 }

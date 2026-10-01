@@ -38,6 +38,18 @@ export function crateDamageStage(hp, maxHp) {
   return ratio<=.35?2:ratio<=.7?1:0;
 }
 
+export function minimapContactVisible({visited, distance, scanRange}) {
+  if (visited) return true;
+  return Number.isFinite(distance) && Number.isFinite(scanRange) && scanRange > 0 && distance <= scanRange;
+}
+
+export function distanceToRect(point, rect) {
+  const values=[point.x,point.y,rect.left,rect.top,rect.right,rect.bottom];
+  if (!values.every(Number.isFinite) || rect.left>rect.right || rect.top>rect.bottom) return Infinity;
+  const dx=Math.max(rect.left-point.x,0,point.x-rect.right),dy=Math.max(rect.top-point.y,0,point.y-rect.bottom);
+  return Math.hypot(dx,dy);
+}
+
 export function segmentIntersectsCircle(start, end, center, radius) {
   if (![start.x,start.y,end.x,end.y,center.x,center.y,radius].every(Number.isFinite)||radius<0) return false;
   const dx=end.x-start.x,dy=end.y-start.y,lengthSquared=dx*dx+dy*dy;

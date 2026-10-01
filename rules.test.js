@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -120,6 +120,24 @@ test('crate damage stages progress at clear health thresholds and clamp invalid 
   assert.equal(crateDamageStage(10,0),2);
 });
 
+test('the minimap hides unknown distant contacts but shows explored or scanned contacts',()=>{
+  assert.equal(minimapContactVisible({visited:false,distance:100,scanRange:0}),false);
+  assert.equal(minimapContactVisible({visited:false,distance:480,scanRange:480}),true);
+  assert.equal(minimapContactVisible({visited:false,distance:481,scanRange:480}),false);
+  assert.equal(minimapContactVisible({visited:true,distance:900,scanRange:0}),true);
+  assert.equal(minimapContactVisible({visited:false,distance:Infinity,scanRange:480}),false);
+});
+
+test('room scan distance measures from the full outer tile edge, including the last tile',()=>{
+  const room={left:32,top:64,right:128,bottom:160};
+  assert.equal(distanceToRect({x:80,y:100},room),0);
+  assert.equal(distanceToRect({x:128,y:100},room),0);
+  assert.equal(distanceToRect({x:129,y:100},room),1);
+  assert.equal(distanceToRect({x:130,y:162},room),Math.hypot(2,2));
+  assert.equal(distanceToRect({x:0,y:0},{...room,right:room.left-1}),Infinity);
+  assert.equal(distanceToRect({x:NaN,y:0},room),Infinity);
+});
+
 test('cover circles intersect a sight or blast path, including endpoints and edge contact',()=>{
   const start={x:0,y:0},end={x:100,y:0};
   assert.equal(segmentIntersectsCircle(start,end,{x:50,y:15},15),true);
@@ -185,10 +203,24 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,crateDropChance:.35});
+  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,crateDropChance:.35,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,crateDropChance:.35});
+  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,crateDropChance:.35,scannerRange:0});
+});
+
+test('Room Sense is a capped saved upgrade with increasing scan range',()=>{
+  let progress=awardCoins(emptyProgress(),200);
+  for(const range of [480,800,1120]){
+    const purchase=purchaseUpgrade(progress,'roomsense');
+    assert.equal(purchase.purchased,true);
+    progress=purchase.progress;
+    assert.equal(progressionStats(progress).scannerRange,range);
+  }
+  assert.equal(purchaseUpgrade(progress,'roomsense').purchased,false);
+  const restored=parseProgress(JSON.stringify(progress));
+  assert.equal(restored.upgrades.roomsense,3);
+  assert.equal(progressionStats(restored).scannerRange,1120);
 });

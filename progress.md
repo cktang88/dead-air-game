@@ -5,7 +5,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Current playable build
 
 - Three.js renders the arena; Rapier 2D handles actor, cover, wall, and projectile physics; ROT.js Digger generates connected rooms and halls.
-- Waiting slows the simulation; movement runs at 1.00× and firing alone blends idle and normal time. Menus pause the run.
+- Waiting slows the simulation; movement alone runs at 1.00× and firing blends idle and normal time, including while moving. Menus pause the run.
 - Thirteen guns cover 3 assault rifles, 4 SMGs, 2 pistols, 3 sniper/anti-materiel rifles, and 1 shotgun. Two weighted slots keep independent ammunition. Attachments are compatible per gun and affect the active gun only.
 - Player and enemy weapons visibly follow aim. Player reload and enemy reload poses tilt their weapons. Ranged enemies show a committed direction before shooting; their bullets travel on that fixed path and can be dodged.
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
@@ -155,3 +155,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Audio context starts from the player's Start click to meet browser gesture requirements. Sound nodes share one master gain and are skipped at zero volume.
 - Verification: volume changed from 65% to 50%, survived a refresh, then was restored to 65% and verified after refresh. A live run played three shots into a 60-HP crate until it broke; the crate disappeared and the browser reported no errors. `npm test` passes 55 tests, including malformed/out-of-range settings and persistence; syntax and diff checks pass. Listening-based sound-level and quality tuning remains open.
 - Next: playtest and tune the new sounds, then add reduced shake/flash options and remappable controls.
+
+## Room Sense scouting upgrade
+
+- Added a capped, permanent Room Sense track to the version 1 save. It reveals nearby room silhouettes and enemy blips on the minimap through walls at 15, 25, or 35 tiles; it does not affect projectile blocking.
+- The base minimap now hides unexplored rooms and enemy locations outside visited rooms, so the scouting upgrade adds information rather than repeating a map that already revealed every threat.
+- Added tests for scan range boundaries, exact room edges, visited contacts, persistence, and capped purchases. `npm test` passes 58 tests, and syntax plus `git diff --check` pass.
+- Browser verification: the current preview at `http://127.0.0.1:8767/` shows the Room Sense card, exact range tiers, and its 35-coin first purchase; a fresh run shows only the entry room on the minimap. This uses a separate preview origin from the existing `8766` save. The headless Playwright runner remains blocked by the macOS Mach-port permission error.
+- Next: add a health item / gear scanner and armor durability; then playtest scan range in combat and tune the remaining room and run balance.
