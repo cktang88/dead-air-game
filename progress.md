@@ -104,3 +104,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Updated the spec to match the playable 13-gun catalog and pickup behavior.
 - Verification: `npm test` passes 37 tests; `node --check` and `git diff --check` pass. The in-app browser renders a live run without errors. The required Playwright client still cannot launch Chromium in this macOS sandbox (Mach-port permission denied), so the pickup modal itself has not received a full browser interaction check.
 - Next: exercise the modal through a longer browser playtest once a working automation runtime is available; review workbench gear replacement preview and weapon/ammo edge cases.
+
+## Seeded room roles
+
+- Floors now reserve entry and extraction roles and assign deterministic combat, cache, armory, clinic, and hazard roles to other rooms. The optional merchant replaces only a normal combat room.
+- Caches have two defenders and guarantee scrap plus a mod pickup. Clinics are safe and heal. Armories have three defenders and a gun pickup; killboxes have four or five enemies. Reward tiles are reserved before props and enemy spawns so crates and actors cannot cover them. Ordinary rooms retain their existing encounter and loot rules.
+- Room names identify special roles in the HUD. The integration harness now checks role stability and reserved entry/extraction while keeping its 64-seed route checks.
+- Verification: `npm test` passes 41 tests. The browser generation harness passes across 64 seeds and the fallback map, checking reachable role rooms and reward tiles clear of props. Seed 417 starts in the in-app browser with no console errors. Full combat and role-reward collection still need a longer playtest.
+- Next: validate reward spawn placement in all generated room shapes, then add intentional branch and secret-room topology or tune role frequency and enemy budgets.

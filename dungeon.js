@@ -1,4 +1,5 @@
 import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {assignRoomRoles} from './room-roles.js';
 
 const ROOM_NAMES = ['ENTRY', 'FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
 
@@ -36,9 +37,12 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       .sort((a, b) => a.pathLength - b.pathLength);
 
     if (rooms.length < 6) continue;
-    rooms[0].name = 'ENTRY';
-    rooms[0].visited = true;
-    return {cells: shaped.cells, doors: shaped.doors, rooms, start: rooms[0], width: mapWidth, height: mapHeight};
+    const roleRooms=assignRoomRoles(rooms,seed);
+    roleRooms[0].name = 'ENTRY';
+    roleRooms[0].visited = true;
+    for(const room of roleRooms.slice(1,-1))if(room.role!=='combat')room.name=({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX'})[room.role];
+    roleRooms.at(-1).name='EXTRACTION';
+    return {cells: shaped.cells, doors: shaped.doors, rooms:roleRooms, start: roleRooms[0], width: mapWidth, height: mapHeight};
   }
   throw new Error(`ROT.js could not generate six reachable rooms for seed ${seed}`);
 }

@@ -1,6 +1,8 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
+import {TILE} from '../catalog.js';
 import {generateDungeon} from '../dungeon.js';
 import {shortestFloorPath} from '../layout.js';
+import {findRoomPropPosition} from '../room-props.js';
 
 const result = document.querySelector('#result');
 const seeds = Array.from({length: 64}, (_, index) => 1 + index * 3571);
@@ -10,7 +12,7 @@ const stableMap = dungeon => JSON.stringify({
   height: dungeon.height,
   cells: dungeon.cells,
   doors: dungeon.doors,
-  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape})),
+  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape, role}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape, role})),
 });
 
 try {
@@ -30,6 +32,19 @@ try {
 
     const entry = dungeon.rooms[0];
     const exit = dungeon.rooms[dungeon.rooms.length - 1];
+    if(entry.role!=='entry'||exit.role!=='extraction')throw new Error(`Seed ${seed} did not reserve entry and extraction roles`);
+    if(dungeon.rooms.filter(room=>room.role==='cache').length!==1)throw new Error(`Seed ${seed} did not generate exactly one cache room`);
+    if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
+    for(const room of dungeon.rooms.filter(room=>['cache','armory','clinic'].includes(room.role))){
+      const rewardCount=room.role==='cache'?2:1,reserved=[];
+      for(let reward=0;reward<rewardCount;reward++){
+        const point=findRoomPropPosition({room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()});
+        if(!point||dungeon.cells[Math.floor(point.y/TILE)]?.[Math.floor(point.x/TILE)]!==0)throw new Error(`Seed ${seed} has no valid ${room.role} reward position`);
+        reserved.push({...point,radius:18});
+      }
+      const prop=findRoomPropPosition({room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()});
+      if(prop&&reserved.some(point=>Math.hypot(prop.x-point.x,prop.y-point.y)<point.radius+22))throw new Error(`Seed ${seed} placed room cover over a ${room.role} reward`);
+    }
     for (const room of dungeon.rooms) {
       if (!isFloor(dungeon.cells, room.cx, room.cy)) throw new Error(`Seed ${seed} has a blocked room center`);
       const path = shortestFloorPath(dungeon.cells, {x: entry.cx, y: entry.cy}, {x: room.cx, y: room.cy});

@@ -9,6 +9,7 @@ import {shapeDungeon, shortestFloorPath} from './layout.js';
 import {findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
+import {roomEnemyCount, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 
 const $ = (id) => document.getElementById(id);
@@ -132,14 +133,23 @@ function makeDoorFrames(){
     const lintel=new THREE.Mesh(headerGeo,frameMat);lintel.scale.x=horizontal?TILE*2+5:5;lintel.scale.z=horizontal?7:TILE*2+5;lintel.position.set(x,WALL_H-2,z);scene.add(lintel);state.props.push(lintel);
   }
 }
+function placeRoleRewards(room){
+  const reserved=[];
+  for(const kind of roomPickupKinds(room.role)){
+    const point=findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...reserved],tileSize:TILE,random});
+    if(!point)continue;
+    dropPickup(kind,point.x,point.y,kind==='scrap'?30+Math.floor(random()*21):0);
+    reserved.push({...point,radius:18});
+  }
+}
 function createRoomMap(){
   const dungeon=generateDungeon(ROT,state.seed);
   state.tileMap=dungeon.cells;state.doors=dungeon.doors;
   state.mapW=dungeon.width;state.mapH=dungeon.height;
   state.rooms=dungeon.rooms;state.currentRoom=0;
   state.rooms.forEach(room=>room.merchant=false);
-  const merchantRooms=state.rooms.map((room,index)=>({room,index})).filter(item=>item.index>=2&&item.index<state.rooms.length-1);
-  if(merchantRooms.length&&random()<.18){const {room}=choose(merchantRooms);room.merchant=true;room.name='BLACK MARKET';room.stock=[];}
+  const merchantRooms=state.rooms.map((room,index)=>({room,index})).filter(item=>item.index>=2&&item.index<state.rooms.length-1&&item.room.role==='combat');
+  if(merchantRooms.length&&random()<.18){const {room}=choose(merchantRooms);room.merchant=true;room.role='merchant';room.name='BLACK MARKET';room.stock=[];}
 }
 function makeLevel(){
   clearLevel(); createRoomMap();
@@ -167,10 +177,10 @@ function makeLevel(){
     makeFixedBox(run.x*TILE+width/2,run.y*TILE+TILE/2,width/2,TILE/2);
   });wallMesh.instanceMatrix.needsUpdate=true;scene.add(wallMesh);state.walls.push(wallMesh);
   makeDoorFrames();
+  for(const room of state.rooms)placeRoleRewards(room);
   const pillarGeo=new THREE.CylinderGeometry(7,8,11,6);const pillarMat=new THREE.MeshStandardMaterial({color:0x36313f,roughness:.8});
   for(const room of state.rooms){
-    const center={x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE};
-    const pickRoomProp=()=>findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:state.cover,tileSize:TILE,random});
+    const pickRoomProp=()=>findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...state.pickups.map(pickup=>({...pickup,radius:18}))],tileSize:TILE,random});
     const guaranteedCrate=pickRoomProp();
     if(guaranteedCrate)spawnCrate(guaranteedCrate.x,guaranteedCrate.y);
     for(let i=0;i<Math.floor((room.x2-room.x1)*(room.y2-room.y1)/52);i++){
@@ -183,15 +193,17 @@ function makeLevel(){
   for(const [i,room] of state.rooms.entries()){
     if(i===0)continue;
     if(room.merchant)continue;
-    const count=2+Math.floor(random()*3),encounter=chooseEncounterTypes(count,state.seed+i*7919);
+    const count=roomEnemyCount(room.role,random()),encounter=chooseEncounterTypes(count,state.seed+i*7919);
     for(let j=0;j<count;j++){
       const point=findEnemySpawn(room,encounter[j]);
       if(point)spawnEnemy(encounter[j],point.x,point.y);
     }
-    if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
-    if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE);}
+    if(!roomPickupKinds(room.role).length){
+      if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
+      if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE);}
+    }
     const tint=[0xff5367,0xeaaa66,0x79d6ae,0xa888e8][i%4];
-    const floorGlow=new THREE.Mesh(new THREE.CircleGeometry(Math.min(room.x2-room.x1,room.y2-room.y1)*TILE*.31,32),new THREE.MeshBasicMaterial({color:tint,transparent:true,opacity:.025,depthWrite:false}));floorGlow.rotation.x=-Math.PI/2;floorGlow.position.set((room.cx+.5)*TILE,.04,(room.cy+.5)*TILE);scene.add(floorGlow);state.props.push(floorGlow);
+  const floorGlow=new THREE.Mesh(new THREE.CircleGeometry(Math.min(room.x2-room.x1,room.y2-room.y1)*TILE*.31,32),new THREE.MeshBasicMaterial({color:tint,transparent:true,opacity:.025,depthWrite:false}));floorGlow.rotation.x=-Math.PI/2;floorGlow.position.set((room.cx+.5)*TILE,.04,(room.cy+.5)*TILE);scene.add(floorGlow);state.props.push(floorGlow);
   }
   const start=state.rooms[0];const sx=(start.cx+.5)*TILE,sy=(start.cy+.5)*TILE;
   const body=makeBody({x:sx,y:sy},8,false);body.lockRotations(true,true);body.setLinearDamping(4);
@@ -247,6 +259,7 @@ function findEnemySpawn(room,type){
   const clear=(x,y)=>state.tileMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]===0&&
     state.doors.every(door=>Math.hypot(x-(door.x+.5)*TILE,y-(door.y+.5)*TILE)>=TILE*1.2)&&
     !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
+    !state.pickups.some(pickup=>pickup.available&&Math.hypot(x-pickup.x,y-pickup.y)<radius+18)&&
     !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+(enemy.type==='brute'?10:8)+4);
   for(let attempt=0;attempt<48;attempt++){
     const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
@@ -514,7 +527,7 @@ function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);c
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
   const gear=GEAR.find(item=>item.id===state.gear),room=state.rooms[state.currentRoom];
-  return JSON.stringify({mode:state.mode,seed:state.seed,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex],reloading:state.reloadTimer>0}:null,loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity,attachments:[...attachmentsFor(GUNS[state.weaponIndex])]},room:room?.name,merchant:!!room?.merchant,merchantOpen:state.merchantOpen,weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:[0,1].map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp),aiming:e.aimTimer>0,reloading:e.reloadTimer>0,tactic:e.intent})).slice(0,12),crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y),gun:p.kind==='gun'?GUNS[p.gunIndex].name:undefined})).slice(0,8),throwables:{selected:selectedThrowable().id,counts:state.throwables,projectiles:state.thrown.length,effects:state.effects.map(effect=>effect.id)},kills:state.kills,scrap:state.scrap,coins:state.progress.coins,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});
+  return JSON.stringify({mode:state.mode,seed:state.seed,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex],reloading:state.reloadTimer>0}:null,loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity,attachments:[...attachmentsFor(GUNS[state.weaponIndex])]},room:room?.name,roomRole:room?.role,merchant:!!room?.merchant,merchantOpen:state.merchantOpen,weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:[0,1].map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp),aiming:e.aimTimer>0,reloading:e.reloadTimer>0,tactic:e.intent})).slice(0,12),crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y),gun:p.kind==='gun'?GUNS[p.gunIndex].name:undefined})).slice(0,8),throwables:{selected:selectedThrowable().id,counts:state.throwables,projectiles:state.thrown.length,effects:state.effects.map(effect=>effect.id)},kills:state.kills,scrap:state.scrap,coins:state.progress.coins,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});
 }
 window.render_game_to_text=renderGameToText;
 window.advanceTime=(ms)=>{const frames=Math.max(1,Math.ceil(ms/16.667));for(let i=0;i<frames;i++)update(1/60);render();};

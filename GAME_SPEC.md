@@ -47,7 +47,8 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 - Every run has an entry, at least six combat or utility rooms, and an extraction room.
 - Rooms vary in width, height, outline, entrance position, and corridor connection. Hallways should create choices and avoid one long empty chain.
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
-- Each room gets a role: combat, cache, armory, clinic, hazard, rest, miniboss, or extraction. Roles affect enemy budget, props, lights, and loot.
+- Each room gets a deterministic role: combat, cache, armory, clinic, hazard, merchant, or extraction. Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
+- Keep the entry and extraction roles reserved. Add optional branches, locked reward doors, rest/miniboss rooms, and secrets as later generation work.
 - Combat room size and enemy budget scale with distance from entry. A room may be small and dangerous or large with scattered guards.
 - Room footprints vary between rectangles and L, U, or C outlines. Keep the center and door approaches clear, and preserve a walkable route between all connected rooms.
 - Prevent spawning enemies, pickups, crates, or the player inside solid walls or on top of another required object.
@@ -253,9 +254,10 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Add seed selection/display and deterministic placement for props, pickups, and enemy spawns.
 - [x] Validate every room layout for a path from entry to exit and reachable doorways. Browser integration checks cover 64 deterministic ROT.js seeds twice, plus the low-room-count larger-map retry.
-- [ ] Add room roles, locked/reward doors, branch rooms, and one secret room type.
+- [x] Add seeded room roles that change enemy counts and provide guaranteed cache, armory, and clinic rewards.
+- [ ] Add deliberate branch rooms, locked/reward doors, rest/miniboss rooms, and one secret room type.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
-- [ ] Make the workbench reachable and clearly signposted; add a weapon replacement preview.
+- [ ] Improve workbench signposting and add a preview before replacing a gun or gear item.
 - [ ] Add crate health feedback (small health state/crack stages), unique break sound, and confirm every room has at least one crate.
 - [x] Show extraction or death, rooms cleared, kills, and coins earned.
 
