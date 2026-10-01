@@ -17,7 +17,7 @@ Then open `http://localhost:8000`. The game loads Three.js, Rapier 2D, and ROT.j
 - **1 / 2:** switch primary and secondary; **Shift:** reload; **R:** restart after a run ends.
 - **Esc:** pause; **F:** toggle fullscreen.
 
-The workbench lets you select a secondary weapon and shows weapon weight against your carry limit. Permanent armor, gear, and carry upgrades are planned; the current run uses weapon weight only.
+The workbench lets you select a secondary weapon or buy a weighted armor plate with run scrap. Armor adds one health. The between-run safehouse awards persistent coins on death or extraction; use them for movement, time-slow, crate-loot, and carry-capacity upgrades.
 
 Generated runs use ROT.js's Digger room and corridor generator. Walls are indestructible; wooden crates take damage and may drop scrap. Combat rules live in `rules.js` and have a small Node test suite:
 
@@ -25,4 +25,4 @@ Generated runs use ROT.js's Digger room and corridor generator. Walls are indest
 npm test
 ```
 
-See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist. Persistent coin upgrades are planned but not in the current build.
+See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist. Progress is saved in this browser; a save reset button and more gear types are still planned.

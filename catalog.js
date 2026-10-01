@@ -16,7 +16,11 @@ export const GUNS = [
   { id:'rifle', name:'HARDLINE RIFLE', short:'STEADY · LONG', weight:4, damage:41, rate:0.42, speed:880, mag:10, reserve:50, spread:0.018, color:0x84e1bd },
 ];
 
-export const BASE_CARRY_CAPACITY = 6.5;
+export const BASE_CARRY_CAPACITY = 7;
+
+export const GEAR = [
+  {id:'armor',name:'ARMOR PLATE',description:'+1 hit before the run ends',weight:1.5,cost:25},
+];
 
 export const ENEMY_TYPES = {
   chaser:{name:'RUSHER', color:0xe95563, hp:42, speed:72, damage:1, range:19, brain:'rush'},

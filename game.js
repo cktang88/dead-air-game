@@ -1,8 +1,9 @@
 import * as THREE from 'https://esm.sh/three@0.180.0';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GUNS, MODS, TAU, TILE, WALL_H} from './catalog.js';
+import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, TAU, TILE, WALL_H} from './catalog.js';
 import {canCarryWeapons, chooseEncounterTypes, damageDurability, reloadSeconds, timeScale, weaponLoadoutWeight, weaponStats} from './rules.js';
+import {META_UPGRADES, awardCoins, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout, SAVE_KEY} from './progression.js';
 
 const $ = (id) => document.getElementById(id);
 const magSize=(gun)=>weaponStats(gun,state.mods).magazine;
@@ -11,7 +12,8 @@ const state = {
   mode:'title', running:false, paused:false, loadoutOpen:false, time:0, elapsed:0, score:0, kills:0, scrap:0, roomsCleared:0,
   seed:Math.floor(Math.random()*0x7fffffff), tileMap:[], mapW:96, mapH:72, rooms:[], currentRoom:0,
   player:null, enemies:[], bullets:[], pickups:[], crates:[], particles:[], props:[], doors:[], colliders:[],
-  weaponSlots:[0,1], activeSlot:0, get weaponIndex(){return this.weaponSlots[this.activeSlot];}, carryCapacity:BASE_CARRY_CAPACITY, weaponAmmo:GUNS.map(g=>g.mag), reserveAmmo:GUNS.map(g=>g.reserve), mods:new Set(), health:5, maxHealth:5,
+  weaponSlots:[0,1], activeSlot:0, get weaponIndex(){return this.weaponSlots[this.activeSlot];}, gear:null, carryCapacity:BASE_CARRY_CAPACITY, weaponAmmo:GUNS.map(g=>g.mag), reserveAmmo:GUNS.map(g=>g.reserve), mods:new Set(), health:5, maxHealth:5,
+  progress:loadProgress(), paidOut:false,
   aim:{x:1,y:0}, lastAction:0, fireCooldown:0, reloadTimer:0, invuln:0, shake:0, hitstop:0, toastTimer:0, roomToast:'', sector:1,
   scene:null, camera:null, renderer:null, physics:null, floorMesh:null, walls:[], meshRoot:null, actorMeshes:new Map(), pickupMeshes:new Map(), bulletMeshes:new Map(),
 };
@@ -28,6 +30,8 @@ function rand(min,max){ return min+Math.random()*(max-min); }
 function choose(list){ return list[Math.floor(Math.random()*list.length)]; }
 function distance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 function clamp(n,min,max){ return Math.max(min,Math.min(max,n)); }
+function loadProgress(){try{return parseProgress(localStorage.getItem(SAVE_KEY));}catch{return parseProgress(null);}}
+function saveProgress(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state.progress));}catch{toast('PROGRESS COULD NOT BE SAVED');}}
 function hud(){
   const gun=GUNS[state.weaponIndex];
   $('health').innerHTML=Array.from({length:state.maxHealth},(_,i)=>`<span class="heart ${i>=state.health?'empty':''}">♥</span>`).join('');
@@ -49,10 +53,16 @@ function syncHudFrame(){
 }
 function renderLoadout(){
   if(!$('loadout-gun'))return;
-  const weight=weaponLoadoutWeight(state.weaponSlots,GUNS);
-  $('loadout-gun').innerHTML=GUNS.map((gun,i)=>{const slot=state.weaponSlots.indexOf(i),fits=slot>=0||canCarryWeapons([state.weaponSlots[0],i],GUNS,state.carryCapacity);return `<button class="loadout-weapon ${i===state.weaponIndex?'active':''}" data-gun="${i}" ${!fits?'disabled':''}><strong>${slot>=0?`${slot===state.activeSlot?'ACTIVE':'SLOT '+(slot+1)} · `:'SWAP SECONDARY · '}${gun.name}</strong><span>${gun.weight.toFixed(1)} wt · ${state.weaponAmmo[i]} / ${magSize(gun)} · ${state.reserveAmmo[i]} reserve</span></button>`}).join('');
+  const gear=GEAR.find(item=>item.id===state.gear),weight=weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0);
+  $('loadout-gun').innerHTML=GUNS.map((gun,i)=>{const slot=state.weaponSlots.indexOf(i),fits=slot>=0||canCarryWeapons([state.weaponSlots[0],i],GUNS,state.carryCapacity-(gear?.weight||0));return `<button class="loadout-weapon ${i===state.weaponIndex?'active':''}" data-gun="${i}" ${!fits?'disabled':''}><strong>${slot>=0?`${slot===state.activeSlot?'ACTIVE':'SLOT '+(slot+1)} · `:'SWAP SECONDARY · '}${gun.name}</strong><span>${gun.weight.toFixed(1)} wt · ${state.weaponAmmo[i]} / ${magSize(gun)} · ${state.reserveAmmo[i]} reserve</span></button>`}).join('');
+  $('gear-list').innerHTML=GEAR.map(item=>{const equipped=state.gear===item.id,canEquip=canCarryWeapons(state.weaponSlots,GUNS,state.carryCapacity-item.weight);return `<div class="mod-row"><span>${item.name}<br><small style="color:#8e8896">${item.description} · ${item.weight.toFixed(1)} wt</small></span><button data-gear="${item.id}" ${equipped?'':state.scrap<item.cost||!canEquip?'disabled':''}>${equipped?'UNEQUIP':`${item.cost} SCRAP`}</button></div>`}).join('');
   $('carry-readout').textContent=`WEIGHT ${weight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} · 2 SLOTS`;
   $('mod-list').innerHTML=MODS.map(mod=>{const has=state.mods.has(mod.id);return `<div class="mod-row"><span>${mod.name}<br><small style="color:#8e8896">${mod.info}</small></span><button data-mod="${mod.id}" ${has||state.scrap<mod.cost?'disabled':''}>${has?'INSTALLED':`${mod.cost} SCRAP`}</button></div>`}).join('');
+}
+function renderMeta(){
+  $('meta-balance').textContent=String(state.progress.coins);
+  $('meta-coins').textContent=`AVAILABLE · ${state.progress.coins} COINS`;
+  $('meta-list').innerHTML=META_UPGRADES.map(item=>{const level=state.progress.upgrades[item.id],cost=item.costs[level];return `<div class="meta-row"><div><strong>${item.name} · ${level}/${item.costs.length}</strong><small>${item.description}</small></div><button data-upgrade="${item.id}" ${cost===undefined||state.progress.coins<cost?'disabled':''}>${cost===undefined?'MAX':`${cost} COINS`}</button></div>`}).join('');
 }
 function toast(message,duration=1700){const el=$('toast');el.textContent=message;el.classList.add('show');state.toastTimer=duration;}
 function makeBody(position,radius,fixed=false){
@@ -183,7 +193,7 @@ function breakCrate(crate){
   if(crate.crack){scene.remove(crate.crack);crate.crack.geometry.dispose();crate.crack.material.dispose();}
   state.props=state.props.filter(prop=>prop!==crate.mesh&&prop!==crate.crack);state.colliders=state.colliders.filter(item=>item.body!==crate.body);state.crates=state.crates.filter(item=>item!==crate);
   state.shake=Math.max(state.shake,1.8);burst(crate.x,crate.y,0xb98258,11,1.1);
-  if(Math.random()<.35)dropPickup('scrap',crate.x,crate.y,8+Math.floor(Math.random()*13));
+  if(Math.random()<progressionStats(state.progress).crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(Math.random()*13));
 }
 function spawnEnemy(type,x,y){
   const def=ENEMY_TYPES[type],body=makeBody({x,y},type==='brute'?10:8,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
@@ -236,22 +246,24 @@ function hitPlayer(damage,x,y){
   if(state.invuln>0||state.mode!=='play')return;
   state.health=Math.max(0,state.health-damage);state.invuln=.85;state.shake=5.5;state.hitstop=.075;state.lastAction=performance.now()/1000;burst(state.player.x,state.player.y,0xff4e63,12,1.1);toast(damage>1?'BRUTAL HIT':'YOU GOT TAGGED',900);hud();
   const dx=state.player.x-x,dy=state.player.y-y,len=Math.hypot(dx,dy)||1;state.player.body.setLinvel({x:dx/len*95,y:dy/len*95},true);
-  if(state.health<=0){state.mode='dead';toast('RUN OVER · PRESS R TO RESTART',4000);$('vignette').style.background='radial-gradient(ellipse,rgba(95,15,30,.25),rgba(10,6,13,.85))';}
+  if(state.health<=0){finishRun('dead');$('vignette').style.background='radial-gradient(ellipse,rgba(95,15,30,.25),rgba(10,6,13,.85))';}
 }
 function reload(){if(state.reloadTimer>0||state.weaponAmmo[state.weaponIndex]>=magSize(GUNS[state.weaponIndex])||state.reserveAmmo[state.weaponIndex]<=0)return;state.reloadTimer=reloadSeconds(state.mods);toast('RELOADING',700);}
 function switchWeapon(slot){if(slot<0||slot>=state.weaponSlots.length)return;state.reloadTimer=0;state.activeSlot=slot;state.lastAction=performance.now()/1000;hud();}
-function equipWeapon(index){const currentSlot=state.weaponSlots.indexOf(index);if(currentSlot>=0){switchWeapon(currentSlot);return;}if(!canCarryWeapons([state.weaponSlots[0],index],GUNS,state.carryCapacity)){toast('TOO HEAVY · UPGRADE YOUR CARRY RIG');return;}state.weaponSlots[1]=index;state.weaponAmmo[index]=Math.min(state.weaponAmmo[index],GUNS[index].mag);toast(`SECONDARY · ${GUNS[index].name}`);hud();}
+function equipWeapon(index){const currentSlot=state.weaponSlots.indexOf(index);if(currentSlot>=0){switchWeapon(currentSlot);return;}const gear=GEAR.find(item=>item.id===state.gear);if(!canCarryWeapons([state.weaponSlots[0],index],GUNS,state.carryCapacity-(gear?.weight||0))){toast('TOO HEAVY · UPGRADE YOUR CARRY RIG');return;}state.weaponSlots[1]=index;state.weaponAmmo[index]=Math.min(state.weaponAmmo[index],GUNS[index].mag);toast(`SECONDARY · ${GUNS[index].name}`);hud();}
+function equipGear(id){const item=GEAR.find(option=>option.id===id);if(!item)return;if(state.gear===id){state.gear=null;state.maxHealth=5;state.health=Math.min(state.health,state.maxHealth);toast('ARMOR PLATE STORED');hud();return;}if(state.scrap<item.cost||!canCarryWeapons(state.weaponSlots,GUNS,state.carryCapacity-item.weight)){toast('ARMOR NEEDS SCRAP AND 1.5 FREE WEIGHT');return;}state.scrap-=item.cost;state.gear=id;state.maxHealth=6;state.health=Math.min(state.maxHealth,state.health+1);toast('ARMOR PLATE EQUIPPED · +1 VITAL');hud();}
 function installMod(id){const mod=MODS.find(m=>m.id===id);if(!mod||state.mods.has(id)||state.scrap<mod.cost)return;state.scrap-=mod.cost;state.mods.add(id);if(id==='extended'){const i=state.weaponIndex;state.weaponAmmo[i]=Math.min(magSize(GUNS[i]),state.weaponAmmo[i]+Math.ceil(GUNS[i].mag*.5));}toast(`${mod.name} INSTALLED`);hud();}
 function collect(pickup){if(!pickup.available)return false;const d=distance(state.player,pickup);if(d>28)return false;pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);burst(pickup.x,pickup.y,pickup.mesh.material.color.getHex(),8);
   switch(pickup.kind){
     case'scrap':state.scrap+=pickup.value||12;toast(`+${pickup.value||12} SCRAP`);break;
-    case'gun':{const candidate=GUNS.findIndex((_,i)=>!state.weaponSlots.includes(i)&&canCarryWeapons([state.weaponSlots[0],i],GUNS,state.carryCapacity));if(candidate<0){toast('NO GUN FITS YOUR CARRY RIG');pickup.available=true;scene.add(pickup.mesh);state.pickupMeshes.set(pickup,pickup.mesh);}else{state.weaponSlots[1]=candidate;state.weaponAmmo[candidate]=GUNS[candidate].mag;state.reserveAmmo[candidate]+=GUNS[candidate].mag;toast(`SECONDARY · ${GUNS[candidate].name}`);renderLoadout();}break;}
+    case'gun':{const gear=GEAR.find(item=>item.id===state.gear),candidate=GUNS.findIndex((_,i)=>!state.weaponSlots.includes(i)&&canCarryWeapons([state.weaponSlots[0],i],GUNS,state.carryCapacity-(gear?.weight||0)));if(candidate<0){toast('NO GUN FITS YOUR CARRY RIG');pickup.available=true;scene.add(pickup.mesh);state.pickupMeshes.set(pickup,pickup.mesh);}else{state.weaponSlots[1]=candidate;state.weaponAmmo[candidate]=GUNS[candidate].mag;state.reserveAmmo[candidate]+=GUNS[candidate].mag;toast(`SECONDARY · ${GUNS[candidate].name}`);renderLoadout();}break;}
     case'mod':{const unowned=MODS.filter(m=>!state.mods.has(m.id));if(unowned.length)installMod(choose(unowned).id);else state.scrap+=30;break;}
     case'heal':state.health=Math.min(state.maxHealth,state.health+2);toast('PATCHED UP · +2 VITALS');break;
     case'exit':if(state.enemies.some(e=>e.alive)){toast('CLEAR THE SECTOR FIRST');pickup.available=true;scene.add(pickup.mesh);return false;}winRun();break;
   }if(!pickup.available){pickup.mesh.geometry.dispose();pickup.mesh.material.dispose();}hud();return true;
 }
-function winRun(){state.mode='won';toast('SECTOR CLEARED · PRESS R FOR A NEW RUN',4500);}
+function finishRun(result){if(state.paidOut)return;state.mode=result;state.paidOut=true;const payout=runCoinPayout({won:result==='won',roomsCleared:state.roomsCleared,kills:state.kills});state.progress=awardCoins(state.progress,payout);saveProgress();$('run-result').hidden=false;$('run-result').textContent=`${result==='won'?'EXTRACTION COMPLETE':'RUN OVER'} · ${state.roomsCleared} ROOMS · ${state.kills} KILLS · +${payout} COINS`;$('start-button').textContent='RUN AGAIN ↗';$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();toast(result==='won'?'SECTOR CLEARED':'RUN OVER',3500);}
+function winRun(){finishRun('won');}
 function checkRoomClear(){for(const [i,r] of state.rooms.entries()){
   if(r.cleared||!r.visited)continue;
   const hasEnemy=state.enemies.some(e=>e.alive&&e.x/TILE>=r.x1&&e.x/TILE<=r.x2&&e.y/TILE>=r.y1&&e.y/TILE<=r.y2);
@@ -270,11 +282,11 @@ function interact(){
   toast('NOTHING IN REACH',650);
 }
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));}
-function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused,loadoutOpen:state.loadoutOpen,moving:['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].some(key=>input.keys.has(key)),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction});}
+function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused,loadoutOpen:state.loadoutOpen,moving:['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'].some(key=>input.keys.has(key)),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
   const left=input.keys.has('a')||input.keys.has('arrowleft'),right=input.keys.has('d')||input.keys.has('arrowright'),up=input.keys.has('w')||input.keys.has('arrowup'),down=input.keys.has('s')||input.keys.has('arrowdown');let vx=(right?1:0)-(left?1:0),vy=(down?1:0)-(up?1:0),len=Math.hypot(vx,vy);if(len>0){vx/=len;vy/=len;state.lastAction=performance.now()/1000;}
-  const speed=112;p.body.setLinvel({x:vx*speed,y:vy*speed},true);const pos=p.body.translation();p.x=pos.x;p.y=pos.y;
+  const speed=progressionStats(state.progress).moveSpeed;p.body.setLinvel({x:vx*speed,y:vy*speed},true);const pos=p.body.translation();p.x=pos.x;p.y=pos.y;
   pointer.set(input.mouseX/innerWidth*2-1,-input.mouseY/innerHeight*2+1);raycaster.setFromCamera(pointer,camera);raycaster.ray.intersectPlane(aimPlane,hitPoint);
   if(hitPoint){const dx=hitPoint.x-p.x,dy=hitPoint.z-p.y,d=Math.hypot(dx,dy)||1;state.aim.x=dx/d;state.aim.y=dy/d;}
   const mesh=state.actorMeshes.get('player');mesh.position.set(p.x,.2,p.y);mesh.rotation.y=Math.atan2(-state.aim.x,-state.aim.y);
@@ -334,10 +346,13 @@ function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/st
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
 function newRun(){
-  state.mode='play';state.paused=false;state.running=true;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=BASE_CARRY_CAPACITY;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.mods=new Set();state.lastAction=0;state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();toast('MOVE TO SPEED UP · STAND STILL TO THINK',2600);}
+  state.mode='play';state.paused=false;state.running=true;state.paidOut=false;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.gear=null;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=progressionStats(state.progress).carryCapacity;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.mods=new Set();state.lastAction=0;state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('run-result').hidden=true;$('start-button').textContent='ENTER THE SECTOR ↗';$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();toast('MOVE TO SPEED UP · STAND STILL TO THINK',2600);}
 function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);const aspect=innerWidth/innerHeight,halfH=260;camera.left=-aspect*halfH;camera.right=aspect*halfH;camera.top=halfH;camera.bottom=-halfH;camera.updateProjectionMatrix();}
 function render(){renderer.render(scene,camera);}
-function renderGameToText(){return JSON.stringify({mode:state.mode,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex]}:null,room:state.rooms[state.currentRoom]?.name,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp)})).slice(0,12),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y)})).slice(0,8),kills:state.kills,scrap:state.scrap,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});}
+function renderGameToText(){
+  const gear=GEAR.find(item=>item.id===state.gear);
+  return JSON.stringify({mode:state.mode,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex]}:null,loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity},room:state.rooms[state.currentRoom]?.name,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp)})).slice(0,12),crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y)})).slice(0,8),kills:state.kills,scrap:state.scrap,coins:state.progress.coins,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});
+}
 window.render_game_to_text=renderGameToText;
 window.advanceTime=(ms)=>{const frames=Math.max(1,Math.ceil(ms/16.667));for(let i=0;i<frames;i++)update(1/60);render();};
 
@@ -356,7 +371,9 @@ function setupControls(){
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
   addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;state.lastAction=performance.now()/1000;}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
   $('start-button').addEventListener('click',()=>{input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>{toggleLoadout(false);renderer.domElement.focus();});
-  $('loadout').addEventListener('click',e=>{if(e.target===$('loadout'))toggleLoadout(false);const gun=e.target.closest('[data-gun]');if(gun)equipWeapon(Number(gun.dataset.gun));const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
+  $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);
+  $('meta-list').addEventListener('click',event=>{const button=event.target.closest('[data-upgrade]');if(!button)return;const result=purchaseUpgrade(state.progress,button.dataset.upgrade);if(result.purchased){state.progress=result.progress;saveProgress();}renderMeta();});
+  $('loadout').addEventListener('click',e=>{if(e.target===$('loadout'))toggleLoadout(false);const gun=e.target.closest('[data-gun]');if(gun)equipWeapon(Number(gun.dataset.gun));const gear=e.target.closest('[data-gear]');if(gear)equipGear(gear.dataset.gear);const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
   addEventListener('resize',resize);
 }
 async function boot(){
@@ -366,7 +383,7 @@ async function boot(){
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.28;renderer.domElement.tabIndex=0;renderer.domElement.setAttribute('aria-label','DEAD AIR game. Use WASD to move and the mouse to aim and fire.');$('game').appendChild(renderer.domElement);
   lighting=new THREE.Group();lighting.add(new THREE.HemisphereLight(0xbab6d2,0x35313d,2.1));const key=new THREE.DirectionalLight(0xffe9cc,2.2);key.position.set(-30,70,10);key.castShadow=true;key.shadow.mapSize.set(1024,1024);lighting.add(key);
   const ambient=new THREE.PointLight(0xff556e,55,220);ambient.position.set(0,25,0);lighting.add(ambient);scene.add(lighting);
-  state.scene=scene;state.camera=camera;state.renderer=renderer;state.physics=physics;setupControls();resize();
+  state.scene=scene;state.camera=camera;state.renderer=renderer;state.physics=physics;setupControls();renderMeta();resize();
   let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;if(state.mode==='play')update(dt);render();}requestAnimationFrame(loop);
 }
 boot().catch(error=>{console.error(error);$('overlay').classList.add('show');$('overlay').querySelector('p').textContent='The game could not load. Start a local web server and check that the three game libraries are reachable.';});

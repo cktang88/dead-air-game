@@ -25,10 +25,10 @@ export function canCarryWeapons(weapons, guns, capacity) {
   return weaponLoadoutWeight(weapons, guns) <= capacity;
 }
 
-export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction}) {
+export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, idleScale = 0.18}) {
   if (mode !== 'play' || paused || loadoutOpen) return 0;
   if (moving || firing || now - lastAction < 0.35) return 1.32;
-  return 0.18;
+  return idleScale;
 }
 
 export function chooseEncounterTypes(count, seed) {

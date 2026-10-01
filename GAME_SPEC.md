@@ -97,7 +97,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ### Inventory rules
 
 - The player always has a **primary** and **secondary** slot. Keys `1` and `2` switch slots.
-- Current loadout weight is the sum of equipped weapon weights. Base capacity is 6.5. Machine pistol + shotgun weigh 5.5; rifle + shotgun exceed the current limit and cannot be equipped together.
+- Current loadout weight is the sum of equipped weapons and gear. Base capacity is 7.0. Machine pistol + shotgun weigh 5.5; adding the 1.5-weight armor plate fills the rig, while a heavier rifle plus armor exceeds capacity.
 - At the workbench, selecting an unequipped gun replaces the secondary if it fits. A gun pickup follows the same rule. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
 - Show slot, weapon, ammo, per-item weight, total weight, and capacity. Explain an overweight selection directly.
 - The capacity is an intentional tradeoff: leave weight free for armor or utility gear once those systems exist. Do not silently discard gear when swapping a weapon.
@@ -126,6 +126,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 - Award **coins** at the end of every run, including a failed run. Coins are separate from run scrap.
 - Show the payout breakdown: rooms cleared, enemies defeated, optional cache, extraction bonus, and first-clear / challenge bonus.
+- Current payout: 5 coins + 8 per cleared room + 2 per kill; extraction adds 50. Death still banks the base, room, and kill rewards.
 - Cap repeated farming rewards from the same room state; do not make intentional death more profitable than extraction.
 - Save coins and purchased upgrades locally. Validate loaded save data and provide a reset-save button behind a clear confirmation.
 - Keep seed, run result, and upgrade purchases visible in a compact between-run screen.
@@ -227,22 +228,23 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
 - [ ] Make the workbench reachable and clearly signposted; add a weapon replacement preview.
 - [ ] Add crate health feedback (small health state/crack stages), unique break sound, and confirm every room has at least one crate.
-- [ ] Add a visible extraction/clear summary and result metrics.
+- [x] Show extraction or death, rooms cleared, kills, and coins earned.
 
 ### Next: account and metaprogression
 
-- [ ] Create a versioned local save record for coins and permanent upgrades.
-- [ ] Award coins exactly once on death or extraction; show a readable breakdown.
-- [ ] Build the between-run upgrade screen and add purchase/refund/reset rules.
-- [ ] Implement Runner’s Legs, Still Mind, Lucky Find, Room Sense, Salvager, and Carry Rig with capped effects.
-- [ ] Test save migration, invalid data, reset, and persistence across refreshes.
+- [x] Create a versioned local save record for coins and permanent upgrades.
+- [x] Award coins exactly once on death or extraction; show the run summary payout.
+- [x] Build the between-run upgrade screen and buy capped permanent upgrades.
+- [x] Implement Runner’s Legs, Still Mind, Salvager crate luck, and Carry Rig with capped effects.
+- [ ] Test progress persistence across browser refreshes; add a visible save reset option.
 
 ### Next: inventory and gear
 
-- [ ] Add armor, healing item, scanner, and ammo-harness definitions with weight and effect.
-- [ ] Add inventory UI that previews slots, total weight, and replacement before commit.
-- [ ] Make armor absorb a defined number of hits and show remaining durability.
-- [ ] Implement carry capacity upgrades and prove at least two distinct loadout choices are viable.
+- [x] Add one armor plate with weight and a +1 health effect.
+- [x] Show weapons, armor, and total weight at the workbench; block overweight swaps.
+- [ ] Add a healing item, scanner, ammo harness, and armor durability.
+- [ ] Add a confirmation preview when replacing a weapon or gear item.
+- [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
 - [ ] Make weapon pickups accept, swap, or decline without losing items or ammo.
 
@@ -257,4 +259,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, fight several enemy roles, break crates for possible loot, clear rooms, and extract or die. The next major completion gate is persistent run currency and between-run upgrades, followed by gear choices that compete with weapon weight.
+A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate luck, and carry capacity. Next work is richer weighted gear, deterministic room validation, and sound/accessibility polish.

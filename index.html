@@ -30,9 +30,19 @@
           <div class="eyebrow">A STOP-AND-GO DUNGEON SHOOTER</div>
           <h1>DEAD<br /><em>AIR</em></h1>
           <p>The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
-          <button id="start-button">ENTER THE SECTOR <span>↗</span></button>
+          <p id="run-result" hidden></p>
+          <button id="start-button">ENTER THE SECTOR ↗</button>
+          <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">0</span> COINS</button>
           <div class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / PICKUP</i></span><span>SHIFT <i>RELOAD</i></span><span>TAB <i>LOADOUT</i></span></div>
         </div>
+        <section id="meta-panel" hidden aria-label="Permanent upgrades">
+          <button id="close-meta" class="close">×</button>
+          <div class="eyebrow">BETWEEN RUNS · PERMANENT</div>
+          <h2>BUILD YOUR <em>EDGE.</em></h2>
+          <p>Coins stay with you when a run ends. Upgrades apply to the next run.</p>
+          <div id="meta-coins" class="meta-coins"></div>
+          <div id="meta-list"></div>
+        </section>
       </section>
       <section id="loadout" aria-hidden="true">
         <div class="loadout-card">
@@ -41,7 +51,7 @@
           <h2>MAKE IT <em>YOURS.</em></h2>
           <p class="loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
           <div id="carry-readout" class="eyebrow"></div>
-          <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · PICK A GUN TO SWAP YOUR SECONDARY</div><div id="loadout-gun" class="loadout-gun"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
+          <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · PICK A GUN TO SWAP YOUR SECONDARY</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
           <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>1–2 SWITCH SLOTS &nbsp;·&nbsp; TAB TO RETURN</span></div>
         </div>
       </section>
