@@ -11,7 +11,7 @@ import {shapeDungeon, shortestFloorPath} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
-import {roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
@@ -493,7 +493,7 @@ function collect(pickup,manual=false){if(!pickup.available)return false;const d=
     case'scrap':state.scrap+=pickup.value||12;toast(`+${pickup.value||12} SCRAP`);break;
     case'mod':{const gun=GUNS[state.weaponIndex],unowned=compatibleAttachments(gun,MODS).filter(mod=>!attachmentsFor(gun).has(mod.id));if(unowned.length)installMod(choose(unowned).id,state.weaponIndex,true,pickup.rarity);else state.scrap+=30;break;}
     case'heal':state.health=Math.min(state.maxHealth,state.health+2);toast('PATCHED UP · +2 VITALS');break;
-    case'exit':if(state.enemies.some(e=>e.alive)){toast('CLEAR THE SECTOR FIRST');pickup.available=true;scene.add(pickup.mesh);return false;}winRun();break;
+    case'exit':if(hasUnclearedRouteEnemies(state.rooms,state.enemies)){toast('CLEAR THE MAIN ROUTE FIRST');pickup.available=true;scene.add(pickup.mesh);return false;}winRun();break;
   }if(!pickup.available){pickup.mesh.geometry.dispose();pickup.mesh.material.dispose();if(pickup.kind!=='exit')playPickup(pickup.kind);}hud();return true;
 }
 function cacheMods(){const gun=GUNS[state.weaponIndex];return compatibleAttachments(gun,MODS).filter(mod=>!attachmentsFor(gun).has(mod.id));}

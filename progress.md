@@ -315,6 +315,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A Brute now cancels an active melee wind-up when its tactical AI chooses to dodge, retreat, or seek cover. That makes projectile dodges take priority over a committed swing instead of leaving the player to eat a hit after the enemy already chose safety.
 - Added a regression test that feeds an incoming bullet through the tactic chooser and verifies the Brute swing is interrupted. `npm test` passes all 104 tests; `node --check` and `git diff --check` pass. Live combat review still needs the browser session.
 
+## Optional encounter branches
+
+- Extraction now requires all living enemies in rooms on the main route to be defeated, while enemies in rooms marked as optional branches no longer block leaving. Unknown enemy room references still block extraction safely.
+- Added unit coverage for both required-route and optional-branch cases. `npm test` passes all 105 tests; JavaScript syntax and diff checks pass. A browser run is still unavailable in this locked desktop session.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.

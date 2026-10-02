@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignRoomRoles, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {assignRoomRoles, hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 
 const rooms=Array.from({length:10},(_,index)=>({index,name:`ROOM ${index}`}));
 
@@ -85,6 +85,16 @@ test('room completion follows living enemies to their spawn room, not their curr
   enemies[0].alive=false;
   assert.equal(roomHasLivingEnemies(3,enemies),false,'dead enemies do not prevent room completion');
   assert.equal(roomHasLivingEnemies(2,enemies),false,'unrelated rooms remain clear');
+});
+
+test('optional branch enemies do not block extraction, but main-route enemies do',()=>{
+  const rooms=[{branch:false},{branch:true},{branch:false}];
+  const enemies=[{alive:true,roomIndex:1},{alive:true,roomIndex:2},{alive:false,roomIndex:0}];
+  assert.equal(hasUnclearedRouteEnemies(rooms,enemies),true);
+  enemies[1].alive=false;
+  assert.equal(hasUnclearedRouteEnemies(rooms,enemies),false);
+  enemies.push({alive:true,roomIndex:99});
+  assert.equal(hasUnclearedRouteEnemies(rooms,enemies),true,'unknown enemy room must not silently bypass the exit gate');
 });
 
 test('only fought rooms earn the room-clear scrap reward',()=>{

@@ -56,6 +56,10 @@ export function roomHasLivingEnemies(roomIndex,enemies){
   return enemies.some(enemy=>enemy.alive&&enemy.roomIndex===roomIndex);
 }
 
+export function hasUnclearedRouteEnemies(rooms,enemies){
+  return enemies.some(enemy=>enemy.alive&&rooms[enemy.roomIndex]?.branch!==true);
+}
+
 export function roomHasEncounter(roomIndex,enemies){
   return roomIndex>0&&enemies.some(enemy=>enemy.roomIndex===roomIndex);
 }
