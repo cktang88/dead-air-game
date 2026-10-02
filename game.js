@@ -528,7 +528,7 @@ function takeCacheReward(choice){
   }
   pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);disposeObject(pickup.mesh);burst(pickup.x,pickup.y,0xf4c66d,14,1.1);playPickup('cache');closeCache();hud();
 }
-function finishRun(result){if(state.paidOut)return;if(result==='won')playExtraction();state.mode=result;state.paidOut=true;const payout=runCoinPayout({won:result==='won',roomsCleared:state.roomsCleared,kills:state.kills});state.progress=awardCoins(state.progress,payout);saveProgress();$('run-result').hidden=false;$('run-result').textContent=`${result==='won'?'EXTRACTION COMPLETE':'RUN OVER'} · ${state.roomsCleared} ROOMS · ${state.kills} KILLS · +${payout} COINS`;$('start-button').textContent='RUN AGAIN ↗';$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();toast(result==='won'?'SECTOR CLEARED':'RUN OVER',3500);}
+function finishRun(result){if(state.paidOut)return;if(result==='won')playExtraction();state.mode=result;state.paidOut=true;const payout=runCoinPayout({won:result==='won',roomsCleared:state.roomsCleared,kills:state.kills});state.progress=awardCoins(state.progress,payout);saveProgress();$('run-result').hidden=false;$('run-result').textContent=`${result==='won'?'EXTRACTION COMPLETE':'RUN OVER'} · ${state.roomsCleared} ROOMS · ${state.kills} KILLS · +${payout} COINS`;$('start-button').textContent='RUN AGAIN ↗';$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus();toast(result==='won'?'SECTOR CLEARED':'RUN OVER',3500);}
 function winRun(){finishRun('won');}
 function checkRoomClear(){for(const [i,r] of state.rooms.entries()){
   if(r.cleared||!r.visited)continue;
@@ -592,6 +592,14 @@ function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projec
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;effect.mesh.material.opacity=(effect.id==='smoke'?.27:.17)*Math.min(1,effect.remaining/.45);if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);burst(enemy.x,enemy.y,0xff6a35,3,.6);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){disposeObject(effect.mesh);state.effects.splice(i,1);}}}
 function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`${keyLabel(binding('throwableCycle'))} ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;$('throwable-hint').textContent=`${keyLabel(binding('throwableCycle'))} SELECT · ${keyLabel(binding('throwableUse'))} THROW`;}
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else state.renderer.domElement.focus();}
+function trapDialogTab(event,panel){
+  const focusable=[...panel.querySelectorAll('button:not(:disabled)')].filter(button=>!button.closest('[hidden]'));
+  const first=focusable[0],last=focusable.at(-1),focused=document.activeElement;
+  if(!first)return;
+  if(!panel.contains(focused)){event.preventDefault();first.focus();}
+  else if(event.shiftKey&&focused===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&focused===last){event.preventDefault();first.focus();}
+}
 function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
@@ -798,14 +806,12 @@ function setupControls(){
       }
       return;
     }
-    if(state.loadoutOpen&&key==='tab'){
-      const panel=$('loadout'),focusable=[...panel.querySelectorAll('button:not(:disabled)')].filter(button=>!button.closest('[hidden]'));
-      const first=focusable[0],last=focusable.at(-1),focused=document.activeElement;
-      if(!panel.contains(focused)){e.preventDefault();first?.focus();}
-      else if(e.shiftKey&&focused===first){e.preventDefault();last?.focus();}
-      else if(!e.shiftKey&&focused===last){e.preventDefault();first?.focus();}
+    if(!$('meta-panel').hidden){
+      if(key==='escape'){$('meta-panel').hidden=true;$('meta-button').focus();}
+      else if(key==='tab')trapDialogTab(e,$('meta-panel'));
       return;
     }
+    if(state.loadoutOpen&&key==='tab'){trapDialogTab(e,$('loadout'));return;}
     if(state.pendingGunPickup){if(key===binding('weaponOne'))acceptWeaponPickup(0);else if(key===binding('weaponTwo'))acceptWeaponPickup(1);else if(key===binding('weaponThree'))acceptWeaponPickup(2);else if(key==='escape')closeWeaponPickup(true);return;}
     if(state.cacheOpen){if(key==='escape')closeCache();return;}
     if(state.merchantOpen){if(key==='escape')closeMerchant();return;}
@@ -829,7 +835,7 @@ function setupControls(){
   $('start-button').addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>toggleLoadout(false));
   $('master-volume').addEventListener('input',event=>{const volume=Number(event.currentTarget.value)/100;$('master-volume-value').textContent=`${Math.round(volume*100)}%`;if(!setMasterVolume(volume))toast('VOLUME CHANGED FOR THIS SESSION ONLY');});
   $('mute-audio').addEventListener('click',()=>{if(!setAudioMuted(!isAudioMuted()))toast('MUTE SETTING CHANGED FOR THIS SESSION ONLY');syncMuteButton();});
-  $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);$('reset-save').addEventListener('click',resetProgress);
+  $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;$('close-meta').focus();});$('close-meta').addEventListener('click',()=>{$('meta-panel').hidden=true;$('meta-button').focus();});$('reset-save').addEventListener('click',resetProgress);
   $('meta-list').addEventListener('click',event=>{const button=event.target.closest('[data-upgrade]');if(!button)return;const result=purchaseUpgrade(state.progress,button.dataset.upgrade);if(result.purchased){state.progress=result.progress;saveProgress();}renderMeta();});
   $('loadout').addEventListener('click',e=>{if(e.target===$('loadout')){toggleLoadout(false);return;}const gun=e.target.closest('[data-gun]');if(gun){const index=Number(gun.dataset.gun);if(state.weaponSlots.includes(index))equipWeapon(index);else previewLoadoutChange({type:'weapon',index});return;}const gear=e.target.closest('[data-gear]');if(gear){previewLoadoutChange({type:'gear',id:gear.dataset.gear});return;}const mod=e.target.closest('[data-mod]');if(mod)installMod(mod.dataset.mod);});
   $('loadout-confirm').addEventListener('click',event=>{if(event.target===$('loadout-confirm'))closeLoadoutPreview();});$('loadout-cancel').addEventListener('click',closeLoadoutPreview);$('loadout-accept').addEventListener('click',confirmLoadoutChange);

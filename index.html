@@ -49,10 +49,10 @@
           </details>
           <div id="key-guide" class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>SHIFT <i>RELOAD</i></span><span>C <i>SHOTGUN SHELL</i></span><span>TAB <i>LOADOUT</i></span></div>
         </div>
-        <section id="meta-panel" hidden aria-label="Permanent upgrades">
-          <button id="close-meta" class="close">×</button>
+        <section id="meta-panel" hidden role="dialog" aria-modal="true" aria-labelledby="meta-title">
+          <button id="close-meta" class="close" aria-label="Close safehouse upgrades">×</button>
           <div class="eyebrow">BETWEEN RUNS · PERMANENT</div>
-          <h2>BUILD YOUR <em>EDGE.</em></h2>
+          <h2 id="meta-title">BUILD YOUR <em>EDGE.</em></h2>
           <p>Coins stay with you when a run ends. Upgrades apply to the next run.</p>
           <div id="meta-coins" class="meta-coins"></div>
           <div id="meta-list"></div>

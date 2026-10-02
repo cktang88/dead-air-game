@@ -31,6 +31,15 @@ async function run(){
   const win=frame.contentWindow,doc=frame.contentDocument;
   await waitForBoot(doc,win);
   const savedCoins=doc.querySelector('#meta-balance').textContent;
+  doc.querySelector('#meta-button').click();
+  if(doc.querySelector('#meta-panel').hidden||doc.activeElement!==doc.querySelector('#close-meta'))throw new Error('Opening safehouse upgrades did not focus its close control');
+  const metaButtons=[...doc.querySelectorAll('#meta-panel button:not(:disabled)')].filter(button=>!button.closest('[hidden]'));
+  const firstMetaButton=metaButtons[0],lastMetaButton=metaButtons.at(-1);
+  lastMetaButton.focus();
+  const metaTab=new win.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});win.dispatchEvent(metaTab);
+  if(!metaTab.defaultPrevented||doc.activeElement!==firstMetaButton)throw new Error('Tab did not stay inside the safehouse dialog');
+  doc.querySelector('#close-meta').click();
+  if(!doc.querySelector('#meta-panel').hidden||doc.activeElement!==doc.querySelector('#meta-button'))throw new Error('Closing safehouse upgrades did not return focus to its opener');
   const seed=213838321;
   const bindings=loadKeyBindings(win.localStorage);
   const movementKey=bindings.moveRight===DEFAULT_KEY_BINDINGS.moveRight&&!Object.values(bindings).includes('arrowright')?'ArrowRight':bindings.moveRight;

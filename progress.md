@@ -304,6 +304,12 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Expanded the seeded browser smoke to check initial focus, both wrap directions, Escape close, and focus return. Added a Web Audio stub test that verifies mute sets master gain to zero, changing volume while muted stays silent, and unmuting restores the latest volume.
 - Verification: `npm test` passes all 103 tests; `node --check game.js`, `node --check tests/game-smoke.js`, and `git diff --check` pass. Live browser smoke is unavailable while the Mac is locked and the localhost server is unreachable.
 
+## Safehouse and run-end focus
+
+- Safehouse upgrades are now labeled as a modal dialog, receive focus when opened, keep Tab navigation inside the panel, and return focus to their opener when closed. Escape also closes the safehouse. Run completion moves focus to the retry button.
+- The seeded browser smoke now checks safehouse focus entry and return. Live browser verification remains pending because the Mac is locked and port 8767 is unreachable.
+- `npm test` passes all 103 tests; `node --check game.js`, `node --check tests/game-smoke.js`, and `git diff --check` pass.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.
