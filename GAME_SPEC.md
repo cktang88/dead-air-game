@@ -193,6 +193,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - Keep health, current room, run timer, scrap, active weapon, ammo, and tempo visible during play.
 - Show both weapon slots and carry load at the workbench.
 - Add remappable controls, separate aim/fire from movement, and support keyboard-only menu navigation.
+- Keep keyboard focus inside the workbench while it is open and return it to the game on close; verify keyboard access for every remaining modal.
 - Offer reduced screen shake, high-contrast enemy outlines, adjustable flash intensity, scalable UI, and color-safe rarity markers.
 - Never communicate rarity or danger by color alone. Use icons or labels too.
 - Pause on browser focus loss. Do not allow held movement/fire input to remain latched after restart or returning to the tab.

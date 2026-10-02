@@ -113,18 +113,34 @@ async function run(){
   if(!stateOf(win).paused||stateOf(win).timeScale!=='0.00')throw new Error('Manual pause did not stop game time');
   press(win,'Tab','keydown');
   press(win,'Tab','keyup');
-  const loadout=stateOf(win);
+  let loadout=stateOf(win);
   if(!doc.querySelector('#loadout').classList.contains('show')||loadout.loadout.slots.length!==2||doc.querySelectorAll('#loadout-gun .loadout-weapon').length<2){
     throw new Error('Loadout did not show two weapon slots with the weapon list');
   }
+  if(doc.activeElement!==doc.querySelector('#close-loadout'))throw new Error('Opening the loadout did not move keyboard focus into the dialog');
+  const menuButtons=[...doc.querySelectorAll('#loadout button:not(:disabled)')].filter(button=>!button.closest('[hidden]'));
+  const firstMenuButton=menuButtons[0],lastMenuButton=menuButtons.at(-1);
+  doc.querySelector('#game canvas').focus();
+  const escapedTab=new win.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});win.dispatchEvent(escapedTab);
+  if(!escapedTab.defaultPrevented||doc.activeElement!==firstMenuButton)throw new Error('Tab did not pull keyboard focus back into the open workbench');
+  lastMenuButton.focus();
+  const forwardTab=new win.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});win.dispatchEvent(forwardTab);
+  if(!forwardTab.defaultPrevented||doc.activeElement!==firstMenuButton)throw new Error('Tab did not wrap focus from the end of the loadout to its first control');
+  firstMenuButton.focus();
+  const backwardTab=new win.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true});win.dispatchEvent(backwardTab);
+  if(!backwardTab.defaultPrevented||doc.activeElement!==lastMenuButton)throw new Error('Shift+Tab did not wrap focus from the start of the loadout to its last control');
+  press(win,'Escape','keydown');press(win,'Escape','keyup');
+  if(doc.querySelector('#loadout').classList.contains('show')||doc.activeElement!==doc.querySelector('#game canvas'))throw new Error('Closing the loadout did not return focus to the game');
+  press(win,'Tab','keydown');press(win,'Tab','keyup');
+  loadout=stateOf(win);
   const extended=doc.querySelector('#mod-list [data-mod="extended"]');
   if(!extended||extended.disabled)throw new Error('Extended magazine was not available at the starting scrap budget');
   extended.click();
   const attached=stateOf(win);
   if(!attached.loadout.attachments.includes('extended')||attached.loadout.attachmentTiers.extended!=='common')throw new Error('Purchased attachment did not install and retain its common tier');
-  press(win,'Tab','keydown');
-  press(win,'Tab','keyup');
-  if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Tab did not close the loadout');
+  press(win,'Escape','keydown');
+  press(win,'Escape','keyup');
+  if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Escape did not close the loadout');
 
   const originalProgress=window.localStorage.getItem(SAVE_KEY);
   try{

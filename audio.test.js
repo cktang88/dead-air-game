@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AUDIO_SETTINGS_KEY, DEFAULT_MASTER_VOLUME, isAudioMuted, loadAudioSettings, parseAudioSettings, serializeAudioSettings, setAudioMuted, setMasterVolume} from './audio.js';
+import {AUDIO_SETTINGS_KEY, DEFAULT_MASTER_VOLUME, isAudioMuted, loadAudioSettings, parseAudioSettings, serializeAudioSettings, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
 
 test('audio settings round-trip the master volume',()=>{
   const encoded=serializeAudioSettings(.42);
@@ -53,4 +53,29 @@ test('a blocked settings store reports when the changed volume cannot persist',(
   loadAudioSettings({getItem(){return null;},setItem(){throw failure;}});
   assert.equal(setMasterVolume(.2),false);
   assert.equal(setAudioMuted(true),false);
+});
+
+test('runtime mute silences the master gain and unmute restores the latest volume',async()=>{
+  const gainTargets=[];
+  const previousWindow=globalThis.window;
+  class StubAudioContext{
+    state='running';currentTime=0;destination={};
+    master={gain:{value:0,setTargetAtTime(value){this.value=value;gainTargets.push(value);}},connect(){}};
+    createGain(){return this.master;}
+  }
+  const values=new Map([[AUDIO_SETTINGS_KEY,serializeAudioSettings(.45)]]);
+  const storage={getItem(key){return values.get(key)??null;},setItem(key,value){values.set(key,value);}};
+  try{
+    globalThis.window={AudioContext:StubAudioContext};
+    loadAudioSettings(storage);
+    assert.equal(await unlockAudio(),true);
+    setAudioMuted(true);
+    setMasterVolume(.2);
+    assert.equal(gainTargets.at(-1),0,'volume changes should remain silent while muted');
+    setAudioMuted(false);
+    assert.equal(gainTargets.at(-1),.2,'unmute should restore the latest selected volume');
+  }finally{
+    if(previousWindow===undefined)delete globalThis.window;
+    else globalThis.window=previousWindow;
+  }
 });

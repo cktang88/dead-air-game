@@ -59,15 +59,15 @@
           <button id="reset-save" class="reset-save" type="button">RESET SAVE…</button>
         </section>
       </section>
-      <section id="loadout" aria-hidden="true">
+      <section id="loadout" role="dialog" aria-modal="true" aria-labelledby="loadout-title" aria-hidden="true">
         <div class="loadout-card">
-          <button id="close-loadout" class="close">×</button>
+          <button id="close-loadout" class="close" aria-label="Close workbench">×</button>
           <div class="eyebrow">FIELD MODIFICATION STATION</div>
-          <h2>MAKE IT <em>YOURS.</em></h2>
+          <h2 id="loadout-title">MAKE IT <em>YOURS.</em></h2>
           <p class="loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
           <div id="carry-readout" class="eyebrow"></div>
           <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · CHOOSE A GUN TO ADD OR REPLACE</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
-          <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>KEYS 1–2 · RIG III ADDS KEY 3 &nbsp;·&nbsp; TAB TO RETURN</span></div>
+          <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span>KEYS 1–2 · RIG III ADDS KEY 3 &nbsp;·&nbsp; ESC TO RETURN</span></div>
           <section id="loadout-confirm" class="loadout-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="loadout-change-title">
             <div class="loadout-confirm-card">
               <div class="eyebrow">CHECK YOUR FIELD LOADOUT</div>

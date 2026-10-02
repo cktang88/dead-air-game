@@ -298,6 +298,12 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Verification: `npm test` passes all 102 tests; `node --check audio.js`, `node --check game.js`, and `git diff --check` pass. The live browser check is pending because the desktop Mac is locked and automatic unlock failed; the game tab remains open at localhost for a later check.
 - Next: unlock the desktop and verify the mute button and audio cues during play, including that changing volume while muted remains quiet and unmutes to the saved level.
 
+## Workbench keyboard focus
+
+- Opening the workbench now moves focus to its close button. Tab and Shift+Tab wrap through enabled workbench controls, while Escape or the close button returns focus to the game canvas. The workbench is labeled as a modal dialog, and its footer now advertises Escape to close.
+- Expanded the seeded browser smoke to check initial focus, both wrap directions, Escape close, and focus return. Added a Web Audio stub test that verifies mute sets master gain to zero, changing volume while muted stays silent, and unmuting restores the latest volume.
+- Verification: `npm test` passes all 103 tests; `node --check game.js`, `node --check tests/game-smoke.js`, and `git diff --check` pass. Live browser smoke is unavailable while the Mac is locked and the localhost server is unreachable.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.
