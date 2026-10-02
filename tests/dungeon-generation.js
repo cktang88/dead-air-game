@@ -3,6 +3,7 @@ import {TILE} from '../catalog.js';
 import {generateDungeon} from '../dungeon.js?locked-door-check-final3';
 import {chooseRewardDoor, roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
 import {findRoomCratePosition, findRoomPropPosition} from '../room-props.js';
+import {roomEnemyCount} from '../room-roles.js';
 
 const result = document.querySelector('#result');
 const seeds = Array.from({length: 64}, (_, index) => 1 + index * 3571);
@@ -23,6 +24,7 @@ try {
   let floorsWithBranches = 0;
   let floorsWithRewardDoors = 0;
   let floorsWithGateableBranch = 0;
+  let floorsWithScaledCombat = 0;
   let firstRewardGateSeed = null;
   for (const seed of seeds) {
     const dungeon = generateDungeon(ROT, seed);
@@ -37,6 +39,17 @@ try {
 
     const entry = dungeon.rooms[0];
     const exit = dungeon.rooms[dungeon.rooms.length - 1];
+    let combatIndex=0;
+    for(const room of dungeon.rooms.slice(1)){
+      if(room.merchant)continue;
+      const count=roomEnemyCount(room.role,.99,combatIndex);
+      if(room.role==='combat'){
+        const expected=combatIndex<2?3:4;
+        if(count!==expected)throw new Error(`Seed ${seed} combat room ${combatIndex} budget was ${count}, expected ${expected}`);
+        combatIndex++;
+      }else if(count!==roomEnemyCount(room.role,.99))throw new Error(`Seed ${seed} special room ${room.role} changed budget`);
+    }
+    if(combatIndex>2)floorsWithScaledCombat++;
     if(entry.role!=='entry'||exit.role!=='extraction')throw new Error(`Seed ${seed} did not reserve entry and extraction roles`);
     if(dungeon.rooms.filter(room=>room.role==='cache').length!==1)throw new Error(`Seed ${seed} did not generate exactly one cache room`);
     const bypassable=new Set(roomsAvoidableOnRoute(dungeon.cells,dungeon.rooms));
@@ -94,6 +107,7 @@ try {
     }
   }
   if(floorsWithRewardDoors<Math.floor(seeds.length/3))throw new Error(`Only ${floorsWithRewardDoors} selected gates of ${seeds.length}; ${floorsWithGateableBranch} floors had a gateable branch`);
+  if(!floorsWithScaledCombat)throw new Error('The selected maps did not reach a later ordinary combat room');
   const fallback = generateDungeon(ROT, 417, 48, 38);
   if (fallback.width !== 108 || fallback.height !== 82) throw new Error('A map with too few initial rooms did not retry at the larger size');
   if (fallback.rooms.length < 6 || shortestFloorPath(fallback.cells, {x:fallback.rooms[0].cx,y:fallback.rooms[0].cy}, {x:fallback.rooms.at(-1).cx,y:fallback.rooms.at(-1).cy}).length === 0) {
@@ -104,7 +118,7 @@ try {
     if(!point)throw new Error(`Fallback map room ${room.index} has no safe crate tile`);
   }
   result.className = 'pass';
-  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable; every room has a reserved crate tile clear of rewards and doors.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; selected gates: ${floorsWithRewardDoors}/${seeds.length}; gateable branches: ${floorsWithGateableBranch}/${seeds.length}.\nUse seed ${firstRewardGateSeed} to try a run with a locked cache gate.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
+  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable; every room has a reserved crate tile clear of rewards and doors.\nOpening combat budgets scale by room distance; special-room budgets stay fixed. Later ordinary combat reached on ${floorsWithScaledCombat}/${seeds.length} floors.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; selected gates: ${floorsWithRewardDoors}/${seeds.length}; gateable branches: ${floorsWithGateableBranch}/${seeds.length}.\nUse seed ${firstRewardGateSeed} to try a run with a locked cache gate.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
 } catch (error) {
   result.className = 'fail';
   result.textContent = `FAIL\n${error.stack || error.message}`;

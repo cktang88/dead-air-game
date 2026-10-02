@@ -268,4 +268,5 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - The first two ordinary combat rooms now cap at three enemies, while later ordinary rooms keep their two-to-four roll. Special room budgets (cache, armory, hazard, elite) stay tied to their roles.
 - This gives the opening fights a little more room for players to learn tells and dodge before the run scales up. Added tests for early, later, and unaffected special-room budgets; `npm test` passes all 91 tests.
-- Next: check actual room mixes across deterministic generated floors and continue tuning damage, drops, and full-run length.
+- Expanded the production dungeon browser harness to verify that generated rooms are processed by their shortest path from entry and that special rooms do not consume the ordinary-combat ordinal. It passes across 64 seeds generated twice, plus the fallback map; 60/64 tested floors reached a later ordinary combat room.
+- The in-app browser started seed 213838321 and visibly rendered gameplay, then I left it paused. The prescribed headless client remains blocked by Chromium's macOS Mach-port permission. Next: continue tuning damage, drops, and full-run length.
