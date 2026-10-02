@@ -12,7 +12,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate starts with two durability points, absorbs damage before health, and competes with heavier weapon choices; the entry workbench repairs it for scrap. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
-- Four base enemy types plus the Warden elite variant with an overhead health bar, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
+- Four base enemy types plus the Warden elite variant with an overhead health bar, destructible 60-HP crates, scrap-gated cache doors, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
 ## Verification
@@ -178,7 +178,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - Every spawned enemy now carries its encounter room index. Room completion and its scrap reward wait for those enemies to die even if a tactical retreat or chase takes them into a hall or another room.
 - Added a pure room-role predicate and a regression test covering living enemies outside the room bounds, unrelated encounters, and corpses. `npm test` passes 64 tests; syntax and diff checks pass.
-- Next: continue the spec's unfinished run-quality and gear work; in particular, tune healing against armor as separate systems and add a real locked-reward or rest/miniboss/secret room loop.
+- Next: continue the spec's unfinished run-quality and gear work; in particular, tune healing against armor as separate systems and add rest/miniboss/secret room variety.
 
 ## Armor durability and repairs
 
@@ -193,14 +193,14 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - The guaranteed cache is now a secret only when the room generator places it on a bypassable branch. Until the player enters, its map outline and enemy blips stay hidden even when Room Sense is upgraded; entering reveals the SIDE CACHE name and discovery toast. Floors without a branch retain a reachable, non-secret cache fallback.
 - Added role tests for branch/fallback secrecy and minimap tests proving scans cannot reveal undiscovered secrets. Expanded the generated-floor check to verify secret naming and branch status across 64 seeds generated twice, plus the fallback map; every tested seed had a branch and secret cache.
 - Verification: `npm test` passes 66 tests; JavaScript syntax and `git diff --check` pass. The live dungeon-generation page visibly shows PASS for all 64 seeds generated twice, branch/cache status, deterministic routes, safe reward placement, and fallback generation. The standalone Playwright action runner is still blocked by this Mac sandbox's Chromium Mach-port permission error; the in-app browser ran the generator harness successfully.
-- Next: build a longer combat/browser check for armor repair; design actual locked/reward doors only after room edges and door collision state are represented, then add rest/miniboss rooms.
+- Next: build a longer combat/browser check for armor repair, then add rest/miniboss room variety.
 
 ## Fight-only room-clear rewards
 
 - Safe clinic, merchant, and empty rooms no longer grant the 20-scrap encounter-clear payout. The room still counts as visited/cleared; the bonus requires that the room actually spawned an enemy encounter.
 - Added a focused regression test that distinguishes an empty room from a defeated encounter; the room ownership check still credits enemies that leave their spawn room.
 - Verification: `npm test` passes 67 tests; JavaScript syntax and `git diff --check` pass. The web-game Playwright runner remains blocked by the local Chromium Mach-port permission error.
-- Next: playtest armor damage and repair in a full encounter; the Warden miniboss and FIELD CLINIC rest loop are covered below. Real locked doors remain a larger map/collision/pathfinding feature.
+- Next: playtest armor damage and repair in a full encounter; the Warden miniboss and FIELD CLINIC rest loop are covered below.
 
 ## Warden miniboss room
 
@@ -208,4 +208,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Small floors keep their existing role count and may receive a regular utility room instead. FIELD CLINIC already acts as a safe rest stop with a guaranteed healing pickup.
 - Added room-role checks for the elite's roster, count, rewards, and large-floor guarantee. The production dungeon harness passes 64 deterministic seeds twice each and the fallback map; a live seeded run starts with no browser errors. `npm test` passes 67 tests; syntax and diff checks pass.
 - Added an overhead Warden health bar that tracks its position and health, then disappears when it is defeated. `npm test` passes 67 tests; `node --check game.js` and `git diff --check` pass. A seeded run starts in the in-app browser and the live screen renders correctly; the automated Playwright runner remains blocked by this machine's Chromium sandbox.
-- Next: playtest the Warden fight/reward balance and test armor breaking and repair during combat. Real locked doors still need explicit room edges plus collision and route state.
+- Next: playtest the Warden fight/reward balance and test armor breaking and repair during combat.
+
+## Locked cache gate
+
+- Optional cache branches receive a reinforced gate when the generator can identify a doorway cut that blocks the cache but preserves extraction. The player spends 18 run scrap and presses E to open it.
+- Closed gate cells feed the same blocked map used by enemy routing, sight, and swept projectile collision, and a Rapier collider blocks player and enemy movement. Standard shots stop at the gate; anti-materiel rifles can use their one-wall penetration. The interaction hint shows the price. If a safe gate cannot be found, the hidden cache stays reachable without one.
+- Unit coverage verifies a closed gate separates a reward room while leaving the extraction route open. The production dungeon harness checks 64 seeds twice each, requires a valid gate on at least one third of seeds, validates gate-open reachability, and prints a repeatable gate seed. A follow-up caught and filtered invalid one-tile gate candidates. The final browser run passed all 64 seeds, found safe gates on 24/64, and prints seed 1 as a repeatable example. `npm test` passes 70 tests. The playable page also starts a seed-1 run successfully.
+- Next: exercise gate interaction and scrap deduction in a longer run; continue Warden balance and armor repair playtests.

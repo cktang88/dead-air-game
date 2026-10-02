@@ -24,6 +24,14 @@ test('every generated floor gets a cache and room variety grows with floor size'
   assert.equal(large.filter(role=>role==='combat').length,4);
 });
 
+test('cache assignment prefers branch rooms that can support a validated gate',()=>{
+  const candidates=rooms.map((room,index)=>({...room,index,branch:[1,3].includes(index)}));
+  const assigned=assignRoomRoles(candidates,417,[3]);
+  assert.equal(assigned.find(room=>room.role==='cache').index,3);
+  const fallback=assignRoomRoles(candidates,417,[]);
+  assert.equal(fallback.find(room=>room.role==='cache').branch,true);
+});
+
 test('short floors do not assign a middle role over entry or extraction',()=>{
   const roles=assignRoomRoles(rooms.slice(0,3),1).map(room=>room.role);
   assert.deepEqual(roles,['entry','cache','extraction']);

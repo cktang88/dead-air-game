@@ -11,7 +11,7 @@ function shuffled(values,seed){
   return result;
 }
 
-export function assignRoomRoles(rooms,seed){
+export function assignRoomRoles(rooms,seed,gateableCacheIndexes=[]){
   if(!rooms.length)return [];
   const roles=rooms.map((room,index)=>({...room,role:index===0?'entry':index===rooms.length-1?'extraction':'combat'}));
   const middle=shuffled(roles.map((_,index)=>index).slice(1,-1),seed);
@@ -20,7 +20,8 @@ export function assignRoomRoles(rooms,seed){
   const availableRoles=shuffled(UTILITY_ROLES,seed);
   const selectedUtilities=middle.length>=5?['elite',...availableRoles.filter(role=>role!=='elite').slice(0,utilityCount-1)]:availableRoles.slice(0,utilityCount);
   const selectedRoles=['cache',...selectedUtilities];
-  const branchRooms=middle.filter(index=>roles[index].branch),cacheIndex=branchRooms.length?shuffled(branchRooms,seed)[0]:middle[0];
+  const branchRooms=middle.filter(index=>roles[index].branch),gateable=new Set(gateableCacheIndexes),gateableBranches=branchRooms.filter(index=>gateable.has(index));
+  const cacheChoices=gateableBranches.length?gateableBranches:branchRooms,cacheIndex=cacheChoices.length?shuffled(cacheChoices,seed)[0]:middle[0];
   const roleRooms=[cacheIndex,...middle.filter(index=>index!==cacheIndex).slice(0,utilityCount)];
   selectedRoles.forEach((role,index)=>{roles[roleRooms[index]].role=role;});
   roles[cacheIndex].secret=Boolean(roles[cacheIndex].branch);

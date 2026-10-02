@@ -157,3 +157,59 @@ export function roomsAvoidableOnRoute(cells,rooms){
     shortestFloorPath(cells,start,exit,(x,y)=>cells[y]?.[x]===0&&
       (x<room.x1||x>room.x2||y<room.y1||y>room.y2)).length>0).map(({index})=>index);
 }
+
+export function doorwayTiles(door){
+  if(!door||!Number.isFinite(door.x)||!Number.isFinite(door.y))return [];
+  const x=Math.floor(door.x),y=Math.floor(door.y);
+  return door.axis==='y'?[{x,y},{x,y:y+1}]:door.axis==='x'?[{x,y},{x:x+1,y}]:[];
+}
+
+export function expandDoorwayTiles(door,cells){
+  const tiles=doorwayTiles(door);
+  if(tiles.length!==2)return tiles;
+  const alongY=door.axis==='y',first=tiles[0],second=tiles[1],before={x:alongY?first.x:first.x-1,y:alongY?first.y-1:first.y},after={x:alongY?second.x:second.x+1,y:alongY?second.y+1:second.y};
+  if(cells[before.y]?.[before.x]===0)tiles.unshift(before);
+  if(cells[after.y]?.[after.x]===0)tiles.push(after);
+  return tiles;
+}
+
+function roomBoundaryGates(cells,room){
+  const sides=[
+    {axis:'y',inside:(at)=>({x:room.x1+1,y:at}),outside:(at)=>({x:room.x1,y:at})},
+    {axis:'y',inside:(at)=>({x:room.x2-1,y:at}),outside:(at)=>({x:room.x2,y:at})},
+    {axis:'x',inside:(at)=>({x:at,y:room.y1+1}),outside:(at)=>({x:at,y:room.y1})},
+    {axis:'x',inside:(at)=>({x:at,y:room.y2-1}),outside:(at)=>({x:at,y:room.y2})},
+  ],gates=[];
+  for(const side of sides){
+    const start=side.axis==='y'?room.y1:room.x1,end=side.axis==='y'?room.y2:room.x2,spans=[];let span=[];
+    for(let at=start;at<=end+1;at++){
+      const inside=at<=end?side.inside(at):null,outside=at<=end?side.outside(at):null;
+      if(inside&&cells[inside.y]?.[inside.x]===0&&cells[outside.y]?.[outside.x]===0)span.push(inside);
+      else if(span.length){spans.push(span);span=[];}
+    }
+    for(const cellsInGate of spans){
+      if(cellsInGate.length<2||cellsInGate.length>5)continue;
+      const x=cellsInGate.reduce((sum,cell)=>sum+cell.x,0)/cellsInGate.length,y=cellsInGate.reduce((sum,cell)=>sum+cell.y,0)/cellsInGate.length;
+      gates.push({x:side.axis==='x'?x:cellsInGate[0].x,y:side.axis==='y'?y:cellsInGate[0].y,axis:side.axis,kind:'room-boundary',cells:cellsInGate});
+    }
+  }
+  return gates;
+}
+
+export function chooseRewardDoor(cells,doors,rooms,targetIndex){
+  const target=rooms[targetIndex],start=rooms[0],exit=rooms.at(-1);
+  if(!target?.secret||!start||!exit||targetIndex===0||targetIndex===rooms.length-1)return null;
+  const startPoint={x:start.cx,y:start.cy},targetPoint={x:target.cx,y:target.cy},exitPoint={x:exit.cx,y:exit.cy};
+  const markers=doors.map(door=>({door,cells:expandDoorwayTiles(door,cells)})).filter(candidate=>
+    candidate.cells.length>=2&&candidate.cells.every(({x,y})=>cells[y]?.[x]===0));
+  const candidates=[...markers,...roomBoundaryGates(cells,target).map(door=>({door,cells:door.cells}))]
+    .filter(candidate=>candidate.cells.length>=2&&candidate.cells.every(({x,y})=>cells[y]?.[x]===0));
+  candidates.sort((a,b)=>Math.hypot(a.door.x-target.cx,a.door.y-target.cy)-Math.hypot(b.door.x-target.cx,b.door.y-target.cy));
+  for(const candidate of candidates){
+    const blocked=new Set(candidate.cells.map(({x,y})=>`${x},${y}`)),canPass=(x,y)=>cells[y]?.[x]===0&&!blocked.has(`${x},${y}`);
+    if(shortestFloorPath(cells,startPoint,targetPoint,canPass).length===0&&shortestFloorPath(cells,startPoint,exitPoint,canPass).length>0){
+      return {...candidate.door,cells:candidate.cells,roomIndex:targetIndex,cost:18,opened:false};
+    }
+  }
+  return null;
+}

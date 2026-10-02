@@ -1,7 +1,7 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {TILE} from '../catalog.js';
-import {generateDungeon} from '../dungeon.js?elite-room-check';
-import {roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
+import {generateDungeon} from '../dungeon.js?locked-door-check-final3';
+import {chooseRewardDoor, roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
 import {findRoomCratePosition, findRoomPropPosition} from '../room-props.js';
 
 const result = document.querySelector('#result');
@@ -12,6 +12,7 @@ const stableMap = dungeon => JSON.stringify({
   height: dungeon.height,
   cells: dungeon.cells,
   doors: dungeon.doors,
+  lockedDoors: dungeon.lockedDoors,
   rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, revealedName, shape, role, branch, secret}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, revealedName, shape, role, branch, secret})),
 });
 
@@ -20,6 +21,9 @@ try {
   let largestMap = '';
   let largestArea = 0;
   let floorsWithBranches = 0;
+  let floorsWithRewardDoors = 0;
+  let floorsWithGateableBranch = 0;
+  let firstRewardGateSeed = null;
   for (const seed of seeds) {
     const dungeon = generateDungeon(ROT, seed);
     const secondRun = generateDungeon(ROT, seed);
@@ -38,9 +42,22 @@ try {
     const bypassable=new Set(roomsAvoidableOnRoute(dungeon.cells,dungeon.rooms));
     if(bypassable.size)floorsWithBranches++;
     const cache=dungeon.rooms.find(room=>room.role==='cache');
+    if(dungeon.rooms.some((room,index)=>room.branch&&chooseRewardDoor(dungeon.cells,dungeon.doors,dungeon.rooms.map(candidate=>({...candidate,secret:candidate.branch})),index)))floorsWithGateableBranch++;
     if(bypassable.size&&!bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} did not place its cache on an optional branch room`);
     if(cache.secret!==bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} secret status does not match the cache branch`);
     if(cache.secret&&(cache.name!=='UNMARKED ROOM'||cache.revealedName!=='SIDE CACHE'))throw new Error(`Seed ${seed} did not hide and name its secret cache consistently`);
+    if(dungeon.lockedDoors.length>1)throw new Error(`Seed ${seed} generated more than one reward gate`);
+    if(dungeon.lockedDoors.length){
+      floorsWithRewardDoors++;
+      firstRewardGateSeed??=seed;
+      const gate=dungeon.lockedDoors[0],rewardRoom=dungeon.rooms[gate.roomIndex],blocked=new Set(gate.cells.map(({x,y})=>`${x},${y}`));
+      if(!cache.secret||rewardRoom!==cache||gate.cost<=0||gate.opened)throw new Error(`Seed ${seed} assigned an invalid reward gate`);
+      if(gate.cells.length<2||gate.cells.some(({x,y})=>!isFloor(dungeon.cells,x,y)))throw new Error(`Seed ${seed} gate does not cover walkable doorway tiles: ${JSON.stringify(gate)}`);
+      const closedCanPass=(x,y)=>isFloor(dungeon.cells,x,y)&&!blocked.has(`${x},${y}`);
+      if(shortestFloorPath(dungeon.cells,{x:entry.cx,y:entry.cy},{x:cache.cx,y:cache.cy},closedCanPass).length)throw new Error(`Seed ${seed} reward room remains reachable through its closed gate`);
+      if(!shortestFloorPath(dungeon.cells,{x:entry.cx,y:entry.cy},{x:exit.cx,y:exit.cy},closedCanPass).length)throw new Error(`Seed ${seed} gate blocks the extraction route`);
+      if(!shortestFloorPath(dungeon.cells,{x:entry.cx,y:entry.cy},{x:cache.cx,y:cache.cy}).length)throw new Error(`Seed ${seed} reward room cannot be reached after opening its gate`);
+    }
     for(const [index,room] of dungeon.rooms.entries())if(Boolean(room.branch)!==bypassable.has(index))throw new Error(`Seed ${seed} has an incorrect branch marker`);
     if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','elite','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
     if(dungeon.rooms.length>=7&&dungeon.rooms.filter(room=>room.role==='elite').length!==1)throw new Error(`Seed ${seed} did not assign its large-floor Warden encounter`);
@@ -76,6 +93,7 @@ try {
       largestMap = `${dungeon.width}×${dungeon.height}`;
     }
   }
+  if(floorsWithRewardDoors<Math.floor(seeds.length/3))throw new Error(`Only ${floorsWithRewardDoors} selected gates of ${seeds.length}; ${floorsWithGateableBranch} floors had a gateable branch`);
   const fallback = generateDungeon(ROT, 417, 48, 38);
   if (fallback.width !== 108 || fallback.height !== 82) throw new Error('A map with too few initial rooms did not retry at the larger size');
   if (fallback.rooms.length < 6 || shortestFloorPath(fallback.cells, {x:fallback.rooms[0].cx,y:fallback.rooms[0].cy}, {x:fallback.rooms.at(-1).cx,y:fallback.rooms.at(-1).cy}).length === 0) {
@@ -86,7 +104,7 @@ try {
     if(!point)throw new Error(`Fallback map room ${room.index} has no safe crate tile`);
   }
   result.className = 'pass';
-  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable; every room has a reserved crate tile clear of rewards and doors.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; each cache uses a branch when available.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
+  result.textContent = `PASS · ${seeds.length} seeds, each generated twice, plus the low-room-count fallback\nAll entry, room-center, extraction, and doorway routes are walkable; every room has a reserved crate tile clear of rewards and doors.\nOptional-branch floors: ${floorsWithBranches}/${seeds.length}; selected gates: ${floorsWithRewardDoors}/${seeds.length}; gateable branches: ${floorsWithGateableBranch}/${seeds.length}.\nUse seed ${firstRewardGateSeed} to try a run with a locked cache gate.\nLargest room count: ${largestRoomCount}\nLargest tested map: ${largestMap}; fallback: ${fallback.width}×${fallback.height}`;
 } catch (error) {
   result.className = 'fail';
   result.textContent = `FAIL\n${error.stack || error.message}`;

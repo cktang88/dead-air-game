@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
+import {chooseRewardDoor, doorwayTiles, expandDoorwayTiles, roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
 
 const blank = (width, height) => Array.from({length:height}, () => Array(width).fill(1));
 const room = (x1,x2,y1,y2) => ({x1,x2,y1,y2});
@@ -106,6 +106,35 @@ test('rooms on the only route to extraction are not marked optional',()=>{
   for(const {x1,x2,y1,y2} of rooms)for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)cells[y][x]=0;
   for(let x=4;x<=8;x++)cells[4][x]=0;
   assert.deepEqual(roomsAvoidableOnRoute(cells,rooms),[]);
+});
+
+test('a reward door blocks its secret room but preserves the extraction route',()=>{
+  const cells=blank(10,10),rooms=[
+    {...room(1,2,2,4),cx:1,cy:3},
+    {...room(5,7,2,4),cx:6,cy:3,secret:true},
+    {...room(1,2,6,8),cx:1,cy:7},
+  ];
+  for(const {x1,x2,y1,y2} of rooms)for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)cells[y][x]=0;
+  for(let x=3;x<=4;x++)for(let y=2;y<=3;y++)cells[y][x]=0;
+  for(let y=4;y<=6;y++)cells[y][1]=0;
+  const door={x:3,y:2.5,axis:'y',kind:'corridor'},locked=chooseRewardDoor(cells,[door],rooms,1);
+  assert.deepEqual(doorwayTiles(door),[{x:3,y:2},{x:3,y:3}]);
+  assert.ok(locked);
+  assert.ok(locked.cells.every(tile=>tile.x===locked.cells[0].x),'vertical doorway tiles must form one straight gate span');
+  assert.deepEqual(locked.cells.map(tile=>tile.y),locked.cells.map((_,index)=>locked.cells[0].y+index),'gate cells must be contiguous');
+  const blocked=new Set(locked.cells.map(({x,y})=>`${x},${y}`)),canPass=(x,y)=>cells[y]?.[x]===0&&!blocked.has(`${x},${y}`);
+  assert.deepEqual(shortestFloorPath(cells,{x:1,y:3},{x:6,y:3},canPass),[]);
+  assert.ok(shortestFloorPath(cells,{x:1,y:3},{x:1,y:7},canPass).length>0);
+  assert.equal(chooseRewardDoor(cells,[door],rooms.map(item=>({...item,secret:false})),1),null);
+});
+
+test('expanded gates stay centered on both doorway axes',()=>{
+  const cells=blank(8,8);
+  for(let y=1;y<7;y++)cells[y][3]=0;
+  for(let x=1;x<7;x++)cells[4][x]=0;
+  const vertical=expandDoorwayTiles({x:3,y:2.5,axis:'y'},cells),horizontal=expandDoorwayTiles({x:2.5,y:4,axis:'x'},cells);
+  assert.deepEqual(vertical.map(tile=>[tile.x,tile.y]),[[3,1],[3,2],[3,3],[3,4]]);
+  assert.deepEqual(horizontal.map(tile=>[tile.x,tile.y]),[[1,4],[2,4],[3,4],[4,4]]);
 });
 
 test('L, U, and C rooms carve different outlines while keeping their centers and doors connected',()=>{
