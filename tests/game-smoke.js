@@ -45,6 +45,11 @@ async function run(){
   if(initial.enemyCount<=12||initial.pickupCount<=8){
     throw new Error('Seeded snapshot no longer exercises the former enemy and pickup output limits');
   }
+  if(initial.roomIndex!==0||initial.roomProgress?.[0]?.name!==initial.room||
+    initial.roomProgress.reduce((count,room)=>count+room.livingEnemies,0)!==initial.enemyCount||
+    initial.enemies.some(enemy=>!Number.isInteger(enemy.roomIndex))){
+    throw new Error('Seeded snapshot lost room ownership for a live enemy');
+  }
 
   press(win,movementKey,'keydown');
   win.advanceTime(500);

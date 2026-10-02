@@ -30,4 +30,6 @@ npm test
 
 Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement at 1×, blended firing tempo, bullet damage to a crate, reload, an extended-magazine purchase, a frag throw and detonation, pause, the two-slot loadout, and a safehouse upgrade surviving a reload. The progression check restores the browser's original save afterward.
 
+For a longer combat sample, open `http://localhost:8000/tests/full-floor-browser-harness.html`. It equips armor, clears the first seeded combat room, fights the next one, and reports health, armor, ammo, kills, and scrap. It pauses the run and restores the original save when it finishes.
+
 Room Sense is a permanent safehouse upgrade that reveals nearby room outlines and enemy blips through walls at increasing ranges. Progress is saved in this browser, with a reset option in the Safehouse upgrades panel. See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist; more gear types remain planned.

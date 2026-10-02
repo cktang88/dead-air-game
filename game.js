@@ -710,13 +710,16 @@ function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);c
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
   const gear=GEAR.find(item=>item.id===state.gear),room=state.rooms[state.currentRoom];
-  const enemies=state.enemies.filter(enemy=>enemy.alive).map(enemy=>({type:enemy.def.name,x:Math.round(enemy.x),y:Math.round(enemy.y),health:Math.round(enemy.hp),aiming:enemy.aimTimer>0||enemy.meleeWindup>0,charging:enemy.meleeWindup>0,telegraphVisible:!!enemy.meleeTelegraph?.visible,reloading:enemy.reloadTimer>0,tactic:enemy.intent}));
+  const enemies=state.enemies.filter(enemy=>enemy.alive).map(enemy=>({type:enemy.def.name,roomIndex:enemy.roomIndex,x:Math.round(enemy.x),y:Math.round(enemy.y),health:Math.round(enemy.hp),aiming:enemy.aimTimer>0||enemy.meleeWindup>0,charging:enemy.meleeWindup>0,telegraphVisible:!!enemy.meleeTelegraph?.visible,reloading:enemy.reloadTimer>0,tactic:enemy.intent}));
+  const roomEnemyCounts=Array(state.rooms.length).fill(0);
+  for(const enemy of enemies)if(Number.isInteger(enemy.roomIndex)&&roomEnemyCounts[enemy.roomIndex]!==undefined)roomEnemyCounts[enemy.roomIndex]++;
   const pickups=state.pickups.filter(pickup=>pickup.available).map(pickup=>({type:pickup.kind,x:Math.round(pickup.x),y:Math.round(pickup.y),gun:pickup.kind==='gun'?GUNS[pickup.gunIndex].name:undefined}));
   return JSON.stringify({
     mode:state.mode,seed:state.seed,coordinateSystem:'world origin at top-left; +x right, +y down',
     player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,armor:state.armor,maxArmor:state.maxArmor,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex],reloading:state.reloadTimer>0,shell:GUNS[state.weaponIndex].id==='shotgun'?shellForRun().id:undefined}:null,
     loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity,attachments:[...attachmentsFor(GUNS[state.weaponIndex])]},
-    room:room?.name,roomRole:room?.role,
+    room:room?.name,roomIndex:state.currentRoom,roomRole:room?.role,
+    roomProgress:state.rooms.map((entry,index)=>({index,name:entry.name,role:entry.role,visited:!!entry.visited,cleared:!!entry.cleared,livingEnemies:roomEnemyCounts[index]})),
     lockedDoors:state.lockedDoors.map(door=>({opened:door.opened,cost:door.cost,room:state.rooms[door.roomIndex]?.name,x:(door.x+.5)*TILE,y:(door.y+.5)*TILE,cells:door.cells.length})),
     merchant:!!room?.merchant,merchantOpen:state.merchantOpen,
     weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,

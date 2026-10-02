@@ -277,6 +277,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A warmed-up seeded entry-room profile ran 240 frames each in idle, movement, and firing batches. Average update/render cost was about 0.83 / 1.33 / 1.18 ms per frame; the slowest 12-frame batches were 16.5 / 21.3 / 18.9 ms. It stayed at 5/5 health with no browser errors, but firing emptied the magazine and it did not profile later floors, so these numbers do not close the full-run performance TODO.
 - A scripted same-seed comparison followed the 28-tile route from ENTRY into FURNACE and cleared that first combat room in both loadouts. With no armor, health fell 5→3; with the 25-scrap plate, armor fell 2→0 while health stayed 5. Both runs ended the room at two kills after spending 13 rounds, with no browser errors and the saved profile restored. This supports the plate's two-hit buffer in one encounter but is not enough to tune repair cost or full-run healing.
 
+## Room-aware combat probe
+
+- The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.
+- Added `tests/full-floor-browser-harness.html` for a repeatable two-encounter browser probe. On seed 213838321 it cleared FURNACE (3 enemies, 5 health, 1/2 plate durability left, 18→3 magazine rounds, 15→63 scrap) and fought THE VAULT for 1,800 steps (2 kills, 4/5 health, plate broken, 1 enemy alive, 63→83 scrap). The harness pauses before restoring its saved profile. This is a useful resource sample, but the second encounter's partial clear and automated combat style do not justify balance changes.
+- Verification: `npm test` passes 93 tests; syntax checks and `git diff --check` pass. The seeded in-browser smoke confirms movement, blended shooting tempo, crate destruction, reload, frag detonation, loadout changes, safehouse persistence, and full enemy/pickup snapshots. The two-room probe reports no game-frame runtime errors and restores the original test profile.
+- Next: repeat the second encounter with a stronger movement/dodge controller or a human playtest; gather longer-run healing and repair data before tuning prices or damage.
+
 ## Salvager room-clear bonus
 
 - Salvager now raises combat room-clear scrap by 2 per tier (20 base, up to 26) as well as raising crate-drop odds. Its safehouse description spells out both effects; room-clear rewards use the saved upgrade stats and show the actual amount earned.
