@@ -274,6 +274,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Re-ran the expanded browser smoke on seed 213838321: movement advanced 53 units at 1×, firing stayed blended at 0.42×, the aimed crate went from 60 health to destroyed, reload refilled 12 to 18 rounds, the frag detonated, and the extended magazine changed the active weapon. The run ended paused with all five health and 15 saved coins in the isolated localhost profile. `npm test` passes all 93 tests.
 - Extended the browser check with an isolated 25-coin save fixture: buying Runner’s Legs spends 25 coins and advances it to level 1; both values survive a game reload. The fixture is restored and the game frame reloaded afterward, preserving the browser’s prior save.
 - A lifecycle review found no cross-room or run-reset resource leak; physics is freed and particles stay capped. Profile before changing the main scaling costs it identified: enemy separation is quadratic in live enemy count and the minimap redraws all floor tiles each frame. Next: tune healing/armor and full-run length, then profile sustained play.
+- A warmed-up seeded entry-room profile ran 240 frames each in idle, movement, and firing batches. Average update/render cost was about 0.83 / 1.33 / 1.18 ms per frame; the slowest 12-frame batches were 16.5 / 21.3 / 18.9 ms. It stayed at 5/5 health with no browser errors, but firing emptied the magazine and it did not profile later floors, so these numbers do not close the full-run performance TODO.
 
 ## Salvager room-clear bonus
 
