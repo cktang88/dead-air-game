@@ -44,8 +44,18 @@ async function run(){
 
   press(win,'Escape','keydown');
   press(win,'Escape','keyup');
+  if(stateOf(win).timeScale!=='0.00')throw new Error('Pause did not stop game time');
+  press(win,'Tab','keydown');
+  press(win,'Tab','keyup');
+  const loadout=stateOf(win);
+  if(!doc.querySelector('#loadout').classList.contains('show')||loadout.loadout.slots.length!==2||doc.querySelectorAll('#loadout-gun .loadout-weapon').length<2){
+    throw new Error('Loadout did not show two weapon slots with the weapon list');
+  }
+  press(win,'Tab','keydown');
+  press(win,'Tab','keyup');
+  if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Tab did not close the loadout');
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · start ${initial.mode} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · ammo ${moved.player.ammo} → ${fired.player.ammo} · paused · saved coins ${savedCoins}`;
+  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · ammo ${moved.player.ammo} → ${fired.player.ammo} · pause · loadout ${loadout.loadout.slots.length} slots · saved coins ${savedCoins}`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
