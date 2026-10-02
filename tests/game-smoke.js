@@ -32,16 +32,20 @@ async function run(){
   press(win,'d','keyup');
   const moved=stateOf(win);
   if(moved.player.x<=initial.player.x+20)throw new Error('Right input did not move the player');
+  if(moved.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moved.timeScale}×`);
 
   win.dispatchEvent(new win.MouseEvent('mousemove',{clientX:win.innerWidth/2+100,clientY:win.innerHeight/2,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
   win.advanceTime(250);
-  win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
   const fired=stateOf(win);
+  win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
   if(fired.player.ammo>=moved.player.ammo)throw new Error('Firing did not consume ammunition');
+  if(!(Number(fired.timeScale)>Number(initial.timeScale)&&Number(fired.timeScale)<1))throw new Error(`Firing should keep a blended tempo, got ${fired.timeScale}×`);
 
+  press(win,'Escape','keydown');
+  press(win,'Escape','keyup');
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · start ${initial.mode} · move Δx ${moved.player.x-initial.player.x} · ammo ${moved.player.ammo} → ${fired.player.ammo} · saved coins ${savedCoins}`;
+  report.textContent=`PASS · seed ${seed} · start ${initial.mode} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · ammo ${moved.player.ammo} → ${fired.player.ammo} · paused · saved coins ${savedCoins}`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{

@@ -278,7 +278,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Create a versioned local save record for coins and permanent upgrades.
 - [x] Award coins exactly once on death or extraction; show the run summary payout.
 - [x] Build the between-run upgrade screen and buy capped permanent upgrades.
-- [x] Implement Runner’s Legs, Still Mind, Salvager crate luck, and Carry Rig with capped effects.
+- [x] Implement Runner’s Legs, Still Mind, Salvager crate and room-clear scrap bonuses, and Carry Rig with capped effects.
 - [x] Add Room Sense: explored rooms and known threats stay on the minimap; upgrades reveal nearby rooms and enemy blips through walls at increasing ranges.
 - [x] Test progress persistence across browser refreshes; add a visible save reset option with a confirmation prompt.
 
@@ -305,7 +305,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### Next: polish and maintainability
 
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
-- [x] Add a compact in-browser smoke check for seeded start, movement, and firing (`tests/game-smoke.html`).
+- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, and ammo use (`tests/game-smoke.html`).
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.
 - [x] Add remappable keyboard controls while keeping Escape, Tab, F, and R fixed for pause, loadout, fullscreen, and restart.

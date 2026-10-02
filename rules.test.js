@@ -319,13 +319,26 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,scannerRange:0});
+  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,scannerRange:0});
+  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
+});
+
+test('Salvager improves crate drops and combat room-clear scrap at each tier',()=>{
+  let progress=awardCoins(emptyProgress(),1000);
+  for(const [chance,clearScrap] of [[.45,22],[.55,24],[.65,26]]){
+    const purchase=purchaseUpgrade(progress,'salvager');
+    assert.equal(purchase.purchased,true);
+    progress=purchase.progress;
+    const stats=progressionStats(progress);
+    assert.ok(Math.abs(stats.crateDropChance-chance)<1e-10);
+    assert.equal(stats.roomClearScrap,clearScrap);
+  }
+  assert.equal(purchaseUpgrade(progress,'salvager').purchased,false);
 });
 
 test('Room Sense is a capped saved upgrade with increasing scan range',()=>{

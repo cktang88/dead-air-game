@@ -8,7 +8,7 @@ export const META_UPGRADES = [
   {id:'runner',name:'RUNNER’S LEGS',description:'+6% movement speed per level',costs:[25,50,80]},
   {id:'stillmind',name:'STILL MIND',description:'Idle time slows by 0.015× per level',costs:[30,55,85]},
   {id:'carryrig',name:'CARRY RIG',description:'+1 carry weight per level · tier III unlocks a third weapon slot',costs:[35,60,95]},
-  {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance per level',costs:[20,45,75]},
+  {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance and +2 room-clear scrap per level',costs:[20,45,75]},
   {id:'roomsense',name:'ROOM SENSE',description:`Reveal room outlines and enemy blips through walls within ${ROOM_SENSE_RANGE_TILES.join(' / ')} tiles`,costs:[35,65,100]},
 ];
 
@@ -61,6 +61,7 @@ export function progressionStats(progress) {
     carryCapacity:BASE_CARRY_CAPACITY+carryrig,
     maxWeaponSlots:carryrig>=3?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
+    roomClearScrap:20+2*salvager,
     scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*32,
   };
 }
