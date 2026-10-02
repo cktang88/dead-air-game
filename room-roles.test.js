@@ -68,6 +68,10 @@ test('room roles control safe rewards and combat pressure',()=>{
   assert.deepEqual(roomPickupKinds('combat'),[]);
   assert.equal(roomEnemyCount('combat',0),2);
   assert.equal(roomEnemyCount('combat',.99),4);
+  assert.equal(roomEnemyCount('combat',.99,0),3);
+  assert.equal(roomEnemyCount('combat',.99,1),3);
+  assert.equal(roomEnemyCount('combat',.99,2),4);
+  assert.equal(roomEnemyCount('hazard',.99,0),5);
 });
 
 test('room completion follows living enemies to their spawn room, not their current position',()=>{

@@ -263,3 +263,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - Moved the shared slot choice order into the pure loadout rules module. Pickup eligibility, workbench assignment, and merchant weapon stock now consult one policy for new-slot preference, primary/secondary replacement order, active-slot preference, duplicate rejection, carry capacity, and gear weight.
 - Added tests for all three slot priorities plus gear weight, heavy guns, and duplicate rejection. `npm test` passes 91 tests; syntax and diff checks pass.
+
+## Early combat pacing
+
+- The first two ordinary combat rooms now cap at three enemies, while later ordinary rooms keep their two-to-four roll. Special room budgets (cache, armory, hazard, elite) stay tied to their roles.
+- This gives the opening fights a little more room for players to learn tells and dodge before the run scales up. Added tests for early, later, and unaffected special-room budgets; `npm test` passes all 91 tests.
+- Next: check actual room mixes across deterministic generated floors and continue tuning damage, drops, and full-run length.

@@ -28,14 +28,16 @@ export function assignRoomRoles(rooms,seed,gateableCacheIndexes=[]){
   return roles;
 }
 
-export function roomEnemyCount(role,roll=0.5){
+export function roomEnemyCount(role,roll=0.5,combatIndex=Infinity){
   if(role==='entry'||role==='clinic'||role==='merchant')return 0;
   if(role==='cache')return 2;
   if(role==='armory')return 3;
   if(role==='elite')return 2;
   const boundedRoll=Math.max(0,Math.min(1-Number.EPSILON,roll));
   if(role==='hazard')return 4+Math.floor(boundedRoll*2);
-  return 2+Math.floor(boundedRoll*3);
+  const count=2+Math.floor(boundedRoll*3);
+  // Only ordinary combat rooms consume this ordinal; specials keep fixed budgets.
+  return role==='combat'&&combatIndex<2?Math.min(count,3):count;
 }
 
 export function roomPickupKinds(role){

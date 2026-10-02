@@ -290,10 +290,12 @@ function makeLevel(){
     }
   }
   const merchantRoom=state.rooms.find(room=>room.merchant);if(merchantRoom)makeMerchantVisual((merchantRoom.cx+.5)*TILE,(merchantRoom.cy+.5)*TILE);
+  let combatIndex=0;
   for(const [i,room] of state.rooms.entries()){
     if(i===0)continue;
     if(room.merchant)continue;
-    const count=roomEnemyCount(room.role,random()),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
+    const count=roomEnemyCount(room.role,random(),combatIndex),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
+    if(room.role==='combat')combatIndex++;
     for(let j=0;j<count;j++){
       const elite=room.role==='elite'&&encounter[j]==='brute',point=findEnemySpawn(room,encounter[j],elite);
       if(point)spawnEnemy(encounter[j],point.x,point.y,i,elite);
