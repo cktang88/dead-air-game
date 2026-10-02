@@ -44,3 +44,7 @@ export function roomPickupKinds(role){
 export function roomHasLivingEnemies(roomIndex,enemies){
   return enemies.some(enemy=>enemy.alive&&enemy.roomIndex===roomIndex);
 }
+
+export function roomHasEncounter(roomIndex,enemies){
+  return roomIndex>0&&enemies.some(enemy=>enemy.roomIndex===roomIndex);
+}

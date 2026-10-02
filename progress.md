@@ -194,3 +194,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added role tests for branch/fallback secrecy and minimap tests proving scans cannot reveal undiscovered secrets. Expanded the generated-floor check to verify secret naming and branch status across 64 seeds generated twice, plus the fallback map; every tested seed had a branch and secret cache.
 - Verification: `npm test` passes 66 tests; JavaScript syntax and `git diff --check` pass. The live dungeon-generation page visibly shows PASS for all 64 seeds generated twice, branch/cache status, deterministic routes, safe reward placement, and fallback generation. The standalone Playwright action runner is still blocked by this Mac sandbox's Chromium Mach-port permission error; the in-app browser ran the generator harness successfully.
 - Next: build a longer combat/browser check for armor repair; design actual locked/reward doors only after room edges and door collision state are represented, then add rest/miniboss rooms.
+
+## Fight-only room-clear rewards
+
+- Safe clinic, merchant, and empty rooms no longer grant the 20-scrap encounter-clear payout. The room still counts as visited/cleared; the bonus requires that the room actually spawned an enemy encounter.
+- Added a focused regression test that distinguishes an empty room from a defeated encounter; the room ownership check still credits enemies that leave their spawn room.
+- Verification: `npm test` passes 67 tests; JavaScript syntax and `git diff --check` pass. The web-game Playwright runner remains blocked by the local Chromium Mach-port permission error.
+- Next: playtest armor damage and repair in a full encounter, then build a meaningful rest/miniboss room role. Real locked doors remain a larger map/collision/pathfinding feature.

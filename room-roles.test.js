@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignRoomRoles, roomEnemyCount, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {assignRoomRoles, roomEnemyCount, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 
 const rooms=Array.from({length:10},(_,index)=>({index,name:`ROOM ${index}`}));
 
@@ -70,4 +70,15 @@ test('room completion follows living enemies to their spawn room, not their curr
   enemies[0].alive=false;
   assert.equal(roomHasLivingEnemies(3,enemies),false,'dead enemies do not prevent room completion');
   assert.equal(roomHasLivingEnemies(2,enemies),false,'unrelated rooms remain clear');
+});
+
+test('only fought rooms earn the room-clear scrap reward',()=>{
+  const enemies=[
+    {alive:false,roomIndex:2},
+    {alive:true,roomIndex:3},
+  ];
+  assert.equal(roomHasEncounter(0,enemies),false,'the entry room never gets a clear payout');
+  assert.equal(roomHasEncounter(1,[]),false,'an empty clinic or merchant gets no fight reward');
+  assert.equal(roomHasEncounter(2,enemies),true,'a defeated encounter still earns its reward');
+  assert.equal(roomHasEncounter(3,enemies),true,'a living encounter earns its reward when it later clears');
 });

@@ -250,6 +250,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Primary and secondary slots; `1` / `2` switching; weapon weight and capacity at the workbench.
 - [x] Four enemy roles, knockback, hit stop, screen shake, particles, and short corpse slide.
 - [x] Multi-room run, minimap, loot, room clear reward, and extraction.
+- [x] Pay the room-clear scrap bonus only after a room that spawned enemies is cleared; safe clinics and merchant rooms do not grant a free fight reward.
 - [x] Room props include permanent cover and health-based destructible crates.
 - [x] Procedural rooms include rectangular, L, U, and C floor plans while preserving door links and room centers.
 - [x] Small pure rules module and Node unit tests.
