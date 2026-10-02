@@ -11,7 +11,7 @@ import {shapeDungeon, shortestFloorPath} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
-import {roomEnemyCount, roomPickupKinds} from './room-roles.js';
+import {roomEnemyCount, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 
 const $ = (id) => document.getElementById(id);
@@ -251,7 +251,7 @@ function makeLevel(){
     const count=roomEnemyCount(room.role,random()),encounter=chooseEncounterTypes(count,state.seed+i*7919);
     for(let j=0;j<count;j++){
       const point=findEnemySpawn(room,encounter[j]);
-      if(point)spawnEnemy(encounter[j],point.x,point.y);
+      if(point)spawnEnemy(encounter[j],point.x,point.y,i);
     }
     if(!roomPickupKinds(room.role).length){
       if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
@@ -357,11 +357,11 @@ function breakCrate(crate){
   state.shake=Math.max(state.shake,1.8);burst(crate.x,crate.y,0xb98258,11,1.1);
   if(random()<progressionStats(state.progress).crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(random()*13));
 }
-function spawnEnemy(type,x,y){
+function spawnEnemy(type,x,y,roomIndex){
   const def=ENEMY_TYPES[type],body=makeBody({x,y},type==='brute'?10:8,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
   const mesh=createActorMesh(type);mesh.position.set(x,0,y);
   const points=[new THREE.Vector3(),new THREE.Vector3()];const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xff4d61,transparent:true,opacity:.76,depthWrite:false}));aimLine.visible=false;scene.add(aimLine);
-  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,x,y,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
+  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,x,y,roomIndex,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
 }
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&[0,1].some(slot=>weaponReplacement(state.weaponSlots,slot,index,GUNS,state.carryCapacity,GEAR.find(item=>item.id===state.gear)?.weight||0).canCarry));
@@ -441,7 +441,7 @@ function finishRun(result){if(state.paidOut)return;state.mode=result;state.paidO
 function winRun(){finishRun('won');}
 function checkRoomClear(){for(const [i,r] of state.rooms.entries()){
   if(r.cleared||!r.visited)continue;
-  const hasEnemy=state.enemies.some(e=>e.alive&&e.x/TILE>=r.x1&&e.x/TILE<=r.x2&&e.y/TILE>=r.y1&&e.y/TILE<=r.y2);
+  const hasEnemy=roomHasLivingEnemies(i,state.enemies);
   if(!hasEnemy){r.cleared=true;state.roomsCleared++;if(i>0){state.scrap+=20;toast(`ROOM CLEAR · +20 SCRAP`,1800);for(let n=0;n<6;n++)dropPickup('scrap',rand(r.x1+1,r.x2-1)*TILE,rand(r.y1+1,r.y2-1)*TILE,4);hud();}}
 }}
 function updateRoom(){

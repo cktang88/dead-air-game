@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignRoomRoles, roomEnemyCount, roomPickupKinds} from './room-roles.js';
+import {assignRoomRoles, roomEnemyCount, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 
 const rooms=Array.from({length:10},(_,index)=>({index,name:`ROOM ${index}`}));
 
@@ -49,4 +49,17 @@ test('room roles control safe rewards and combat pressure',()=>{
   assert.deepEqual(roomPickupKinds('combat'),[]);
   assert.equal(roomEnemyCount('combat',0),2);
   assert.equal(roomEnemyCount('combat',.99),4);
+});
+
+test('room completion follows living enemies to their spawn room, not their current position',()=>{
+  const enemies=[
+    {alive:true,roomIndex:3,x:200,y:200},
+    {alive:true,roomIndex:4,x:320,y:320},
+    {alive:false,roomIndex:3,x:250,y:250},
+  ];
+  assert.equal(roomHasLivingEnemies(3,enemies),true,'an enemy still alive in the encounter blocks its reward after leaving');
+  assert.equal(roomHasLivingEnemies(4,enemies),true,'the other room keeps its own completion state');
+  enemies[0].alive=false;
+  assert.equal(roomHasLivingEnemies(3,enemies),false,'dead enemies do not prevent room completion');
+  assert.equal(roomHasLivingEnemies(2,enemies),false,'unrelated rooms remain clear');
 });

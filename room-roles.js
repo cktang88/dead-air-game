@@ -39,3 +39,7 @@ export function roomPickupKinds(role){
   if(role==='armory')return ['gun'];
   return [];
 }
+
+export function roomHasLivingEnemies(roomIndex,enemies){
+  return enemies.some(enemy=>enemy.alive&&enemy.roomIndex===roomIndex);
+}

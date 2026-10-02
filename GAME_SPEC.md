@@ -46,6 +46,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 
 - Every run has an entry, at least six combat or utility rooms, and an extraction room.
 - Rooms vary in width, height, outline, entrance position, and corridor connection. Hallways should create choices and avoid one long empty chain.
+- Enemies belong to their spawn encounter. A living enemy still blocks that room's clear reward if it chases beyond the original walls.
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
 - Each room gets a deterministic role: combat, cache, armory, clinic, hazard, merchant, or extraction. Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
 - Keep the entry and extraction roles reserved. Add optional branches, locked reward doors, rest/miniboss rooms, and secrets as later generation work.

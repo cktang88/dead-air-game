@@ -173,3 +173,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added tests for shell tradeoffs, weapon penetration budgets, swept enemy hits, wall traversal, and connected multi-tile wall thickness. `npm test` passes 63 tests; syntax and diff checks pass.
 - Live in-app browser check: started a fresh seeded run, selected the Street Sweeper, cycled from buckshot to birdshot, and fired once; ammo changed from 6 to 5 and the HUD showed Birdshot. The screenshot showed the visible shell toast and active ammo label. The standalone Playwright runner still cannot start Chromium because this sandbox denies Chromium's macOS Mach-port registration; the in-app browser provided the gameplay check.
 - Next: do a longer encounter pass for rifle penetration and shotgun balance; proceed with the remaining run-quality and accessibility items in the spec.
+
+## Room clear ownership fix
+
+- Every spawned enemy now carries its encounter room index. Room completion and its scrap reward wait for those enemies to die even if a tactical retreat or chase takes them into a hall or another room.
+- Added a pure room-role predicate and a regression test covering living enemies outside the room bounds, unrelated encounters, and corpses. `npm test` passes 64 tests; syntax and diff checks pass.
+- Next: continue the spec's unfinished run-quality and gear work; in particular, tune healing against armor as separate systems and add a real locked-reward or rest/miniboss/secret room loop.
