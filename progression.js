@@ -1,4 +1,4 @@
-import {BASE_CARRY_CAPACITY} from './catalog.js';
+import {BASE_CARRY_CAPACITY,TILE} from './catalog.js';
 
 export const SAVE_VERSION = 1;
 export const SAVE_KEY = 'dead-air.progress.v1';
@@ -62,6 +62,6 @@ export function progressionStats(progress) {
     maxWeaponSlots:carryrig>=3?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
     roomClearScrap:20+2*salvager,
-    scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*32,
+    scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*TILE,
   };
 }

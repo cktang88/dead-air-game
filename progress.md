@@ -278,3 +278,8 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Salvager now raises combat room-clear scrap by 2 per tier (20 base, up to 26) as well as raising crate-drop odds. Its safehouse description spells out both effects; room-clear rewards use the saved upgrade stats and show the actual amount earned.
 - Added tier coverage for all three Salvager levels. `npm test` passes all 92 tests and the seeded browser smoke check passes with no change to the saved profile.
 - Next: playtest healing and armor balance over longer runs, then profile sustained full-floor performance.
+
+## Architecture review
+
+- Removed the duplicate Room Sense tile-size constant by deriving its pixel range from `catalog.js`'s `TILE`; the capped-tier test now calculates expected ranges from the same shared unit. `npm test` passes all 92 tests.
+- Reviewed `makeLevel()` and kept it as the lifecycle coordinator: extracting a room-population helper would move code but still share the same global game state, without improving a current change path. The browser harnesses remain manual checks alongside the Node suite.

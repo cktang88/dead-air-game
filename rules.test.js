@@ -343,7 +343,7 @@ test('Salvager improves crate drops and combat room-clear scrap at each tier',()
 
 test('Room Sense is a capped saved upgrade with increasing scan range',()=>{
   let progress=awardCoins(emptyProgress(),200);
-  for(const range of [480,800,1120]){
+  for(const range of [15,25,35].map(tiles=>tiles*TILE)){
     const purchase=purchaseUpgrade(progress,'roomsense');
     assert.equal(purchase.purchased,true);
     progress=purchase.progress;
