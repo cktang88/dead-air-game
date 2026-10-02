@@ -256,7 +256,8 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Brute melee telegraph
 
 - Removed random per-frame heavy contact damage from Brutes. They now commit to a bright directional swing, wait 0.48 simulation seconds, then deal two damage only if the player remains within reach and the committed forward arc. A 0.9-second recovery prevents instant repeat attacks; bullets cancel an active wind-up. Rushers keep their lighter contact behavior.
-- Added pure timing and hit-arc tests for telegraph, single strike, recovery, range, sideways dodges, and blocked sight. An independent review caught and fixed wall/smoke attacks by requiring sight both to begin a swing and to land it. `npm test` passes 90 tests; syntax and diff checks pass. The browser smoke run launched, moved, and fired with two Brutes present and no console errors, but did not directly exercise a Brute wind-up animation. Repeated-run balance still needs follow-up.
+- Added pure timing and hit-arc tests for telegraph, single strike, recovery, range, sideways dodges, and blocked sight. An independent review caught and fixed wall/smoke attacks by requiring sight both to begin a swing and to land it. `npm test` passes 90 tests; syntax and diff checks pass.
+- Seed `213838321` now drives a repeatable Playwright encounter: tile-path movement reaches the first Brute, `render_game_to_text()` reports `charging: true`, and the screenshot confirms a bright locked direction beam plus a strong body glow. No browser console errors occurred. The player lost two health to ranged fire during the first six game seconds, so ranged pressure needs more repeated tuning.
 
 ## Weapon replacement policy review
 
