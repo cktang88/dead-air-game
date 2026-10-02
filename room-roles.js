@@ -41,7 +41,7 @@ export function roomEnemyCount(role,roll=0.5,combatIndex=Infinity){
 }
 
 export function roomPickupKinds(role){
-  if(role==='cache')return ['scrap','mod'];
+  if(role==='cache')return ['cache'];
   if(role==='clinic')return ['heal'];
   if(role==='armory')return ['gun'];
   if(role==='elite')return ['scrap','mod'];

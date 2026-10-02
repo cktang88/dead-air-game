@@ -20,7 +20,7 @@ Then open `http://localhost:8000`. The game loads Three.js, Rapier 2D, and ROT.j
 
 The workbench lets you select a secondary weapon, buy weighted armor, and buy attachments compatible with the active gun. The 13 weapons have distinct damage, fire rate, magazine, spread, range, reload, weight, and projectile speed. Player and enemy guns turn with their aim; ranged enemies show a warning line before firing and visibly tilt their guns while reloading. Enemy shots keep the direction they aimed at, so movement can dodge them at either tempo.
 
-Throwables use physics-driven travel and have separate effects: smoke hides the player from ranged enemies, flash stuns enemies in line of sight, frag deals area damage and knockback, and incendiary fire burns nearby enemies. A rare black-market room sells run weapons, compatible attachments, armor, healing, and throwable refills for scrap. See [GAME_SPEC.md](./GAME_SPEC.md) for the design and remaining roadmap.
+Throwables use physics-driven travel and have separate effects: smoke hides the player from ranged enemies, flash stuns enemies in line of sight, frag deals area damage and knockback, and incendiary fire burns nearby enemies. Cleared rooms can contain a cache with a choice of ammo, healing, an attachment, a risky prototype, or scrap. A rare black-market room sells run weapons, compatible attachments, armor, healing, and throwable refills for scrap. See [GAME_SPEC.md](./GAME_SPEC.md) for the design and remaining roadmap.
 
 Generated runs use ROT.js's Digger room and corridor generator. Walls are indestructible; wooden crates take damage and may drop scrap. Combat rules live in `rules.js` and have a small Node test suite:
 

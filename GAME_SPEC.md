@@ -151,7 +151,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 - Crates may drop a small amount of scrap. Enemies reward a predictable small amount; rooms grant a clear bonus for clearing.
 - Healing should be uncommon enough that taking damage matters but common enough to prevent a long unwinnable run.
 - Weapon pickup should preview the replacement and weight before collection. Provide a clear decline path if the player wants to keep their current weapon.
-- A room cache should offer a choice when possible: ammunition, health, upgrade, or riskier rare item.
+- After its guards are gone, a room cache opens a paused choice: ammunition, health, a compatible attachment, a prototype attachment that costs one health, or 35 scrap. The scrap fallback stays available if every other reward is unusable.
 
 ## Meta progression
 

@@ -284,6 +284,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Verification: `npm test` passes 98 tests; `node --check` and `git diff --check` pass. The in-browser seeded smoke check passed rarity-tagged drops, persistent common attachment quality, focus-loss pause, and Runner/Lucky Find purchases persisting after reload. It restored the browser's original save.
 - Next: validate quality progression through a longer human run and keep tuning attachment effects if high tiers dominate. Full-floor completion and longer-run balance/performance remain open.
 
+## Room cache choices
+
+- Cache rooms now place one interactable cache box rather than dropping scrap and an attachment automatically. Clearing the cache room unlocks a paused choice of ammo, health, an attachment, a prototype attachment for one health, or 35 scrap.
+- The scrap choice is always available, so full health/ammo or a fully upgraded gun cannot strand the player in the menu. The cache closes without taking its reward when Esc is pressed.
+- A pure cache-choice rule keeps the scrap option available when ammo, health, and attachment rewards are exhausted. Regression tests cover that full-inventory case.
+- Verification: `npm test` passes 100 tests and JavaScript syntax checks pass. The browser smoke could not load the game libraries in the locked desktop session; the new dialog therefore still needs a live in-browser check. The prior seed smoke passed before this cache change.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.

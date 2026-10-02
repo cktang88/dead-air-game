@@ -16,6 +16,7 @@ import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
 import {lootTier,lootTierForRoll} from './loot.js';
+import {cacheRewardAvailable} from './cache-rewards.js';
 import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
 import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,resolveMovementKey,saveKeyBindings} from './keybindings.js';
 
@@ -32,7 +33,7 @@ const state = {
   weaponSlots:[0,1], activeSlot:0, get weaponIndex(){return this.weaponSlots[this.activeSlot];}, gear:null, carryCapacity:BASE_CARRY_CAPACITY, weaponAmmo:GUNS.map(g=>g.mag), reserveAmmo:GUNS.map(g=>g.reserve), attachments:new Map(), health:5, maxHealth:5, armor:0, maxArmor:0,
   progress:loadProgress(), paidOut:false,
   aim:{x:1,y:0}, lastAction:0, lastActionKind:'other', fireCooldown:0, reloadTimer:0, invuln:0, shake:0, flashTimer:0, hitstop:0, toastTimer:0, roomToast:'', sector:1,
-  throwableIndex:2, throwables:{smoke:1,flash:1,frag:2,incendiary:1}, shotgunShellId:'buckshot', merchantOpen:false, merchantRoom:null, pendingGunPickup:null, pendingLoadoutChange:null,
+  throwableIndex:2, throwables:{smoke:1,flash:1,frag:2,incendiary:1}, shotgunShellId:'buckshot', merchantOpen:false, merchantRoom:null, cacheOpen:false, cachePickup:null, pendingGunPickup:null, pendingLoadoutChange:null,
   scene:null, camera:null, renderer:null, physics:null, floorMesh:null, walls:[], meshRoot:null, actorMeshes:new Map(), pickupMeshes:new Map(), bulletMeshes:new Map(),
 };
 const input = {keys:new Set(), mouseX:innerWidth/2, mouseY:innerHeight/2, firing:false, interact:false};
@@ -42,7 +43,7 @@ let renderer, scene, camera, physics, lighting;
 const tempObj = new THREE.Object3D();
 const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
-const MINIMAP_LOOT_COLORS={scrap:'#f4c66d',gun:'#74c9ed',mod:'#d38ff5',heal:'#74dfab'};
+const MINIMAP_LOOT_COLORS={scrap:'#f4c66d',gun:'#74c9ed',mod:'#d38ff5',heal:'#74dfab',cache:'#f4c66d'};
 let visualSettings={shake:1,flash:1};
 function binding(action){return controls.bindings[action];}
 function weaponSlotLabel(slot){return ['PRIMARY','SECONDARY','TERTIARY'][slot]||`SLOT ${slot+1}`;}
@@ -233,7 +234,7 @@ function placeRoleRewards(room){
   for(const kind of roomPickupKinds(room.role)){
     const point=findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...reserved],tileSize:TILE,random});
     if(!point)continue;
-    dropPickup(kind,point.x,point.y,kind==='scrap'?30+Math.floor(random()*21):0);
+    dropPickup(kind,point.x,point.y,kind==='scrap'?30+Math.floor(random()*21):0,room.index);
     reserved.push({...point,radius:18});
   }
 }
@@ -419,14 +420,14 @@ function spawnEnemy(type,x,y,roomIndex,elite=false){
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&canEquipGun(index));
 }
-function dropPickup(kind,x,y,value=0){
+function dropPickup(kind,x,y,value=0,roomIndex=null){
   if(state.solidMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]!==0)return;
   const gunIndex=kind==='gun'?choose(possiblePickupGuns()):undefined;if(kind==='gun'&&!Number.isInteger(gunIndex))return;
   const rarity=kind==='mod'?lootTierForRoll(random(),progressionStats(state.progress).luckyFindLevel):null;
-  const colors={scrap:0xf4c66d,gun:0x74c9ed,mod:lootTier(rarity).color,heal:0x74dfab,exit:0xff5969};
-  const geometry=kind==='exit'?new THREE.TorusGeometry(16,3,6,20):new THREE.OctahedronGeometry(kind==='gun'?9:kind==='heal'?8:6,0);
+  const colors={scrap:0xf4c66d,gun:0x74c9ed,mod:lootTier(rarity).color,heal:0x74dfab,cache:0xf4c66d,exit:0xff5969};
+  const geometry=kind==='exit'?new THREE.TorusGeometry(16,3,6,20):kind==='cache'?new THREE.BoxGeometry(13,10,13):new THREE.OctahedronGeometry(kind==='gun'?9:kind==='heal'?8:6,0);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:colors[kind],emissive:colors[kind],emissiveIntensity:.4,roughness:.45,metalness:.1}));mesh.position.set(x,kind==='exit'?1:5,y);mesh.castShadow=true;scene.add(mesh);
-  const pickup={kind,x,y,value,mesh,gunIndex,rarity,available:true,declined:false};state.pickups.push(pickup);state.pickupMeshes.set(pickup,mesh);
+  const pickup={kind,x,y,value,mesh,gunIndex,rarity,roomIndex,available:true,declined:false};state.pickups.push(pickup);state.pickupMeshes.set(pickup,mesh);
 }
 function makeBulletMesh(color){const mesh=new THREE.Mesh(new THREE.SphereGeometry(2.4,8,6),new THREE.MeshBasicMaterial({color}));mesh.material.toneMapped=false;scene.add(mesh);return mesh;}
 function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
@@ -487,13 +488,45 @@ function equipGear(id,repair=false){
   toast(item.armorDurability?`ARMOR PLATE EQUIPPED · ${item.armorDurability} DURABILITY`:item.reloadMultiplier?'AMMO HARNESS EQUIPPED · FASTER RELOADS':`${item.name} EQUIPPED`);hud();return true;
 }
 function installMod(id,gunIndex=state.weaponIndex,free=false,tier='common'){const gun=GUNS[gunIndex],mod=MODS.find(m=>m.id===id),installed=attachmentsFor(gun);if(!mod||!compatibleAttachments(gun,MODS).some(item=>item.id===id)||installed.has(id)||(!free&&state.scrap<mod.cost))return false;if(!free)state.scrap-=mod.cost;const previousMagazine=magSize(gun);installed.set(id,lootTier(tier).id);if(id==='extended')state.weaponAmmo[gunIndex]=Math.min(magSize(gun),state.weaponAmmo[gunIndex]+magSize(gun)-previousMagazine);toast(`${lootTier(tier).label} ${mod.name} INSTALLED · ${gun.name}`);hud();return true;}
-function collect(pickup,manual=false){if(!pickup.available)return false;const d=distance(state.player,pickup);if(d>28)return false;if(pickup.kind==='gun'){if(pickup.declined&&!manual)return false;showWeaponPickup(pickup);return false;}pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);burst(pickup.x,pickup.y,pickup.mesh.material.color.getHex(),8);
+function collect(pickup,manual=false){if(!pickup.available)return false;const d=distance(state.player,pickup);if(d>28)return false;if(pickup.kind==='cache'){if(manual)openCache(pickup);return false;}if(pickup.kind==='gun'){if(pickup.declined&&!manual)return false;showWeaponPickup(pickup);return false;}pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);burst(pickup.x,pickup.y,pickup.mesh.material.color.getHex(),8);
   switch(pickup.kind){
     case'scrap':state.scrap+=pickup.value||12;toast(`+${pickup.value||12} SCRAP`);break;
     case'mod':{const gun=GUNS[state.weaponIndex],unowned=compatibleAttachments(gun,MODS).filter(mod=>!attachmentsFor(gun).has(mod.id));if(unowned.length)installMod(choose(unowned).id,state.weaponIndex,true,pickup.rarity);else state.scrap+=30;break;}
     case'heal':state.health=Math.min(state.maxHealth,state.health+2);toast('PATCHED UP · +2 VITALS');break;
     case'exit':if(state.enemies.some(e=>e.alive)){toast('CLEAR THE SECTOR FIRST');pickup.available=true;scene.add(pickup.mesh);return false;}winRun();break;
   }if(!pickup.available){pickup.mesh.geometry.dispose();pickup.mesh.material.dispose();}hud();return true;
+}
+function cacheMods(){const gun=GUNS[state.weaponIndex];return compatibleAttachments(gun,MODS).filter(mod=>!attachmentsFor(gun).has(mod.id));}
+function cacheChoiceStatus(choice){const gun=GUNS[state.weaponIndex],mods=cacheMods();
+  return cacheRewardAvailable(choice,{health:state.health,maxHealth:state.maxHealth,ammo:state.weaponAmmo[state.weaponIndex],magazine:magSize(gun),reserve:state.reserveAmmo[state.weaponIndex],maxReserve:gun.reserve,hasUpgrade:mods.length>0});
+}
+function renderCache(){
+  const choices=[['ammo','AMMUNITION','Refill this weapon and add reserve rounds.'],['health','FIELD MEDKIT','Restore up to two health.'],['upgrade','FIELD TUNING','Install a random compatible attachment at a Lucky Find quality.'],['prototype','PROTOTYPE DRAW','Install a prototype attachment, but lose one health.'],['scrap','SCRAP STASH','Take 35 scrap for the run.']];
+  $('cache-options').innerHTML=choices.map(([id,name,description])=>`<div class="merchant-row"><span><strong>${name}</strong><small>${description}</small></span><button data-cache="${id}" ${cacheChoiceStatus(id)?'':'disabled'}>TAKE</button></div>`).join('');
+}
+function openCache(pickup){
+  if(roomHasLivingEnemies(pickup.roomIndex,state.enemies)){toast('CLEAR THE CACHE ROOM FIRST');return;}
+  state.cachePickup=pickup;state.cacheOpen=true;input.keys.clear();input.firing=false;renderCache();$('cache-panel').hidden=false;$('cache-panel').setAttribute('aria-hidden','false');$('close-cache').focus();
+}
+function closeCache(){state.cacheOpen=false;state.cachePickup=null;input.keys.clear();input.firing=false;$('cache-panel').hidden=true;$('cache-panel').setAttribute('aria-hidden','true');renderer.domElement.focus();}
+function takeCacheReward(choice){
+  const pickup=state.cachePickup;if(!pickup||!cacheChoiceStatus(choice))return;
+  const gun=GUNS[state.weaponIndex];
+  if(choice==='ammo'){
+    state.weaponAmmo[state.weaponIndex]=magSize(gun);
+    state.reserveAmmo[state.weaponIndex]=Math.min(gun.reserve,state.reserveAmmo[state.weaponIndex]+Math.max(12,Math.ceil(gun.reserve*.25)));
+    toast('CACHE · AMMO RESTOCKED');
+  }else if(choice==='health'){
+    const healed=Math.min(2,state.maxHealth-state.health);state.health+=healed;toast(`CACHE · +${healed} HEALTH`);
+  }else if(choice==='scrap'){
+    state.scrap+=35;toast('CACHE · +35 SCRAP');
+  }else{
+    const mod=choose(cacheMods()),tier=choice==='prototype'?'prototype':lootTierForRoll(random(),progressionStats(state.progress).luckyFindLevel);
+    if(choice==='prototype')state.health--;
+    if(!installMod(mod.id,state.weaponIndex,true,tier))return;
+    toast(choice==='prototype'?'PROTOTYPE CACHE · -1 HEALTH':'FIELD CACHE · ATTACHMENT FOUND');
+  }
+  pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);disposeObject(pickup.mesh);burst(pickup.x,pickup.y,0xf4c66d,14,1.1);closeCache();hud();
 }
 function finishRun(result){if(state.paidOut)return;state.mode=result;state.paidOut=true;const payout=runCoinPayout({won:result==='won',roomsCleared:state.roomsCleared,kills:state.kills});state.progress=awardCoins(state.progress,payout);saveProgress();$('run-result').hidden=false;$('run-result').textContent=`${result==='won'?'EXTRACTION COMPLETE':'RUN OVER'} · ${state.roomsCleared} ROOMS · ${state.kills} KILLS · +${payout} COINS`;$('start-button').textContent='RUN AGAIN ↗';$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();toast(result==='won'?'SECTOR CLEARED':'RUN OVER',3500);}
 function winRun(){finishRun('won');}
@@ -511,6 +544,7 @@ function updateRoom(){
 function interact(){
   const gate=state.lockedDoors.find(door=>!door.opened&&distance(state.player,{x:(door.x+.5)*TILE,y:(door.y+.5)*TILE})<38);
   if(gate){const purchase=unlockRewardGate(gate,state.scrap);if(purchase.status==='insufficient'){toast(`VAULT LOCK · NEED ${purchase.missing} MORE SCRAP`);return;}if(purchase.status!=='opened')return;state.scrap=purchase.scrap;gate.opened=true;for(const {x,y} of gate.cells)state.solidMap[y][x]=0;if(gate.body){physics.removeRigidBody(gate.body);state.colliders=state.colliders.filter(item=>item.body!==gate.body);gate.body=null;}if(gate.mesh){disposeObject(gate.mesh);state.props=state.props.filter(item=>item!==gate.mesh);gate.mesh=null;}toast(`CACHE GATE OPEN · -${gate.cost} SCRAP`);hud();return;}
+  const cache=state.pickups.find(pickup=>pickup.available&&pickup.kind==='cache'&&distance(state.player,pickup)<36);if(cache){collect(cache,true);return;}
   const market=state.rooms.find(room=>room.merchant&&distance(state.player,{x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE})<90);if(market){openMerchant(market);return;}
   const close=state.pickups.filter(p=>p.available&&distance(state.player,p)<36).sort((a,b)=>distance(state.player,a)-distance(state.player,b))[0];
   if(close){collect(close,true);return;}
@@ -558,7 +592,7 @@ function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projec
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;effect.mesh.material.opacity=(effect.id==='smoke'?.27:.17)*Math.min(1,effect.remaining/.45);if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);burst(enemy.x,enemy.y,0xff6a35,3,.6);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){disposeObject(effect.mesh);state.effects.splice(i,1);}}}
 function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`${keyLabel(binding('throwableCycle'))} ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;$('throwable-hint').textContent=`${keyLabel(binding('throwableCycle'))} SELECT · ${keyLabel(binding('throwableUse'))} THROW`;}
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));}
-function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
+function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
   const {x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);if(vx!==0||vy!==0)markAction('move');
@@ -570,8 +604,8 @@ function updatePlayer(dt){
   if(state.reloadTimer>0){state.reloadTimer-=dt;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;hud();}}
   if(input.firing)playerShoot();if(input.interact){input.interact=false;interact();}
   for(const pickup of state.pickups){if(pickup.declined&&distance(p,pickup)>48)pickup.declined=false;if(state.pendingGunPickup)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
-  const gateNear=state.lockedDoors.find(door=>!door.opened&&distance(p,{x:(door.x+.5)*TILE,y:(door.y+.5)*TILE})<38),stationNear=distance(p,{x:state.rooms[0].cx*TILE,y:state.rooms[0].cy*TILE})<110,shopNear=state.rooms.some(room=>room.merchant&&distance(p,{x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE})<90),gunNear=state.pickups.filter(pickup=>pickup.available&&pickup.kind==='gun'&&distance(p,pickup)<36).sort((a,b)=>distance(p,a)-distance(p,b))[0];
-  const interactKey=keyLabel(binding('interact'));$('interaction-hint').textContent=gateNear?`${interactKey} · UNLOCK CACHE · ${gateNear.cost} SCRAP`:gunNear?`${interactKey} · REVIEW ${GUNS[gunNear.gunIndex].name}`:shopNear?`${interactKey} · ENTER THE BLACK MARKET`:`${interactKey} · OPEN THE LOADOUT`;$('interaction-hint').classList.toggle('show',(gateNear||gunNear||stationNear||shopNear)&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup);
+  const gateNear=state.lockedDoors.find(door=>!door.opened&&distance(p,{x:(door.x+.5)*TILE,y:(door.y+.5)*TILE})<38),cacheNear=state.pickups.find(pickup=>pickup.available&&pickup.kind==='cache'&&distance(p,pickup)<36),stationNear=distance(p,{x:state.rooms[0].cx*TILE,y:state.rooms[0].cy*TILE})<110,shopNear=state.rooms.some(room=>room.merchant&&distance(p,{x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE})<90),gunNear=state.pickups.filter(pickup=>pickup.available&&pickup.kind==='gun'&&distance(p,pickup)<36).sort((a,b)=>distance(p,a)-distance(p,b))[0];
+  const interactKey=keyLabel(binding('interact'));$('interaction-hint').textContent=gateNear?`${interactKey} · UNLOCK CACHE · ${gateNear.cost} SCRAP`:cacheNear?`${interactKey} · ${roomHasLivingEnemies(cacheNear.roomIndex,state.enemies)?'CLEAR ROOM FOR CACHE':'OPEN ROOM CACHE'}`:gunNear?`${interactKey} · REVIEW ${GUNS[gunNear.gunIndex].name}`:shopNear?`${interactKey} · ENTER THE BLACK MARKET`:`${interactKey} · OPEN THE LOADOUT`;$('interaction-hint').classList.toggle('show',(gateNear||cacheNear||gunNear||stationNear||shopNear)&&!state.loadoutOpen&&!state.merchantOpen&&!state.cacheOpen&&!state.pendingGunPickup);
   updateRoom();
 }
 function lineBlocked(x1,y1,x2,y2){const start={x:x1,y:y1},end={x:x2,y:y2},length=Math.hypot(x2-x1,y2-y1),steps=Math.ceil(length/8);for(let i=1;i<steps;i++){const t=i/steps,tx=Math.floor((x1+(x2-x1)*t)/TILE),ty=Math.floor((y1+(y2-y1)*t)/TILE);if(state.solidMap[ty]?.[tx]!==0)return true;}return state.crates.some(crate=>segmentIntersectsCircle(start,end,crate,17))||state.cover.some(cover=>!cover.crate&&segmentIntersectsCircle(start,end,cover,cover.radius));}
@@ -677,7 +711,7 @@ function updateParticles(dt){for(let i=state.particles.length-1;i>=0;i--){const 
 function updateCorpses(dt){for(const e of state.enemies){if(e.alive||!e.corpseTimer)continue;e.corpseTimer-=dt;const p=e.body.translation();e.x=p.x;e.y=p.y;e.mesh.position.set(e.x,.2,e.y);if(e.corpseTimer<=0){physics.removeRigidBody(e.body);disposeObject(e.mesh);e.corpseTimer=0;}}}
 function update(dt){
   state.flashTimer=Math.max(0,state.flashTimer-dt);$('flash-overlay').style.opacity=String(flashOverlayOpacity(state.flashTimer,visualSettings.flash));
-  if(state.mode!=='play'||state.paused||state.loadoutOpen||state.merchantOpen||state.pendingGunPickup)return;
+  if(state.mode!=='play'||state.paused||state.loadoutOpen||state.merchantOpen||state.cacheOpen||state.pendingGunPickup)return;
   const scale=getTimeScale();const step=dt*scale;if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)physics.step();}else{physics.timestep=Math.min(step,1/30);physics.step();}
   state.time+=step;state.elapsed+=step;updatePlayer(step);updateEnemies(step);updateBullets(step);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);updateParticles(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
   const now=performance.now()/1000,recent=now-state.lastAction<.35,hasMoveInput=hasMovementInput(),moving=hasMoveInput||(!input.firing&&recent&&state.lastActionKind==='move'),firing=input.firing||(!hasMoveInput&&recent&&state.lastActionKind==='fire');
@@ -707,7 +741,7 @@ function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/st
 }
 function newRun(){
   input.keys.clear();input.firing=false;input.interact=false;const chosenSeed=parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));ROT.RNG.setSeed(state.seed);$('seed-display').textContent=String(state.seed);
-  state.mode='play';state.paused=false;state.merchantOpen=false;state.merchantRoom=null;state.pendingGunPickup=null;$('weapon-pickup').hidden=true;$('weapon-pickup').setAttribute('aria-hidden','true');state.running=true;state.paidOut=false;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.armor=0;state.maxArmor=0;state.gear=null;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=progressionStats(state.progress).carryCapacity;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.attachments=new Map(GUNS.map(gun=>[gun.id,new Map()]));state.throwables={smoke:1,flash:1,frag:2,incendiary:1};state.throwableIndex=2;state.shotgunShellId='buckshot';state.lastAction=0;state.lastActionKind='other';state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');$('run-result').hidden=true;$('start-button').textContent='ENTER THE SECTOR ↗';$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();updateThrowableHud();toast('MOVE ALONE AT 1× · FIRE STAYS BLENDED · STOP TO PLAN',3200);}
+  state.cacheOpen=false;state.cachePickup=null;$('cache-panel').hidden=true;$('cache-panel').setAttribute('aria-hidden','true');state.mode='play';state.paused=false;state.merchantOpen=false;state.merchantRoom=null;state.pendingGunPickup=null;$('weapon-pickup').hidden=true;$('weapon-pickup').setAttribute('aria-hidden','true');state.running=true;state.paidOut=false;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.armor=0;state.maxArmor=0;state.gear=null;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=progressionStats(state.progress).carryCapacity;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.attachments=new Map(GUNS.map(gun=>[gun.id,new Map()]));state.throwables={smoke:1,flash:1,frag:2,incendiary:1};state.throwableIndex=2;state.shotgunShellId='buckshot';state.lastAction=0;state.lastActionKind='other';state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');$('run-result').hidden=true;$('start-button').textContent='ENTER THE SECTOR ↗';$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();updateThrowableHud();toast('MOVE ALONE AT 1× · FIRE STAYS BLENDED · STOP TO PLAN',3200);}
 function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);const aspect=innerWidth/innerHeight,halfH=260;camera.left=-aspect*halfH;camera.right=aspect*halfH;camera.top=halfH;camera.bottom=-halfH;camera.updateProjectionMatrix();}
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
@@ -723,7 +757,7 @@ function renderGameToText(){
     room:room?.name,roomIndex:state.currentRoom,roomRole:room?.role,
     roomProgress:state.rooms.map((entry,index)=>({index,name:entry.name,role:entry.role,visited:!!entry.visited,cleared:!!entry.cleared,livingEnemies:roomEnemyCounts[index]})),
     lockedDoors:state.lockedDoors.map(door=>({opened:door.opened,cost:door.cost,room:state.rooms[door.roomIndex]?.name,x:(door.x+.5)*TILE,y:(door.y+.5)*TILE,cells:door.cells.length})),
-    merchant:!!room?.merchant,merchantOpen:state.merchantOpen,
+    merchant:!!room?.merchant,merchantOpen:state.merchantOpen,cacheOpen:state.cacheOpen,
     weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,
     enemyCount:enemies.length,enemies,
     crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),
@@ -764,14 +798,15 @@ function setupControls(){
       return;
     }
     if(state.pendingGunPickup){if(key===binding('weaponOne'))acceptWeaponPickup(0);else if(key===binding('weaponTwo'))acceptWeaponPickup(1);else if(key===binding('weaponThree'))acceptWeaponPickup(2);else if(key==='escape')closeWeaponPickup(true);return;}
+    if(state.cacheOpen){if(key==='escape')closeCache();return;}
     if(state.merchantOpen){if(key==='escape')closeMerchant();return;}
-    if(key==='tab'){e.preventDefault();if(!state.merchantOpen)toggleLoadout();markAction();}
+    if(key==='tab'){e.preventDefault();if(!state.merchantOpen&&!state.cacheOpen)toggleLoadout();markAction();}
     if(key===binding('interact')){input.interact=true;markAction();}
     if(key===binding('throwableCycle')&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}
     if(key===binding('shellCycle'))cycleShotgunShell();
-    if(key===binding('throwableUse')&&state.mode==='play'&&!state.merchantOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
+    if(key===binding('throwableUse')&&state.mode==='play'&&!state.merchantOpen&&!state.cacheOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
     if(key==='r'&&(state.mode==='dead'||state.mode==='won'))newRun();
-    if(key==='escape'){if(state.merchantOpen)closeMerchant();else if(state.loadoutOpen)toggleLoadout(false);else state.paused=!state.paused;toast(state.paused?'PAUSED':'BACK IN');}
+    if(key==='escape'){if(state.merchantOpen)closeMerchant();else if(state.cacheOpen)closeCache();else if(state.loadoutOpen)toggleLoadout(false);else state.paused=!state.paused;toast(state.paused?'PAUSED':'BACK IN');}
     if(key===binding('weaponOne'))switchWeapon(0);
     if(key===binding('weaponTwo'))switchWeapon(1);
     if(key===binding('weaponThree'))switchWeapon(2);
@@ -781,7 +816,7 @@ function setupControls(){
   addEventListener('keyup',e=>input.keys.delete(resolveMovementKey(normalizeKey(e.key),controls.bindings)));
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;if(state.mode==='play')state.paused=true;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
-  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
+  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.cacheOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
   $('start-button').addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun();renderer.domElement.focus();});$('close-loadout').addEventListener('click',()=>{toggleLoadout(false);renderer.domElement.focus();});
   $('master-volume').addEventListener('input',event=>{const volume=Number(event.currentTarget.value)/100;$('master-volume-value').textContent=`${Math.round(volume*100)}%`;if(!setMasterVolume(volume))toast('VOLUME CHANGED FOR THIS SESSION ONLY');});
   $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;});$('close-meta').addEventListener('click',()=>$('meta-panel').hidden=true);$('reset-save').addEventListener('click',resetProgress);
@@ -790,6 +825,7 @@ function setupControls(){
   $('loadout-confirm').addEventListener('click',event=>{if(event.target===$('loadout-confirm'))closeLoadoutPreview();});$('loadout-cancel').addEventListener('click',closeLoadoutPreview);$('loadout-accept').addEventListener('click',confirmLoadoutChange);
   $('weapon-pickup').addEventListener('click',event=>{if(event.target===$('weapon-pickup')){closeWeaponPickup(true);return;}const button=event.target.closest('[data-pickup-slot]');if(button)acceptWeaponPickup(Number(button.dataset.pickupSlot));});
   $('decline-weapon-pickup').addEventListener('click',()=>closeWeaponPickup(true));
+  $('close-cache').addEventListener('click',closeCache);$('cache-panel').addEventListener('click',event=>{if(event.target===$('cache-panel')){closeCache();return;}const button=event.target.closest('[data-cache]');if(button)takeCacheReward(button.dataset.cache);});
   $('close-merchant').addEventListener('click',closeMerchant);$('merchant-panel').addEventListener('click',event=>{const button=event.target.closest('[data-merchant]');if(button)buyMerchantOffer(Number(button.dataset.merchant));});
   addEventListener('resize',resize);
 }

@@ -55,7 +55,7 @@ test('the guaranteed cache fallback is not secret when the floor has no branch',
 test('room roles control safe rewards and combat pressure',()=>{
   assert.equal(roomEnemyCount('cache'),2);
   assert.equal(roomEnemyCount('clinic'),0);
-  assert.deepEqual(roomPickupKinds('cache'),['scrap','mod']);
+  assert.deepEqual(roomPickupKinds('cache'),['cache']);
   assert.deepEqual(roomPickupKinds('clinic'),['heal']);
   assert.equal(roomEnemyCount('armory'),3);
   assert.equal(roomEnemyCount('elite'),2);
