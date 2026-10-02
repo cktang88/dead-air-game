@@ -224,3 +224,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - The existing workbench and merchant gear paths offer it using its catalog weight and price; the equip toast now describes reload acceleration only for the ammo harness.
 - Unit tests cover scan distance, unavailable pickups, secret-cache hiding, scan range, price, and the weapon-plus-scanner weight tradeoff. `npm test` passes 73 tests; syntax and diff checks pass. Visual in-run minimap confirmation still needs a longer browser playthrough.
 - Next: tune healing and armor over longer runs, playtest Warden balance, and verify scanner visibility during a live run.
+
+## Visual accessibility settings
+
+- Added saved title-screen sliders for camera-shake strength and flash-grenade screen brightness. Zero shake removes camera movement; zero flash brightness removes the brief screen overlay without changing grenade stun or range.
+- The flash overlay fades on real time, including while paused or after a run ends, so a pause cannot leave a bright screen stuck in place.
+- Added settings-store and effect-scaling tests. `npm test` passes 78 tests; syntax and diff checks pass. The in-app preview's accessibility tree shows both sliders at 100%. Full gameplay visual verification remains limited because the Playwright browser fails to launch under this host's Chromium Mach-port permissions.
+- Next: complete a manual flash-grenade playtest, then continue run-balance and accessibility work, including remappable controls.

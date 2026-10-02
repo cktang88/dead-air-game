@@ -306,7 +306,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
 - [ ] Add compact visual/behavior checks for the browser build and a repeatable manual seed.
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
-- [ ] Add reduced shake/flash options and remappable controls.
+- [x] Add adjustable camera shake and flash brightness options; remappable controls remain planned.
 - [ ] Profile a full run; cap particles and dispose every removed geometry/material/body.
 - [ ] Run an architecture review after the next major milestone; remove abstractions that do not own real rules.
 - [ ] Update this document when actual game behavior changes; mark delivered items only after verification.
