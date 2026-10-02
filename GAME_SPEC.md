@@ -115,13 +115,14 @@ Room compositions should use a threat budget rather than an unbounded random cou
 - Current loadout weight is the sum of equipped weapons and gear. Base capacity is 7.0. Machine pistol + shotgun weigh 5.5; adding the 1.5-weight armor plate fills the rig, while a heavier rifle plus armor exceeds capacity.
 - At the workbench, selecting an unequipped gun previews its stats and resulting carry weight before confirmation; cancel leaves the loadout untouched. A gun pickup previews its identity, stats, selected replacement slot, and resulting weight. The player can replace either slot or leave it. Keep ammo indexed by weapon so a swap does not erase the player’s stored magazine.
 - Show slot, weapon, ammo, per-item weight, total weight, and capacity. Explain an overweight selection directly.
-- The capacity is an intentional tradeoff: leave weight free for armor or utility gear once those systems exist. Do not silently discard gear when swapping a weapon.
+- The capacity is an intentional tradeoff between heavier weapons, armor, and utility gear. Do not silently discard gear when swapping a weapon.
 
 ### Inventory behavior
 
 - The armor plate has two durability points separate from five health; incoming damage wears the plate first and excess damage reaches health. Repair costs 10 scrap at the workbench.
-- The gear screen previews total load, capacity, plate durability change, and scrap cost before confirming an armor or ammo-harness change.
+- The gear screen previews total load, capacity, equipment effect, and scrap cost before confirming a gear change; armor also previews its durability change.
 - The ammo harness weighs 1.0 and reduces manual and automatic reload time by 15% for either carried weapon; it competes with the 1.5-weight armor plate.
+- The loot scanner weighs 1.0 and reveals available guns, attachments, healing, and scrap within seven tiles on the minimap, through walls. It keeps undiscovered secret-cache loot hidden and competes with armor and reload gear.
 - Permanent carry-rig upgrades increase capacity through metaprogression.
 - Decide whether temporary attachments have weight. If they do, show the added weight in the same total. Avoid hidden weight penalties.
 - Add a third weapon slot only as a later carry-rig unlock with a real weight and opportunity cost. Two slots are the default and should remain useful.
@@ -285,7 +286,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Add a weighted armor plate with separate durability and repair cost; healing restores health only.
 - [x] Show weapons, armor, and total weight at the workbench; block overweight swaps.
 - [x] Add the ammo harness as weighted gear; it reduces reload time for both carried weapons.
-- [ ] Add a gear scanner and tune healing, armor repair cost, and durability through longer runs.
+- [x] Add a weighted loot scanner that reveals nearby guns, attachments, healing, and scrap on the minimap through walls without exposing undiscovered secret-cache loot.
+- [ ] Tune healing, armor repair cost, and durability through longer runs.
 - [x] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS, TILE} from './catalog.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -202,6 +202,23 @@ test('the minimap hides unknown distant contacts but shows explored or scanned c
   assert.equal(minimapContactVisible({visited:false,distance:Infinity,scanRange:480}),false);
   assert.equal(minimapContactVisible({visited:false,distance:2,scanRange:480,secret:true}),false);
   assert.equal(minimapContactVisible({visited:true,distance:900,scanRange:0,secret:true}),true);
+});
+
+test('loot scanner reveals only available nearby pickups and keeps undiscovered cache loot hidden',()=>{
+  assert.equal(minimapPickupVisible({available:true,distance:224,scanRange:224}),true);
+  assert.equal(minimapPickupVisible({available:true,distance:225,scanRange:224}),false);
+  assert.equal(minimapPickupVisible({available:false,distance:20,scanRange:224}),false);
+  assert.equal(minimapPickupVisible({available:true,distance:20,scanRange:224,hiddenSecret:true}),false);
+  assert.equal(minimapPickupVisible({available:true,distance:20,scanRange:224,hiddenSecret:false}),true);
+});
+
+test('loot scanner is a one-weight, seven-tile gear choice',()=>{
+  const scanner=GEAR.find(item=>item.id==='loot-scanner');
+  assert.ok(scanner);
+  assert.equal(scanner.weight,1);
+  assert.equal(scanner.cost,32);
+  assert.equal(scanner.pickupScanRange,7*TILE);
+  assert.equal(weaponLoadoutWeight([0,1],GUNS)+scanner.weight,6.5);
 });
 
 test('room scan distance measures from the full outer tile edge, including the last tile',()=>{

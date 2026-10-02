@@ -80,6 +80,10 @@ export function minimapContactVisible({visited, distance, scanRange, secret=fals
   return Number.isFinite(distance) && Number.isFinite(scanRange) && scanRange > 0 && distance <= scanRange;
 }
 
+export function minimapPickupVisible({available,distance,scanRange,hiddenSecret=false}) {
+  return available&&minimapContactVisible({visited:false,distance,scanRange,secret:hiddenSecret});
+}
+
 export function distanceToRect(point, rect) {
   const values=[point.x,point.y,rect.left,rect.top,rect.right,rect.bottom];
   if (!values.every(Number.isFinite) || rect.left>rect.right || rect.top>rect.bottom) return Infinity;

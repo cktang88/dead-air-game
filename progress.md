@@ -12,6 +12,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate starts with two durability points, absorbs damage before health, and competes with heavier weapon choices; the entry workbench repairs it for scrap. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
+- The 1.0-weight loot scanner highlights available weapons, attachments, healing, and scrap within seven tiles on the minimap through walls. It does not expose loot inside undiscovered secret-cache rooms.
 - Four base enemy types plus the Warden elite variant with an overhead health bar, destructible 60-HP crates, scrap-gated cache doors, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
@@ -216,3 +217,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Closed gate cells feed the same blocked map used by enemy routing, sight, and swept projectile collision, and a Rapier collider blocks player and enemy movement. Standard shots stop at the gate; anti-materiel rifles can use their one-wall penetration. The interaction hint shows the price. If a safe gate cannot be found, the hidden cache stays reachable without one.
 - Unit coverage verifies a closed gate separates a reward room while leaving the extraction route open. Scrap-gate rules also verify that insufficient funds are untouched, the exact price is deducted, and an opened gate cannot charge twice. The production dungeon harness checks 64 seeds twice each, requires a valid gate on at least one third of seeds, validates gate-open reachability, and prints a repeatable gate seed. A follow-up caught and filtered invalid one-tile gate candidates. The final browser run passed all 64 seeds, found safe gates on 24/64, and prints seed 1 as a repeatable example. `npm test` passes 71 tests. A fresh game page loads in the in-app browser. Long-form movement to the gate and live E interaction still need a manual playthrough.
 - Next: exercise gate interaction and scrap deduction in a longer run; continue Warden balance and armor repair playtests.
+
+## Loot scanner gear
+
+- Added a third carry-weighted gear choice: the 32-scrap Loot Scanner weighs 1.0 and marks available guns, attachments, healing, and scrap within seven tiles on the minimap, even through walls. It leaves extraction markers unchanged and hides loot in undiscovered secret rooms.
+- The existing workbench and merchant gear paths offer it using its catalog weight and price; the equip toast now describes reload acceleration only for the ammo harness.
+- Unit tests cover scan distance, unavailable pickups, secret-cache hiding, scan range, price, and the weapon-plus-scanner weight tradeoff. `npm test` passes 73 tests; syntax and diff checks pass. Visual in-run minimap confirmation still needs a longer browser playthrough.
+- Next: tune healing and armor over longer runs, playtest Warden balance, and verify scanner visibility during a live run.

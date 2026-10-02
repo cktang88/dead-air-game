@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {loadAudioSettings, playCrateBreak, playGunshot, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -36,6 +36,7 @@ let renderer, scene, camera, physics, lighting;
 const tempObj = new THREE.Object3D();
 const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
+const MINIMAP_LOOT_COLORS={scrap:'#f4c66d',gun:'#74c9ed',mod:'#d38ff5',heal:'#74dfab'};
 const MOVEMENT_KEYS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];
 function hasMovementInput(){return MOVEMENT_KEYS.some(key=>input.keys.has(key));}
 function markAction(kind='other'){state.lastAction=performance.now()/1000;state.lastActionKind=kind;}
@@ -445,7 +446,7 @@ function equipGear(id,repair=false){
   }
   if(state.scrap<item.cost||weaponLoadoutWeight(state.weaponSlots,GUNS)+item.weight>state.carryCapacity){toast(`NEED ${item.cost} SCRAP AND ${item.weight.toFixed(1)} FREE WEIGHT`);return false;}
   state.scrap-=item.cost;state.gear=id;state.maxArmor=item.armorDurability||0;state.armor=state.maxArmor;
-  toast(item.armorDurability?`ARMOR PLATE EQUIPPED · ${item.armorDurability} DURABILITY`:`${item.name} EQUIPPED · FASTER RELOADS`);hud();return true;
+  toast(item.armorDurability?`ARMOR PLATE EQUIPPED · ${item.armorDurability} DURABILITY`:item.reloadMultiplier?'AMMO HARNESS EQUIPPED · FASTER RELOADS':`${item.name} EQUIPPED`);hud();return true;
 }
 function installMod(id,gunIndex=state.weaponIndex,free=false){const gun=GUNS[gunIndex],mod=MODS.find(m=>m.id===id),installed=attachmentsFor(gun);if(!mod||!compatibleAttachments(gun,MODS).some(item=>item.id===id)||installed.has(id)||(!free&&state.scrap<mod.cost))return false;if(!free)state.scrap-=mod.cost;installed.add(id);if(id==='extended')state.weaponAmmo[gunIndex]=Math.min(magSize(gun),state.weaponAmmo[gunIndex]+Math.ceil(gun.mag*.5));toast(`${mod.name} INSTALLED · ${gun.name}`);hud();return true;}
 function collect(pickup,manual=false){if(!pickup.available)return false;const d=distance(state.player,pickup);if(d>28)return false;if(pickup.kind==='gun'){if(pickup.declined&&!manual)return false;showWeaponPickup(pickup);return false;}pickup.available=false;scene.remove(pickup.mesh);state.pickupMeshes.delete(pickup);burst(pickup.x,pickup.y,pickup.mesh.material.color.getHex(),8);
@@ -636,11 +637,22 @@ function update(dt){
   drawMinimap();syncHudFrame();
 }
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);}
+function drawLootScannerPings(ctx,sx,sy,player){
+  const scanRange=GEAR.find(item=>item.id===state.gear)?.pickupScanRange||0;
+  if(!player||!scanRange)return;
+  for(const pickup of state.pickups){
+    if(!pickup.available||pickup.kind==='exit')continue;
+    const room=state.rooms.find(candidate=>pickup.x>=candidate.x1*TILE&&pickup.x<=(candidate.x2+1)*TILE&&pickup.y>=candidate.y1*TILE&&pickup.y<=(candidate.y2+1)*TILE);
+    if(!minimapPickupVisible({available:pickup.available,distance:distance(player,pickup),scanRange,hiddenSecret:!!room?.secret&&!room.visited}))continue;
+    ctx.fillStyle=MINIMAP_LOOT_COLORS[pickup.kind]||'#d4d0da';ctx.fillRect(pickup.x/TILE*sx-1,pickup.y/TILE*sy-1,2,2);
+  }
+}
 function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/state.mapW,sy=c.height/state.mapH;ctx.fillStyle='#171420';ctx.fillRect(0,0,c.width,c.height);
   const scanRange=progressionStats(state.progress).scannerRange,player=state.player;
   for(const r of state.rooms){const roomDistance=player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity;if(!minimapContactVisible({visited:r.visited,distance:roomDistance,scanRange,secret:r.secret}))continue;ctx.fillStyle=r.visited?'#45404e':'#34303a';for(let y=r.y1;y<=r.y2;y++)for(let x=r.x1;x<=r.x2;x++)if(state.tileMap[y]?.[x]===0)ctx.fillRect(x*sx, y*sy, sx+.2, sy+.2);}
   ctx.fillStyle='#ed5a68';for(const e of state.enemies){if(!e.alive)continue;const ex=e.x/TILE,ey=e.y/TILE,spawnRoom=state.rooms[e.roomIndex],room=state.rooms.find(r=>ex>=r.x1&&ex<=r.x2&&ey>=r.y1&&ey<=r.y2),enemyDistance=state.player?distance(state.player,e):Infinity;if(minimapContactVisible({visited:!!room?.visited,distance:enemyDistance,scanRange,secret:spawnRoom?.secret&&!spawnRoom.visited}))ctx.fillRect(ex*sx-1,ey*sy-1,3,3);}
   for(const p of state.pickups)if(p.available&&p.kind==='exit'){ctx.fillStyle='#f5cb76';ctx.fillRect(p.x/TILE*sx-1,p.y/TILE*sy-1,3,3);}
+  drawLootScannerPings(ctx,sx,sy,player);
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
 function newRun(){
