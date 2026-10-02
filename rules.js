@@ -68,8 +68,9 @@ export function crateDamageStage(hp, maxHp) {
   return ratio<=.35?2:ratio<=.7?1:0;
 }
 
-export function minimapContactVisible({visited, distance, scanRange}) {
+export function minimapContactVisible({visited, distance, scanRange, secret=false}) {
   if (visited) return true;
+  if (secret) return false;
   return Number.isFinite(distance) && Number.isFinite(scanRange) && scanRange > 0 && distance <= scanRange;
 }
 

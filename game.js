@@ -452,7 +452,7 @@ function checkRoomClear(){for(const [i,r] of state.rooms.entries()){
 function updateRoom(){
   const px=state.player.x/TILE,py=state.player.y/TILE;let found=state.rooms.findIndex(r=>px>=r.x1-1&&px<=r.x2+1&&py>=r.y1-1&&py<=r.y2+1);
   if(found<0){const nearest=state.rooms.reduce((best,r,i)=>Math.hypot(px-r.cx,py-r.cy)<best.d?{i,d:Math.hypot(px-r.cx,py-r.cy)}:best,{i:state.currentRoom,d:Infinity});found=nearest.i;}
-  if(found!==state.currentRoom){state.currentRoom=found;const room=state.rooms[found];room.visited=true;state.roomToast=`FLOOR 01 · ${room.name}`;state.toastTimer=1100;checkRoomClear();hud();}
+  if(found!==state.currentRoom){state.currentRoom=found;const room=state.rooms[found],discoveredSecret=room.secret&&!room.visited;room.visited=true;if(discoveredSecret)room.name=room.revealedName;state.roomToast=discoveredSecret?'SECRET ROOM FOUND':`FLOOR 01 · ${room.name}`;state.toastTimer=1100;checkRoomClear();hud();}
   if(state.roomToast&&state.toastTimer<=0)state.roomToast='';
 }
 function interact(){
@@ -622,8 +622,8 @@ function update(dt){
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);}
 function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/state.mapW,sy=c.height/state.mapH;ctx.fillStyle='#171420';ctx.fillRect(0,0,c.width,c.height);
   const scanRange=progressionStats(state.progress).scannerRange,player=state.player;
-  for(const r of state.rooms){const roomDistance=player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity;if(!minimapContactVisible({visited:r.visited,distance:roomDistance,scanRange}))continue;ctx.fillStyle=r.visited?'#45404e':'#34303a';for(let y=r.y1;y<=r.y2;y++)for(let x=r.x1;x<=r.x2;x++)if(state.tileMap[y]?.[x]===0)ctx.fillRect(x*sx,y*sy,sx+.2,sy+.2);}
-  ctx.fillStyle='#ed5a68';for(const e of state.enemies){if(!e.alive)continue;const ex=e.x/TILE,ey=e.y/TILE,room=state.rooms.find(r=>ex>=r.x1&&ex<=r.x2&&ey>=r.y1&&ey<=r.y2),enemyDistance=state.player?distance(state.player,e):Infinity;if(minimapContactVisible({visited:!!room?.visited,distance:enemyDistance,scanRange}))ctx.fillRect(ex*sx-1,ey*sy-1,3,3);}
+  for(const r of state.rooms){const roomDistance=player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity;if(!minimapContactVisible({visited:r.visited,distance:roomDistance,scanRange,secret:r.secret}))continue;ctx.fillStyle=r.visited?'#45404e':'#34303a';for(let y=r.y1;y<=r.y2;y++)for(let x=r.x1;x<=r.x2;x++)if(state.tileMap[y]?.[x]===0)ctx.fillRect(x*sx, y*sy, sx+.2, sy+.2);}
+  ctx.fillStyle='#ed5a68';for(const e of state.enemies){if(!e.alive)continue;const ex=e.x/TILE,ey=e.y/TILE,spawnRoom=state.rooms[e.roomIndex],room=state.rooms.find(r=>ex>=r.x1&&ex<=r.x2&&ey>=r.y1&&ey<=r.y2),enemyDistance=state.player?distance(state.player,e):Infinity;if(minimapContactVisible({visited:!!room?.visited,distance:enemyDistance,scanRange,secret:spawnRoom?.secret&&!spawnRoom.visited}))ctx.fillRect(ex*sx-1,ey*sy-1,3,3);}
   for(const p of state.pickups)if(p.available&&p.kind==='exit'){ctx.fillStyle='#f5cb76';ctx.fillRect(p.x/TILE*sx-1,p.y/TILE*sy-1,3,3);}
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }

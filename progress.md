@@ -187,3 +187,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Corrected merchant gear pricing so its displayed markup is also charged on purchase.
 - Verification: `npm test` passes 65 tests. Live in-app browser equipped the plate from the workbench, confirmed 5 health remained unchanged, showed `PLATE 2 / 2`, and showed the loadout at 7.0 / 7.0 weight with scrap reduced from 40 to 15. Syntax and diff checks pass. Armor damage and repair after an in-run hit still need a longer browser combat check.
 - Next: test plate absorption and the repair flow after taking damage during a run; implement the scanner gear, then continue balance and run-quality playtests.
+
+## Hidden cache branch
+
+- The guaranteed cache is now a secret only when the room generator places it on a bypassable branch. Until the player enters, its map outline and enemy blips stay hidden even when Room Sense is upgraded; entering reveals the SIDE CACHE name and discovery toast. Floors without a branch retain a reachable, non-secret cache fallback.
+- Added role tests for branch/fallback secrecy and minimap tests proving scans cannot reveal undiscovered secrets. Expanded the generated-floor check to verify secret naming and branch status across 64 seeds generated twice, plus the fallback map; every tested seed had a branch and secret cache.
+- Verification: `npm test` passes 66 tests; JavaScript syntax and `git diff --check` pass. The live dungeon-generation page visibly shows PASS for all 64 seeds generated twice, branch/cache status, deterministic routes, safe reward placement, and fallback generation. The standalone Playwright action runner is still blocked by this Mac sandbox's Chromium Mach-port permission error; the in-app browser ran the generator harness successfully.
+- Next: build a longer combat/browser check for armor repair; design actual locked/reward doors only after room edges and door collision state are represented, then add rest/miniboss rooms.

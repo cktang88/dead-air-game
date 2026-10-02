@@ -34,7 +34,15 @@ test('the cache prefers a reachable room outside the entry-to-extraction route',
   const branchRooms=rooms.map((room,index)=>({...room,branch:index===4}));
   const assigned=assignRoomRoles(branchRooms,417);
   assert.equal(assigned[4].role,'cache');
+  assert.equal(assigned[4].secret,true);
   assert.equal(assigned.filter(room=>room.role==='cache').length,1);
+});
+
+test('the guaranteed cache fallback is not secret when the floor has no branch',()=>{
+  const assigned=assignRoomRoles(rooms,417);
+  const cache=assigned.find(room=>room.role==='cache');
+  assert.ok(cache);
+  assert.equal(cache.secret,false);
 });
 
 test('room roles control safe rewards and combat pressure',()=>{

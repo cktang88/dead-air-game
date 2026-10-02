@@ -192,6 +192,8 @@ test('the minimap hides unknown distant contacts but shows explored or scanned c
   assert.equal(minimapContactVisible({visited:false,distance:481,scanRange:480}),false);
   assert.equal(minimapContactVisible({visited:true,distance:900,scanRange:0}),true);
   assert.equal(minimapContactVisible({visited:false,distance:Infinity,scanRange:480}),false);
+  assert.equal(minimapContactVisible({visited:false,distance:2,scanRange:480,secret:true}),false);
+  assert.equal(minimapContactVisible({visited:true,distance:900,scanRange:0,secret:true}),true);
 });
 
 test('room scan distance measures from the full outer tile edge, including the last tile',()=>{

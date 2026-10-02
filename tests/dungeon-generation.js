@@ -1,6 +1,6 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {TILE} from '../catalog.js';
-import {generateDungeon} from '../dungeon.js';
+import {generateDungeon} from '../dungeon.js?secret-room-check';
 import {roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
 import {findRoomCratePosition, findRoomPropPosition} from '../room-props.js';
 
@@ -12,7 +12,7 @@ const stableMap = dungeon => JSON.stringify({
   height: dungeon.height,
   cells: dungeon.cells,
   doors: dungeon.doors,
-  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape, role, branch}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, shape, role, branch})),
+  rooms: dungeon.rooms.map(({cx, cy, x1, x2, y1, y2, index, pathLength, name, revealedName, shape, role, branch, secret}) => ({cx, cy, x1, x2, y1, y2, index, pathLength, name, revealedName, shape, role, branch, secret})),
 });
 
 try {
@@ -39,6 +39,8 @@ try {
     if(bypassable.size)floorsWithBranches++;
     const cache=dungeon.rooms.find(room=>room.role==='cache');
     if(bypassable.size&&!bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} did not place its cache on an optional branch room`);
+    if(cache.secret!==bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} secret status does not match the cache branch`);
+    if(cache.secret&&(cache.name!=='UNMARKED ROOM'||cache.revealedName!=='SIDE CACHE'))throw new Error(`Seed ${seed} did not hide and name its secret cache consistently`);
     for(const [index,room] of dungeon.rooms.entries())if(Boolean(room.branch)!==bypassable.has(index))throw new Error(`Seed ${seed} has an incorrect branch marker`);
     if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
     for(const room of dungeon.rooms){
