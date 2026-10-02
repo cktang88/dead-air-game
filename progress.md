@@ -245,3 +245,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - The final CARRY RIG tier now unlocks a third weapon slot while the starting loadout stays at two. A third gun can be added at the loadout station, from a pickup, or through a shop purchase; once the rig is full, the active slot is the default replacement choice at the station and shops.
 - All add, replace, pickup, and merchant paths use the shared weight-aware replacement rule, including equipped gear weight. The slot uses the remappable `3` weapon binding; older keybinding saves retain their other choices.
 - Added tests for the tier unlock, legacy binding saves (including a prior key mapped to `3`), and third-slot weight/duplicate behavior. `npm test` passes 85 tests; JavaScript syntax checks and `git diff --check` pass. The in-app browser loads the current build, shows the remappable tertiary key, and starts a run with the expected two-weapon default. A live unlock/pickup of slot 3 still needs a profile with enough permanent coins to buy the final Carry Rig tier.
+
+## Particle budget and physics cleanup
+
+- Particle bursts now keep at most 240 active meshes. New impacts replace the oldest particles first, and every evicted or naturally expired mesh has its geometry and material disposed.
+- Run resets now call Rapier `World.free()` before creating the next physics world, releasing its WASM-owned systems. The API documents `free()` as releasing the world and all fields it owns.
+- Added budget tests for overlapping bursts, over-sized requests, invalid values, and exact cap behavior. Verification: `npm test` passes 87 tests; JavaScript syntax and `git diff --check` pass. A Playwright browser smoke check launched a seeded run, moved the player, fired once (ammo 18→17), and captured gameplay with no browser console errors. The screenshot was visually inspected. A repeated full-run memory profile is still pending.
+- An independent lifecycle review confirmed that the burst path evicts oldest particles and disposes their meshes, natural particle expiry disposes resources, and the run reset frees the previous Rapier world before replacement.
