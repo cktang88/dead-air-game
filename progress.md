@@ -277,6 +277,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A warmed-up seeded entry-room profile ran 240 frames each in idle, movement, and firing batches. Average update/render cost was about 0.83 / 1.33 / 1.18 ms per frame; the slowest 12-frame batches were 16.5 / 21.3 / 18.9 ms. It stayed at 5/5 health with no browser errors, but firing emptied the magazine and it did not profile later floors, so these numbers do not close the full-run performance TODO.
 - A scripted same-seed comparison followed the 28-tile route from ENTRY into FURNACE and cleared that first combat room in both loadouts. With no armor, health fell 5→3; with the 25-scrap plate, armor fell 2→0 while health stayed 5. Both runs ended the room at two kills after spending 13 rounds, with no browser errors and the saved profile restored. This supports the plate's two-hit buffer in one encounter but is not enough to tune repair cost or full-run healing.
 
+## Loot rarity and Lucky Find
+
+- Attachment drops now roll common, uncommon, rare, or prototype quality. The tier stays attached to its owning gun and scales that attachment's combat effect; the HUD/workbench and pickup toast show a text label as well as the loot color.
+- Added the three-level Lucky Find safehouse upgrade. It shifts mod-drop odds from 75/20/4.5/0.5% to 60/27.5/10.5/2% across the four tiers, without adding more drops. Existing version-1 saves load with Lucky Find at level 0.
+- Verification: `npm test` passes 98 tests; `node --check` and `git diff --check` pass. The in-browser seeded smoke check passed rarity-tagged drops, persistent common attachment quality, focus-loss pause, and Runner/Lucky Find purchases persisting after reload. It restored the browser's original save.
+- Next: validate quality progression through a longer human run and keep tuning attachment effects if high tiers dominate. Full-floor completion and longer-run balance/performance remain open.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.

@@ -45,6 +45,10 @@ async function run(){
   if(initial.enemyCount<=12||initial.pickupCount<=8){
     throw new Error('Seeded snapshot no longer exercises the former enemy and pickup output limits');
   }
+  const modDrops=initial.pickups.filter(pickup=>pickup.type==='mod');
+  if(!modDrops.length||modDrops.some(pickup=>!['common','uncommon','rare','prototype'].includes(pickup.rarity))){
+    throw new Error('Generated attachment drops did not carry a visible rarity tier');
+  }
   if(initial.roomIndex!==0||initial.roomProgress?.[0]?.name!==initial.room||
     initial.roomProgress.reduce((count,room)=>count+room.livingEnemies,0)!==initial.enemyCount||
     initial.enemies.some(enemy=>!Number.isInteger(enemy.roomIndex))){
@@ -117,14 +121,14 @@ async function run(){
   if(!extended||extended.disabled)throw new Error('Extended magazine was not available at the starting scrap budget');
   extended.click();
   const attached=stateOf(win);
-  if(!attached.loadout.attachments.includes('extended'))throw new Error('Purchased attachment did not change the active weapon');
+  if(!attached.loadout.attachments.includes('extended')||attached.loadout.attachmentTiers.extended!=='common')throw new Error('Purchased attachment did not install and retain its common tier');
   press(win,'Tab','keydown');
   press(win,'Tab','keyup');
   if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Tab did not close the loadout');
 
   const originalProgress=window.localStorage.getItem(SAVE_KEY);
   try{
-    const fixture={...emptyProgress(),coins:25};
+    const fixture={...emptyProgress(),coins:55};
     window.localStorage.setItem(SAVE_KEY,JSON.stringify(fixture));
     await reloadGame();
     let metaWin=frame.contentWindow,metaDoc=frame.contentDocument;
@@ -133,15 +137,21 @@ async function run(){
     const runner=metaDoc.querySelector('#meta-list [data-upgrade="runner"]');
     if(!runner||runner.disabled)throw new Error('Runner upgrade was not available for the 25-coin fixture');
     runner.click();
-    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
-      throw new Error('Safehouse purchase did not spend coins and raise Runner’s Legs to level 1');
+    if(metaDoc.querySelector('#meta-balance').textContent!=='30'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
+      throw new Error('Safehouse purchase did not spend 25 coins and raise Runner’s Legs to level 1');
+    }
+    const luckyFind=metaDoc.querySelector('#meta-list [data-upgrade="luckyfind"]');
+    if(!luckyFind||luckyFind.disabled)throw new Error('Lucky Find was not available for the 30-coin balance');
+    luckyFind.click();
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')){
+      throw new Error('Lucky Find did not spend coins and reach level 1');
     }
     await reloadGame();
     metaWin=frame.contentWindow;metaDoc=frame.contentDocument;
     await waitForBoot(metaDoc,metaWin);
     metaDoc.querySelector('#meta-button').click();
-    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
-      throw new Error('Safehouse upgrade and remaining coins did not survive a reload');
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')){
+      throw new Error('Safehouse Runner and Lucky Find upgrades did not survive a reload');
     }
   }finally{
     if(originalProgress===null)window.localStorage.removeItem(SAVE_KEY);
@@ -151,7 +161,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{

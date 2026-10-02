@@ -147,7 +147,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ## Loot and room rewards
 
 - Run scrap buys attachments and services during a run. It is not permanent currency.
-- Loot rarity: common, uncommon, rare, and prototype. Rarity should change a weapon/attachment effect, not only its color.
+- Attachment loot has four named tiers: common, uncommon, rare, and prototype. Each tier scales the attachment’s own bonus by 1.00×, 1.15×, 1.30×, and 1.45×; installed tiers stay visible on the weapon and in the workbench. Ground loot uses both a distinct color and a rarity name when collected.
 - Crates may drop a small amount of scrap. Enemies reward a predictable small amount; rooms grant a clear bonus for clearing.
 - Healing should be uncommon enough that taking damage matters but common enough to prevent a long unwinnable run.
 - Weapon pickup should preview the replacement and weight before collection. Provide a clear decline path if the player wants to keep their current weapon.
@@ -173,7 +173,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 | Runner’s Legs | Increase move speed by 5% per tier | Low then rising | Cap near +20%; do not make aiming while moving trivial |
 | Still Mind | Idle simulation moves closer to 0.12× | Medium | Preserve fast/slow contrast; the player still has to choose actions |
 | Deep Breath | Increase grace after an action before time accelerates | Medium | Short, capped extension; should help planning, not remove pressure |
-| Lucky Find | Improve the chance of uncommon/rare loot | Medium, rising | Small changes; avoid guaranteed rare drops |
+| Lucky Find | Shift attachment drops toward better tiers: common/uncommon/rare/prototype odds move from 75/20/4.5/0.5% to 60/27.5/10.5/2% at level III | 30 / 60 / 90 coins | Affects quality, not the number of drops; rare loot remains a chance |
 | Carry Rig | Add +1 weight capacity per tier | Medium | Cap low enough that heavy loadouts still make choices |
 | Field Medic | Add one starting health buffer or improve a heal | High | Avoid stacking into careless play |
 | Room Sense | Reveal nearby room outlines and enemy blips through walls within 15 / 25 / 35 tiles | Medium | Reveal information only; shots still stop at walls |

@@ -28,7 +28,7 @@ Generated runs use ROT.js's Digger room and corridor generator. Walls are indest
 npm test
 ```
 
-Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement at 1×, blended firing tempo, bullet damage to a crate, reload, an extended-magazine purchase, a frag throw and detonation, pause, the two-slot loadout, and a safehouse upgrade surviving a reload. The progression check restores the browser's original save afterward.
+Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement at 1×, blended firing tempo, rarity-tagged loot, bullet damage to a crate, reload, a common extended-magazine purchase, a frag throw and detonation, focus-loss and manual pause, the two-slot loadout, and a safehouse upgrade surviving a reload. The progression check restores the browser's original save afterward.
 
 For a longer combat sample, open `http://localhost:8000/tests/full-floor-browser-harness.html`. It equips armor, clears the first seeded combat room, fights the next one, and reports health, armor, ammo, kills, and scrap. It pauses the run and restores the original save when it finishes.
 

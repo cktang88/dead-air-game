@@ -40,8 +40,8 @@ test('ranged enemy shots leave time for a sidestep at idle and action tempo',()=
 });
 
 test('gun mods change the weapon values consumed by combat',()=>{
-  const base=weaponStats(GUNS[0],new Set());
-  const mods=new Set(['extended','hollow','stabilizer','longbarrel','suppressor']);
+  const base=weaponStats(GUNS[0],new Map());
+  const mods=new Map(['extended','hollow','stabilizer','longbarrel','suppressor'].map(id=>[id,'common']));
   const upgraded=weaponStats(GUNS[0],mods);
   assert.equal(base.magazine,18);
   assert.equal(upgraded.magazine,27);
@@ -50,9 +50,18 @@ test('gun mods change the weapon values consumed by combat',()=>{
   assert.equal(upgraded.projectileSpeed,690);
   assert.equal(upgraded.range,GUNS[0].range*1.35);
   assert.equal(upgraded.spread,0.0385);
-  assert.equal(reloadSeconds(new Set()),1.65);
-  assert.equal(reloadSeconds(new Set(['extended'])),1.85);
-  assert.equal(reloadSeconds(new Set(['stabilizer'])),1.25);
+  assert.equal(reloadSeconds(new Map()),1.65);
+  assert.equal(reloadSeconds(new Map([['extended','common']])),1.85);
+  assert.equal(reloadSeconds(new Map([['stabilizer','common']])),1.25);
+});
+
+test('attachment rarity is retained in weapon stats and strengthens the installed mod',()=>{
+  const gun=GUNS[0],common=new Map([['extended','common']]),prototype=new Map([['extended','prototype']]);
+  assert.equal(weaponStats(gun,common).magazine,27);
+  assert.equal(weaponStats(gun,prototype).magazine,32);
+  assert.equal(weaponPenetration(gun,new Map([['longbarrel','common']])).enemies,1);
+  assert.equal(weaponPenetration(gun,new Map([['longbarrel','prototype']])).enemies,2);
+  assert.ok(reloadSeconds(new Map([['stabilizer','prototype']]),gun)<reloadSeconds(new Map([['stabilizer','common']]),gun));
 });
 
 test('the weighted ammo harness speeds reloads for every carried gun and stacks with mods',()=>{
@@ -61,9 +70,9 @@ test('the weighted ammo harness speeds reloads for every carried gun and stacks 
   assert.equal(harness.weight,1);
   assert.equal(harness.reloadMultiplier,.85);
   for(const gun of GUNS){
-    const normal=reloadSeconds(new Set(),gun);
-    assert.ok(Math.abs(reloadSeconds(new Set(),gun,harness.reloadMultiplier)-normal*.85)<1e-10,`${gun.name} should reload 15% faster`);
-    if(gun.attachments.includes('stabilizer'))assert.ok(Math.abs(reloadSeconds(new Set(['stabilizer']),gun,harness.reloadMultiplier)-1.25*.85)<1e-10,`${gun.name} should combine the harness and stabilizer`);
+    const normal=reloadSeconds(new Map(),gun);
+    assert.ok(Math.abs(reloadSeconds(new Map(),gun,harness.reloadMultiplier)-normal*.85)<1e-10,`${gun.name} should reload 15% faster`);
+    if(gun.attachments.includes('stabilizer'))assert.ok(Math.abs(reloadSeconds(new Map([['stabilizer','common']]),gun,harness.reloadMultiplier)-1.25*.85)<1e-10,`${gun.name} should combine the harness and stabilizer`);
   }
 });
 
@@ -98,7 +107,7 @@ test('the roster covers the requested classes with distinct, complete weapon pro
 test('attachment compatibility gates the actual weapon stats and shop options',()=>{
   const mule=GUNS.find(gun=>gun.id==='sniper_mule');
   const owned=new Set(['extended','hollow','longbarrel','suppressor']);
-  const stats=weaponStats(mule,owned);
+  const stats=weaponStats(mule,new Map([...owned].map(id=>[id,'common'])));
   assert.equal(stats.magazine,mule.mag,'Mule cannot take an extended magazine');
   assert.equal(stats.damage,mule.damage*1.35);
   assert.equal(stats.spread,mule.spread,'Mule cannot take a suppressor');
@@ -107,12 +116,12 @@ test('attachment compatibility gates the actual weapon stats and shop options',(
   assert.deepEqual(compatibleAttachments(mule,[
     {id:'extended'},{id:'hollow'},{id:'suppressor'},{id:'longbarrel'}
   ]).map(item=>item.id),['hollow','longbarrel']);
-  assert.equal(reloadSeconds(new Set(),mule),mule.reload);
-  assert.equal(reloadSeconds(new Set(['stabilizer']),GUNS[0]),1.25);
+  assert.equal(reloadSeconds(new Map(),mule),mule.reload);
+  assert.equal(reloadSeconds(new Map([['stabilizer','common']]),GUNS[0]),1.25);
 });
 
 test('shotgun shells trade pellet count, spread, damage, and range',()=>{
-  const gun=GUNS.find(item=>item.id==='shotgun'),base=weaponStats(gun,new Set());
+  const gun=GUNS.find(item=>item.id==='shotgun'),base=weaponStats(gun,new Map());
   const buck=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='buckshot'),base);
   const bird=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='birdshot'),base);
   const slug=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='slug'),base);
@@ -123,11 +132,11 @@ test('shotgun shells trade pellet count, spread, damage, and range',()=>{
 });
 
 test('snipers pierce multiple enemies and crates; anti-materiel adds one wall',()=>{
-  const mods=new Set(),lynx=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_lynx'),mods),quill=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_quill'),mods),mule=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_mule'),mods);
+  const mods=new Map(),lynx=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_lynx'),mods),quill=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_quill'),mods),mule=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_mule'),mods);
   for(const rifle of [lynx,quill]){assert.ok(rifle.enemies>=3);assert.ok(rifle.crates>=2);assert.equal(rifle.walls,0);}
   assert.ok(mule.enemies>=3);assert.ok(mule.crates>=2);assert.equal(mule.walls,1);
-  assert.equal(weaponPenetration(GUNS[0],new Set()).enemies,0);
-  assert.equal(weaponPenetration(GUNS[0],new Set(['longbarrel'])).enemies,1);
+  assert.equal(weaponPenetration(GUNS[0],new Map()).enemies,0);
+  assert.equal(weaponPenetration(GUNS[0],new Map([['longbarrel','common']])).enemies,1);
   let budget={enemies:2,crates:1,walls:1};
   budget=consumePenetration(budget,'enemies');assert.deepEqual(budget,{enemies:1,crates:1,walls:1});
   budget=consumePenetration(budget,'walls');assert.equal(budget.walls,0);assert.equal(consumePenetration(budget,'walls'),null);
@@ -319,13 +328,27 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,scannerRange:0});
+  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,scannerRange:0});
+  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
+});
+
+test('Lucky Find is saved and adds capped rarity levels without changing item quantity',()=>{
+  let progress=awardCoins(emptyProgress(),1000);
+  for(let level=1;level<=3;level++){
+    const purchase=purchaseUpgrade(progress,'luckyfind');
+    assert.equal(purchase.purchased,true);
+    progress=purchase.progress;
+    assert.equal(progressionStats(progress).luckyFindLevel,level);
+  }
+  assert.equal(purchaseUpgrade(progress,'luckyfind').purchased,false);
+  assert.equal(parseProgress(JSON.stringify(progress)).upgrades.luckyfind,3);
+  const olderSave=parseProgress(JSON.stringify({version:1,coins:12,upgrades:{salvager:1}}));
+  assert.equal(olderSave.upgrades.luckyfind,0);
 });
 
 test('Salvager improves crate drops and combat room-clear scrap at each tier',()=>{

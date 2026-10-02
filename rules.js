@@ -1,13 +1,20 @@
+import {lootTier} from './loot.js';
+
 export function weaponStats(gun, mods) {
   const compatible=new Set(gun.attachments||[]);
-  const has=id=>compatible.has(id)&&mods.has(id);
+  const tierFor=id=>{
+    if(!compatible.has(id))return null;
+    const tier=mods.get(id);
+    return tier?lootTier(tier):null;
+  };
+  const strength=id=>tierFor(id)?.strength||0;
   return {
-    magazine: Math.ceil(gun.mag * (has('extended') ? 1.5 : 1)),
-    damage: gun.damage * (has('hollow') ? 1.35 : 1),
-    fireRate: gun.rate * (has('stabilizer') ? 0.82 : 1),
+    magazine: Math.ceil(gun.mag * (1 + .5*strength('extended'))),
+    damage: gun.damage * (1 + .35*strength('hollow')),
+    fireRate: gun.rate * (.82 - .18*(strength('stabilizer')-1)),
     projectileSpeed: gun.speed,
-    range: gun.range * (has('longbarrel') ? 1.35 : 1),
-    spread: gun.spread * (has('suppressor') ? 0.7 : 1),
+    range: gun.range * (1 + .35*strength('longbarrel')),
+    spread: gun.spread * (1 - .3*strength('suppressor')),
     compatibleAttachments: gun.attachments||[],
   };
 }
@@ -22,9 +29,9 @@ export function shotgunShellStats(shell, gunStats) {
 }
 
 export function weaponPenetration(gun, mods) {
-  const compatible=new Set(gun.attachments||[]),hasLongbarrel=compatible.has('longbarrel')&&mods.has('longbarrel');
+  const compatible=new Set(gun.attachments||[]),tier=compatible.has('longbarrel')&&mods.has('longbarrel')?lootTier(mods.get('longbarrel')):null;
   const base=gun.penetration||{enemies:0,crates:0,walls:0};
-  return {...base,enemies:base.enemies+(hasLongbarrel?1:0)};
+  return {...base,enemies:base.enemies+(tier?Math.ceil(tier.strength):0)};
 }
 
 export function consumePenetration(budget, target) {
@@ -40,13 +47,14 @@ export function unlockRewardGate(gate,scrap) {
 
 export function reloadSeconds(mods, gun, reloadMultiplier=1) {
   let seconds=1.65;
+  const tierFor=id=>lootTier(mods.get(id));
   if (!gun) {
     if(mods.has('stabilizer'))seconds=1.25;
     else if(mods.has('extended'))seconds=1.85;
   } else {
     const compatible=new Set(gun.attachments||[]);
-    if(mods.has('stabilizer')&&compatible.has('stabilizer'))seconds=1.25;
-    else if(mods.has('extended')&&compatible.has('extended'))seconds=(gun.reload??1.65)*1.22;
+    if(mods.has('stabilizer')&&compatible.has('stabilizer'))seconds=1.25-(tierFor('stabilizer').strength-1)*.25;
+    else if(mods.has('extended')&&compatible.has('extended'))seconds=(gun.reload??1.65)*(1.22-(tierFor('extended').strength-1)*.12);
     else seconds=gun.reload??1.65;
   }
   return seconds*reloadMultiplier;
