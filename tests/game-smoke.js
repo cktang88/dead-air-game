@@ -39,6 +39,9 @@ async function run(){
   doc.querySelector('#start-button').click();
   const initial=stateOf(win);
   if(initial.mode!=='play'||initial.seed!==seed||!initial.player)throw new Error('Seeded run did not start with a player');
+  if(initial.enemyCount!==initial.enemies.length||initial.pickupCount!==initial.pickups.length){
+    throw new Error('Gameplay snapshot omitted enemies or pickups from its reported counts');
+  }
 
   press(win,movementKey,'keydown');
   win.advanceTime(500);
@@ -134,7 +137,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
