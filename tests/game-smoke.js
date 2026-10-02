@@ -98,9 +98,15 @@ async function run(){
   }
   if(!detonated.throwables.effects.includes('frag')||detonated.throwables.projectiles!==0)throw new Error('Frag projectile did not detonate into an effect');
 
+  win.dispatchEvent(new win.Event('blur'));
+  const focusPaused=stateOf(win);
+  if(!focusPaused.paused||focusPaused.timeScale!=='0.00')throw new Error('Losing browser focus did not pause game time');
   press(win,'Escape','keydown');
   press(win,'Escape','keyup');
-  if(stateOf(win).timeScale!=='0.00')throw new Error('Pause did not stop game time');
+  if(stateOf(win).paused)throw new Error('Returning from focus loss did not require and accept an explicit resume');
+  press(win,'Escape','keydown');
+  press(win,'Escape','keyup');
+  if(!stateOf(win).paused||stateOf(win).timeScale!=='0.00')throw new Error('Manual pause did not stop game time');
   press(win,'Tab','keydown');
   press(win,'Tab','keyup');
   const loadout=stateOf(win);
@@ -145,7 +151,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
