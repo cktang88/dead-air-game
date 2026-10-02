@@ -55,6 +55,13 @@ export function damageDurability(current, damage) {
   return Math.max(0, current - Math.max(0, damage));
 }
 
+export function absorbArmorDamage(armor, damage) {
+  const condition=Number.isFinite(armor)?Math.max(0,armor):0;
+  const incoming=Number.isFinite(damage)?Math.max(0,damage):0;
+  const absorbed=Math.min(condition,incoming);
+  return {armor:condition-absorbed,healthDamage:incoming-absorbed,absorbed};
+}
+
 export function crateDamageStage(hp, maxHp) {
   if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) return 2;
   const ratio=Math.max(0,Math.min(1,hp/maxHp));

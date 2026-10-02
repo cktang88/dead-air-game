@@ -45,7 +45,7 @@ export const GUNS = [
 export const BASE_CARRY_CAPACITY = 7;
 
 export const GEAR = [
-  {id:'armor',name:'ARMOR PLATE',description:'+1 hit before the run ends',weight:1.5,cost:25,healthBonus:1},
+  {id:'armor',name:'ARMOR PLATE',description:'Absorb 2 damage before health · repair for 10 scrap',weight:1.5,cost:25,armorDurability:2,repairCost:10},
   {id:'ammo-harness',name:'AMMO HARNESS',description:'Reload both weapons 15% faster',weight:1,cost:30,reloadMultiplier:.85},
 ];
 

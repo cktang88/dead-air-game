@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -65,6 +65,15 @@ test('the weighted ammo harness speeds reloads for every carried gun and stacks 
     assert.ok(Math.abs(reloadSeconds(new Set(),gun,harness.reloadMultiplier)-normal*.85)<1e-10,`${gun.name} should reload 15% faster`);
     if(gun.attachments.includes('stabilizer'))assert.ok(Math.abs(reloadSeconds(new Set(['stabilizer']),gun,harness.reloadMultiplier)-1.25*.85)<1e-10,`${gun.name} should combine the harness and stabilizer`);
   }
+});
+
+test('armor durability absorbs incoming damage separately from health',()=>{
+  const armor=GEAR.find(item=>item.id==='armor');
+  assert.equal(armor.armorDurability,2);assert.equal(armor.repairCost,10);assert.equal(armor.healthBonus,undefined);
+  assert.deepEqual(absorbArmorDamage(2,1),{armor:1,healthDamage:0,absorbed:1});
+  assert.deepEqual(absorbArmorDamage(1,3),{armor:0,healthDamage:2,absorbed:1});
+  assert.deepEqual(absorbArmorDamage(0,1),{armor:0,healthDamage:1,absorbed:0});
+  assert.deepEqual(absorbArmorDamage(-1,-2),{armor:0,healthDamage:0,absorbed:0});
 });
 
 test('the roster covers the requested classes with distinct, complete weapon profiles',()=>{

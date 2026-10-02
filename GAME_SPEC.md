@@ -119,8 +119,8 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 ### Inventory behavior
 
-- The armor plate is implemented as a one-health buffer with 1.5 carry weight.
-- The gear screen previews total load, capacity, health change, and scrap cost before confirming an armor or ammo-harness change.
+- The armor plate has two durability points separate from five health; incoming damage wears the plate first and excess damage reaches health. Repair costs 10 scrap at the workbench.
+- The gear screen previews total load, capacity, plate durability change, and scrap cost before confirming an armor or ammo-harness change.
 - The ammo harness weighs 1.0 and reduces manual and automatic reload time by 15% for either carried weapon; it competes with the 1.5-weight armor plate.
 - Permanent carry-rig upgrades increase capacity through metaprogression.
 - Decide whether temporary attachments have weight. If they do, show the added weight in the same total. Avoid hidden weight penalties.
@@ -278,10 +278,10 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ### Next: inventory and gear
 
-- [x] Add one armor plate with weight and a +1 health effect.
+- [x] Add a weighted armor plate with separate durability and repair cost; healing restores health only.
 - [x] Show weapons, armor, and total weight at the workbench; block overweight swaps.
 - [x] Add the ammo harness as weighted gear; it reduces reload time for both carried weapons.
-- [ ] Add a scanner and tune healing and armor durability as separate systems.
+- [ ] Add a gear scanner and tune healing, armor repair cost, and durability through longer runs.
 - [x] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
 - [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
@@ -307,4 +307,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip a health-boosting armor plate, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, and the other roadmap items above.
+A player can launch a run, explore generated connected rooms, change time by acting or waiting, use two weighted weapon slots, equip and repair armor with durability separate from health, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, and the other roadmap items above.

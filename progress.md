@@ -10,7 +10,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Player and enemy weapons visibly follow aim. Player reload and enemy reload poses tilt their weapons. Ranged enemies show a committed direction before shooting; their bullets travel on that fixed path and can be dodged.
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
-- A weighted armor plate adds one health and competes with heavier weapon choices. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
+- A weighted armor plate starts with two durability points, absorbs damage before health, and competes with heavier weapon choices; the entry workbench repairs it for scrap. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
 - Four enemy types, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
@@ -164,7 +164,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - The base minimap now hides unexplored rooms and enemy locations outside visited rooms, so the scouting upgrade adds information rather than repeating a map that already revealed every threat.
 - Added tests for scan range boundaries, exact room edges, visited contacts, persistence, and capped purchases. `npm test` passes 58 tests, and syntax plus `git diff --check` pass.
 - Browser verification: the current preview at `http://127.0.0.1:8767/` shows the Room Sense card, exact range tiers, and its 35-coin first purchase; a fresh run shows only the entry room on the minimap. This uses a separate preview origin from the existing `8766` save. The headless Playwright runner remains blocked by the macOS Mach-port permission error.
-- Next: add a health item / gear scanner and armor durability; then playtest scan range in combat and tune the remaining room and run balance.
+- Next: add a gear scanner; armor durability arrived in the latest iteration below.
 
 ## Shotgun shells and rifle penetration
 
@@ -179,3 +179,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Every spawned enemy now carries its encounter room index. Room completion and its scrap reward wait for those enemies to die even if a tactical retreat or chase takes them into a hall or another room.
 - Added a pure room-role predicate and a regression test covering living enemies outside the room bounds, unrelated encounters, and corpses. `npm test` passes 64 tests; syntax and diff checks pass.
 - Next: continue the spec's unfinished run-quality and gear work; in particular, tune healing against armor as separate systems and add a real locked-reward or rest/miniboss/secret room loop.
+
+## Armor durability and repairs
+
+- Replaced the armor plate's extra-health bonus with two separate durability points. Incoming hits wear the plate first; damage beyond its remaining durability reaches health. Fully absorbed hits show distinct plate feedback, and the HUD hides the plate meter when no armor is equipped.
+- The workbench previews armor durability and offers a 10-scrap repair when the equipped plate is worn. Armor occupies the same 1.5 carry weight, so it still trades off against heavier guns; a plate can exactly fill the default 7.0-weight loadout.
+- Corrected merchant gear pricing so its displayed markup is also charged on purchase.
+- Verification: `npm test` passes 65 tests. Live in-app browser equipped the plate from the workbench, confirmed 5 health remained unchanged, showed `PLATE 2 / 2`, and showed the loadout at 7.0 / 7.0 weight with scrap reduced from 40 to 15. Syntax and diff checks pass. Armor damage and repair after an in-run hit still need a longer browser combat check.
+- Next: test plate absorption and the repair flow after taking damage during a run; implement the scanner gear, then continue balance and run-quality playtests.
