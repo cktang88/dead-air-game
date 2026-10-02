@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -154,6 +154,14 @@ test('anti-materiel wall penetration treats thick connected tiles as one wall',(
   assert.equal(ongoing.endsInsideWall,true);
   const nextWall=segmentWallRuns({x:55,y:24},{x:96,y:24},map,16,true);
   assert.deepEqual(nextWall.runs.map(({x,y})=>[x,y]),[[5,1]],'a new wall after a floor gap still counts');
+});
+
+test('locked reward gates require the full price and cannot be charged twice',()=>{
+  const gate={cost:18,opened:false};
+  assert.deepEqual(unlockRewardGate(gate,17),{status:'insufficient',scrap:17,missing:1});
+  assert.deepEqual(unlockRewardGate(gate,18),{status:'opened',scrap:0});
+  assert.deepEqual(unlockRewardGate({...gate,opened:true},40),{status:'already-open',scrap:40});
+  assert.deepEqual(gate,{cost:18,opened:false},'the price check must not mutate the gate');
 });
 
 test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{

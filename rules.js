@@ -32,6 +32,12 @@ export function consumePenetration(budget, target) {
   return {...budget,[target]:budget[target]-1};
 }
 
+export function unlockRewardGate(gate,scrap) {
+  if(gate.opened)return {status:'already-open',scrap};
+  if(scrap<gate.cost)return {status:'insufficient',scrap,missing:gate.cost-scrap};
+  return {status:'opened',scrap:scrap-gate.cost};
+}
+
 export function reloadSeconds(mods, gun, reloadMultiplier=1) {
   let seconds=1.65;
   if (!gun) {

@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {loadAudioSettings, playCrateBreak, playGunshot, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -471,7 +471,7 @@ function updateRoom(){
 }
 function interact(){
   const gate=state.lockedDoors.find(door=>!door.opened&&distance(state.player,{x:(door.x+.5)*TILE,y:(door.y+.5)*TILE})<38);
-  if(gate){if(state.scrap<gate.cost){toast(`VAULT LOCK · NEED ${gate.cost-state.scrap} MORE SCRAP`);return;}state.scrap-=gate.cost;gate.opened=true;for(const {x,y} of gate.cells)state.solidMap[y][x]=0;if(gate.body){physics.removeRigidBody(gate.body);state.colliders=state.colliders.filter(item=>item.body!==gate.body);gate.body=null;}if(gate.mesh){disposeObject(gate.mesh);state.props=state.props.filter(item=>item!==gate.mesh);gate.mesh=null;}toast(`CACHE GATE OPEN · -${gate.cost} SCRAP`);hud();return;}
+  if(gate){const purchase=unlockRewardGate(gate,state.scrap);if(purchase.status==='insufficient'){toast(`VAULT LOCK · NEED ${purchase.missing} MORE SCRAP`);return;}if(purchase.status!=='opened')return;state.scrap=purchase.scrap;gate.opened=true;for(const {x,y} of gate.cells)state.solidMap[y][x]=0;if(gate.body){physics.removeRigidBody(gate.body);state.colliders=state.colliders.filter(item=>item.body!==gate.body);gate.body=null;}if(gate.mesh){disposeObject(gate.mesh);state.props=state.props.filter(item=>item!==gate.mesh);gate.mesh=null;}toast(`CACHE GATE OPEN · -${gate.cost} SCRAP`);hud();return;}
   const market=state.rooms.find(room=>room.merchant&&distance(state.player,{x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE})<90);if(market){openMerchant(market);return;}
   const close=state.pickups.filter(p=>p.available&&distance(state.player,p)<36).sort((a,b)=>distance(state.player,a)-distance(state.player,b))[0];
   if(close){collect(close,true);return;}
