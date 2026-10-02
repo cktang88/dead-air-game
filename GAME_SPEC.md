@@ -36,7 +36,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 - Bullets are physical projectiles with collision checks; walls block shots.
 - Player bullets damage enemies and crates. Enemy bullets damage the player.
 - Hits briefly interrupt time, push targets, and add restrained camera shake.
-- Enemy tells must remain readable at both slow and fast speeds. Use an aim cue or wind-up before ranged shots and a clear charge before heavy contact.
+- Enemy tells must remain readable at both slow and fast speeds. Use an aim cue or wind-up before ranged shots and a clear charge before heavy contact. Brutes now commit to a visible directional swing with a dodgeable wind-up and recovery.
 - Reloads consume time and ammunition. A reload may be interrupted by damage; whether ammo is retained on interruption is a balance choice to test.
 - Death restarts at the entry with one action. Preserve persistent currency and upgrades, not run-only loot.
 
@@ -267,6 +267,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Add a Warden miniboss and guaranteed loot to sufficiently large floors.
 - [x] Turn the guaranteed optional cache branch into a secret room hidden from the minimap until found.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
+- [x] Give heavy Brute contact attacks a readable, committed wind-up and recovery so players can dodge the two-damage swing.
 - [x] Improve workbench signposting and add a preview before replacing a gun or gear item.
 - [x] Give every room a safely placed destructible crate. Show its remaining health on hit, deepen crack marks at damage thresholds, and remove its collision plus leave a scrap chance when it breaks.
 - [x] Add a unique crate-break sound.

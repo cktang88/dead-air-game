@@ -15,6 +15,7 @@ import {roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemi
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
+import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
 import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,saveKeyBindings} from './keybindings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -410,8 +411,8 @@ function spawnEnemy(type,x,y,roomIndex,elite=false){
   const mesh=createActorMesh(type,radius,def.color);mesh.position.set(x,0,y);
   let healthBar=null,healthFill=null;
   if(elite){healthBar=new THREE.Group();healthBar.visible=true;const back=new THREE.Mesh(new THREE.BoxGeometry(38,1,5),new THREE.MeshBasicMaterial({color:0x211820}));healthFill=new THREE.Mesh(new THREE.BoxGeometry(34,1.4,3),new THREE.MeshBasicMaterial({color:0xff9566}));healthFill.position.y=.8;healthBar.add(back,healthFill);scene.add(healthBar);}
-  const points=[new THREE.Vector3(),new THREE.Vector3()];const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xff4d61,transparent:true,opacity:.76,depthWrite:false}));aimLine.visible=false;scene.add(aimLine);
-  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,healthBar,healthFill,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
+  const points=[new THREE.Vector3(),new THREE.Vector3()];const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:type==='brute'?0xffb15e:0xff4d61,transparent:true,opacity:.82,depthWrite:false}));aimLine.visible=false;scene.add(aimLine);
+  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,healthBar,healthFill,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},meleeWindup:0,meleeCooldown:0,mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
 }
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&canEquipGun(index));
@@ -609,6 +610,17 @@ function updateEnemies(dt){
       if(tactic.intent==='dodge'||e.tacticTimer<=0){e.intent=tactic.intent;e.intentGoal=tactic.goal;e.navGoal=tactic.intent==='dodge'?tactic.goal:routedEnemyGoal(e,tactic.goal);e.tacticTimer=tactic.intent==='dodge'?.14:.42;}
     }
     const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),canAcquire=ranged&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
+    if(e.type==='brute'){
+      if(e.stun>0){e.meleeWindup=0;e.aimLine.visible=false;}
+      else{
+        const attack=stepBruteMelee({windup:e.meleeWindup,cooldown:e.meleeCooldown},dt,d<e.def.range&&canSee);
+        e.meleeWindup=attack.windup;e.meleeCooldown=attack.cooldown;
+        if(attack.started)e.aim={x:nx,y:ny};
+        if(e.meleeWindup>0){const line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.3,e.y);line.setXYZ(1,e.x+e.aim.x*42,1.3,e.y+e.aim.y*42);line.needsUpdate=true;e.aimLine.visible=true;}
+        else e.aimLine.visible=false;
+        if(attack.strike&&bruteMeleeHits({canSee,distance:d,range:e.def.range,targetRadius:10,aim:e.aim,targetDirection:{x:nx,y:ny}}))hitPlayer(e.def.damage,e.x,e.y);
+      }
+    }
     let vx=0,vy=0;
     if(e.intentGoal&&e.navGoal&&Math.hypot(e.navGoal.x-e.x,e.navGoal.y-e.y)<=10){
       if(Math.hypot(e.intentGoal.x-e.x,e.intentGoal.y-e.y)<=14){e.intentGoal=null;e.navGoal=null;}
@@ -622,7 +634,7 @@ function updateEnemies(dt){
     for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}
     e.body.setLinvel({x:vx+e.knock.x,y:vy+e.knock.y},true);e.knock.x*=Math.pow(.1,dt);e.knock.y*=Math.pow(.1,dt);
     const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);if(e.healthBar){e.healthBar.position.set(e.x,e.radius*1.85,e.y-20);e.healthFill.scale.x=clamp(e.hp/e.maxHp,0,1);e.healthFill.position.x=-17*(1-e.healthFill.scale.x);}const facing=e.aimTimer>0?e.aim:{x:nx,y:ny},reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.scale.setScalar(e.type==='brute'?1.22:1);
-    if(d<e.def.range&&e.def.brain==='rush'&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
+    if(e.type==='chaser'&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
   }
 }
 function updateBullets(dt){
@@ -697,7 +709,7 @@ function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);c
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
   const gear=GEAR.find(item=>item.id===state.gear),room=state.rooms[state.currentRoom];
-  return JSON.stringify({mode:state.mode,seed:state.seed,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,armor:state.armor,maxArmor:state.maxArmor,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex],reloading:state.reloadTimer>0,shell:GUNS[state.weaponIndex].id==='shotgun'?shellForRun().id:undefined}:null,loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity,attachments:[...attachmentsFor(GUNS[state.weaponIndex])]},room:room?.name,roomRole:room?.role,lockedDoors:state.lockedDoors.map(door=>({opened:door.opened,cost:door.cost,room:state.rooms[door.roomIndex]?.name,x:(door.x+.5)*TILE,y:(door.y+.5)*TILE,cells:door.cells.length})),merchant:!!room?.merchant,merchantOpen:state.merchantOpen,weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp),aiming:e.aimTimer>0,reloading:e.reloadTimer>0,tactic:e.intent})).slice(0,12),crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y),gun:p.kind==='gun'?GUNS[p.gunIndex].name:undefined})).slice(0,8),throwables:{selected:selectedThrowable().id,counts:state.throwables,projectiles:state.thrown.length,effects:state.effects.map(effect=>effect.id)},kills:state.kills,scrap:state.scrap,coins:state.progress.coins,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});
+  return JSON.stringify({mode:state.mode,seed:state.seed,coordinateSystem:'world origin at top-left; +x right, +y down',player:state.player?{x:Math.round(state.player.x),y:Math.round(state.player.y),health:state.health,armor:state.armor,maxArmor:state.maxArmor,weapon:GUNS[state.weaponIndex].name,ammo:state.weaponAmmo[state.weaponIndex],reserve:state.reserveAmmo[state.weaponIndex],reloading:state.reloadTimer>0,shell:GUNS[state.weaponIndex].id==='shotgun'?shellForRun().id:undefined}:null,loadout:{slots:state.weaponSlots.map(index=>GUNS[index].name),activeSlot:state.activeSlot,gear:gear?.name||null,weight:weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),capacity:state.carryCapacity,attachments:[...attachmentsFor(GUNS[state.weaponIndex])]},room:room?.name,roomRole:room?.role,lockedDoors:state.lockedDoors.map(door=>({opened:door.opened,cost:door.cost,room:state.rooms[door.roomIndex]?.name,x:(door.x+.5)*TILE,y:(door.y+.5)*TILE,cells:door.cells.length})),merchant:!!room?.merchant,merchantOpen:state.merchantOpen,weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,enemies:state.enemies.filter(e=>e.alive).map(e=>({type:e.def.name,x:Math.round(e.x),y:Math.round(e.y),health:Math.round(e.hp),aiming:e.aimTimer>0||e.meleeWindup>0,charging:e.meleeWindup>0,reloading:e.reloadTimer>0,tactic:e.intent})).slice(0,12),crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp})),pickups:state.pickups.filter(p=>p.available).map(p=>({type:p.kind,x:Math.round(p.x),y:Math.round(p.y),gun:p.kind==='gun'?GUNS[p.gunIndex].name:undefined})).slice(0,8),throwables:{selected:selectedThrowable().id,counts:state.throwables,projectiles:state.thrown.length,effects:state.effects.map(effect=>effect.id)},kills:state.kills,scrap:state.scrap,coins:state.progress.coins,roomsCleared:state.roomsCleared,rooms:state.rooms.length,timeScale:getTimeScale().toFixed(2),elapsed:Math.floor(state.elapsed)});
 }
 window.render_game_to_text=renderGameToText;
 window.advanceTime=(ms)=>{const frames=Math.max(1,Math.ceil(ms/16.667));for(let i=0;i<frames;i++)update(1/60);render();};
