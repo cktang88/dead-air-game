@@ -151,6 +151,13 @@ export function weaponReplacement(weapons, slot, candidate, guns, capacity, gear
   return {weapons:nextWeapons,totalWeight,canCarry:!alreadyEquipped&&!hasDuplicate&&totalWeight<=capacity};
 }
 
+export function chooseWeaponReplacementSlot(weapons,candidate,maxSlots,activeSlot,guns,capacity,gearWeight=0){
+  const newSlot=weapons.length;
+  if(newSlot<maxSlots&&weaponReplacement(weapons,newSlot,candidate,guns,capacity,gearWeight).canCarry)return newSlot;
+  const preferred=maxSlots===2?[1,0]:[activeSlot,...weapons.map((_,index)=>index).filter(index=>index!==activeSlot)];
+  return preferred.find(slot=>slot<weapons.length&&weaponReplacement(weapons,slot,candidate,guns,capacity,gearWeight).canCarry);
+}
+
 export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, lastActionKind = 'other', idleScale = 0.18}) {
   if (mode !== 'play' || paused || loadoutOpen) return 0;
   const stillScale = Math.max(0, Math.min(1, idleScale));

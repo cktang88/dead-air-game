@@ -257,3 +257,8 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - Removed random per-frame heavy contact damage from Brutes. They now commit to a bright directional swing, wait 0.48 simulation seconds, then deal two damage only if the player remains within reach and the committed forward arc. A 0.9-second recovery prevents instant repeat attacks; bullets cancel an active wind-up. Rushers keep their lighter contact behavior.
 - Added pure timing and hit-arc tests for telegraph, single strike, recovery, range, sideways dodges, and blocked sight. An independent review caught and fixed wall/smoke attacks by requiring sight both to begin a swing and to land it. `npm test` passes 90 tests; syntax and diff checks pass. The browser smoke run launched, moved, and fired with two Brutes present and no console errors, but did not directly exercise a Brute wind-up animation. Repeated-run balance still needs follow-up.
+
+## Weapon replacement policy review
+
+- Moved the shared slot choice order into the pure loadout rules module. Pickup eligibility, workbench assignment, and merchant weapon stock now consult one policy for new-slot preference, primary/secondary replacement order, active-slot preference, duplicate rejection, carry capacity, and gear weight.
+- Added tests for all three slot priorities plus gear weight, heavy guns, and duplicate rejection. `npm test` passes 91 tests; syntax and diff checks pass.

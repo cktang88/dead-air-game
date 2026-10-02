@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {loadAudioSettings, playCrateBreak, playGunshot, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
-import {absorbArmorDamage, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -48,11 +48,8 @@ function weaponSlotLabel(slot){return ['PRIMARY','SECONDARY','TERTIARY'][slot]||
 function maxWeaponSlots(){return progressionStats(state.progress).maxWeaponSlots;}
 function weaponTargets(){return [...state.weaponSlots.map((_,slot)=>slot),...(state.weaponSlots.length<maxWeaponSlots()?[state.weaponSlots.length]:[])];}
 function weaponSlotForGun(candidate){
-  const gearWeight=GEAR.find(item=>item.id===state.gear)?.weight||0,newSlot=state.weaponSlots.length;
-  if(newSlot<maxWeaponSlots()&&weaponReplacement(state.weaponSlots,newSlot,candidate,GUNS,state.carryCapacity,gearWeight).canCarry)return newSlot;
-  const preferred=maxWeaponSlots()===2?[1,0]:[state.activeSlot,...state.weaponSlots.map((_,index)=>index).filter(index=>index!==state.activeSlot)];
-  const slot=preferred.find(index=>index<state.weaponSlots.length&&weaponReplacement(state.weaponSlots,index,candidate,GUNS,state.carryCapacity,gearWeight).canCarry);
-  return slot;
+  const gearWeight=GEAR.find(item=>item.id===state.gear)?.weight||0;
+  return chooseWeaponReplacementSlot(state.weaponSlots,candidate,maxWeaponSlots(),state.activeSlot,GUNS,state.carryCapacity,gearWeight);
 }
 function weaponTargetSlot(index){return weaponSlotForGun(index)??state.activeSlot;}
 function canEquipGun(index){return weaponSlotForGun(index)!==undefined;}
@@ -517,7 +514,7 @@ function interact(){
 function createMerchantStock(room){
   const attachmentOptions=compatibleAttachments(GUNS[state.weaponIndex],MODS).filter(mod=>!attachmentsFor(GUNS[state.weaponIndex]).has(mod.id));
   const gearWeight=GEAR.find(item=>item.id===state.gear)?.weight||0;
-  const eligibleGuns=GUNS.filter((gun,index)=>!state.weaponSlots.includes(index)&&weaponTargets().some(slot=>weaponReplacement(state.weaponSlots,slot,index,GUNS,state.carryCapacity,gearWeight).canCarry));
+  const eligibleGuns=GUNS.filter((gun,index)=>!state.weaponSlots.includes(index)&&chooseWeaponReplacementSlot(state.weaponSlots,index,maxWeaponSlots(),state.activeSlot,GUNS,state.carryCapacity,gearWeight)!==undefined);
   const gear=choose(GEAR);
   const offers=[{type:'weapon',gunId:choose(eligibleGuns.length?eligibleGuns:GUNS).id,cost:42},{type:'gear',gearId:gear.id,cost:gear.cost+13},{type:'health',cost:24},{type:'throwable',throwableId:choose(THROWABLES).id,cost:22}];
   if(attachmentOptions.length){const mod=choose(attachmentOptions);offers.splice(1,0,{type:'attachment',modId:mod.id,gunIndex:state.weaponIndex,cost:mod.cost+12});}

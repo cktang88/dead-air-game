@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS, TILE} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -259,6 +259,18 @@ test('weapon replacement preview includes gear weight without mutating the curre
   assert.equal(secondary.canCarry,false);
   assert.deepEqual(current,[0,1]);
   assert.equal(weaponReplacement(current,1,rifle,GUNS,BASE_CARRY_CAPACITY+1,1.5).canCarry,true);
+});
+
+test('weapon replacement selection shares append and replacement priorities',()=>{
+  const pistol=GUNS.findIndex(gun=>gun.id==='pistol_9');
+  const heavy=GUNS.findIndex(gun=>gun.id==='sniper_mule');
+  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,2,0,GUNS,BASE_CARRY_CAPACITY,1.5),1);
+  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,3,0,GUNS,BASE_CARRY_CAPACITY+2),2);
+  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,2,0,GUNS,BASE_CARRY_CAPACITY),1);
+  assert.equal(chooseWeaponReplacementSlot([0,1,2],pistol,3,2,GUNS,BASE_CARRY_CAPACITY+4),2);
+  assert.equal(chooseWeaponReplacementSlot([0,1,2],pistol,3,2,GUNS,BASE_CARRY_CAPACITY+4,1),2);
+  assert.equal(chooseWeaponReplacementSlot([0,1],heavy,3,0,GUNS,BASE_CARRY_CAPACITY+1.5),undefined);
+  assert.equal(chooseWeaponReplacementSlot([0,1],0,3,0,GUNS,BASE_CARRY_CAPACITY+3),undefined);
 });
 
 test('weapon pickup cannot equip the same gun in both slots',()=>{
