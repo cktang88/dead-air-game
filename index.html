@@ -41,7 +41,13 @@
           <label class="audio-volume" for="master-volume"><span>MASTER VOLUME <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label>
           <label class="audio-volume visual-volume" for="shake-strength"><span>SCREEN SHAKE <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
           <label class="audio-volume visual-volume" for="flash-strength"><span>FLASH BRIGHTNESS <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
-          <div class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>SHIFT <i>RELOAD</i></span><span>C <i>SHOTGUN SHELL</i></span><span>TAB <i>LOADOUT</i></span></div>
+          <details id="controls-settings">
+            <summary>REMAP CONTROLS</summary>
+            <p>Choose an action, then press a free key. Escape cancels. Escape pauses, Tab opens loadout, F toggles fullscreen, and R restarts after a run.</p>
+            <div id="key-bindings"></div>
+            <div id="binding-status" role="status" aria-live="polite">Click a key to change it.</div>
+          </details>
+          <div id="key-guide" class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>SHIFT <i>RELOAD</i></span><span>C <i>SHOTGUN SHELL</i></span><span>TAB <i>LOADOUT</i></span></div>
         </div>
         <section id="meta-panel" hidden aria-label="Permanent upgrades">
           <button id="close-meta" class="close">×</button>

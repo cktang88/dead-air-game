@@ -14,6 +14,7 @@ import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
 import {roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
+import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,saveKeyBindings} from './keybindings.js';
 
 const $ = (id) => document.getElementById(id);
 const attachmentsFor=(gun)=>state.attachments.get(gun.id)||new Set();
@@ -32,6 +33,7 @@ const state = {
   scene:null, camera:null, renderer:null, physics:null, floorMesh:null, walls:[], meshRoot:null, actorMeshes:new Map(), pickupMeshes:new Map(), bulletMeshes:new Map(),
 };
 const input = {keys:new Set(), mouseX:innerWidth/2, mouseY:innerHeight/2, firing:false, interact:false};
+const controls={bindings:{...DEFAULT_KEY_BINDINGS},waitingFor:null};
 
 let renderer, scene, camera, physics, lighting;
 const tempObj = new THREE.Object3D();
@@ -39,8 +41,18 @@ const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
 const MINIMAP_LOOT_COLORS={scrap:'#f4c66d',gun:'#74c9ed',mod:'#d38ff5',heal:'#74dfab'};
 let visualSettings={shake:1,flash:1};
-const MOVEMENT_KEYS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];
-function hasMovementInput(){return MOVEMENT_KEYS.some(key=>input.keys.has(key));}
+function binding(action){return controls.bindings[action];}
+function hasMovementInput(){return ['moveUp','moveDown','moveLeft','moveRight'].some(action=>input.keys.has(binding(action)));}
+function renderKeyBindings(focusAction=null){
+  const list=$('key-bindings');if(!list)return;
+  list.innerHTML=KEY_BINDING_ACTIONS.map(({id,label})=>`<div class="key-binding-row"><span>${label}</span><button type="button" data-bind-action="${id}" aria-label="${label}: ${keyLabel(binding(id))}" aria-pressed="${controls.waitingFor===id}">${controls.waitingFor===id?'PRESS A KEY':keyLabel(binding(id))}</button></div>`).join('');
+  if(focusAction)list.querySelector(`[data-bind-action="${focusAction}"]`)?.focus();
+}
+function renderKeyGuide(){
+  const movement=`${keyLabel(binding('moveUp'))} ${keyLabel(binding('moveLeft'))} ${keyLabel(binding('moveDown'))} ${keyLabel(binding('moveRight'))}`;
+  $('key-guide').innerHTML=`<span>${movement}<i>MOVE</i></span><span>MOUSE<i>AIM / FIRE</i></span><span>${keyLabel(binding('interact'))}<i>INTERACT</i></span><span>${keyLabel(binding('reload'))}<i>RELOAD</i></span><span>${keyLabel(binding('shellCycle'))}<i>SHOTGUN SHELL</i></span><span>TAB<i>LOADOUT</i></span>`;
+  renderer?.domElement.setAttribute('aria-label',`DEAD AIR game. Use ${movement} to move and the mouse to aim and fire.`);
+}
 function markAction(kind='other'){state.lastAction=performance.now()/1000;state.lastActionKind=kind;}
 const aimPlane = new THREE.Plane(new THREE.Vector3(0,1,0),0);
 const hitPoint = new THREE.Vector3();
@@ -520,12 +532,12 @@ function detonateThrowable(projectile){physics.removeRigidBody(projectile.body);
 }
 function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projectile=state.thrown[i];projectile.fuse-=dt;const p=projectile.body.translation();projectile.x=p.x;projectile.y=p.y;projectile.mesh.position.set(p.x,4+Math.sin(state.time*18)*2,p.y);if(projectile.fuse<=0){detonateThrowable(projectile);state.thrown.splice(i,1);}}}
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;effect.mesh.material.opacity=(effect.id==='smoke'?.27:.17)*Math.min(1,effect.remaining/.45);if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);burst(enemy.x,enemy.y,0xff6a35,3,.6);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){disposeObject(effect.mesh);state.effects.splice(i,1);}}}
-function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`Q ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;}
+function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`${keyLabel(binding('throwableCycle'))} ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;$('throwable-hint').textContent=`${keyLabel(binding('throwableCycle'))} SELECT · ${keyLabel(binding('throwableUse'))} THROW`;}
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));}
 function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
-  const left=input.keys.has('a')||input.keys.has('arrowleft'),right=input.keys.has('d')||input.keys.has('arrowright'),up=input.keys.has('w')||input.keys.has('arrowup'),down=input.keys.has('s')||input.keys.has('arrowdown');let vx=(right?1:0)-(left?1:0),vy=(down?1:0)-(up?1:0),len=Math.hypot(vx,vy);if(len>0){vx/=len;vy/=len;markAction('move');}
+  const {x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);if(vx!==0||vy!==0)markAction('move');
   const speed=progressionStats(state.progress).moveSpeed;p.body.setLinvel({x:vx*speed,y:vy*speed},true);const pos=p.body.translation();p.x=pos.x;p.y=pos.y;
   pointer.set(input.mouseX/innerWidth*2-1,-input.mouseY/innerHeight*2+1);raycaster.setFromCamera(pointer,camera);raycaster.ray.intersectPlane(aimPlane,hitPoint);
   if(hitPoint){const dx=hitPoint.x-p.x,dy=hitPoint.z-p.y,d=Math.hypot(dx,dy)||1;state.aim.x=dx/d;state.aim.y=dy/d;}
@@ -535,7 +547,7 @@ function updatePlayer(dt){
   if(input.firing)playerShoot();if(input.interact){input.interact=false;interact();}
   for(const pickup of state.pickups){if(pickup.declined&&distance(p,pickup)>48)pickup.declined=false;if(state.pendingGunPickup)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
   const gateNear=state.lockedDoors.find(door=>!door.opened&&distance(p,{x:(door.x+.5)*TILE,y:(door.y+.5)*TILE})<38),stationNear=distance(p,{x:state.rooms[0].cx*TILE,y:state.rooms[0].cy*TILE})<110,shopNear=state.rooms.some(room=>room.merchant&&distance(p,{x:(room.cx+.5)*TILE,y:(room.cy+.5)*TILE})<90),gunNear=state.pickups.filter(pickup=>pickup.available&&pickup.kind==='gun'&&distance(p,pickup)<36).sort((a,b)=>distance(p,a)-distance(p,b))[0];
-  $('interaction-hint').textContent=gateNear?`E · UNLOCK CACHE · ${gateNear.cost} SCRAP`:gunNear?`E · REVIEW ${GUNS[gunNear.gunIndex].name}`:shopNear?'E · ENTER THE BLACK MARKET':'E · OPEN THE LOADOUT';$('interaction-hint').classList.toggle('show',(gateNear||gunNear||stationNear||shopNear)&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup);
+  const interactKey=keyLabel(binding('interact'));$('interaction-hint').textContent=gateNear?`${interactKey} · UNLOCK CACHE · ${gateNear.cost} SCRAP`:gunNear?`${interactKey} · REVIEW ${GUNS[gunNear.gunIndex].name}`:shopNear?`${interactKey} · ENTER THE BLACK MARKET`:`${interactKey} · OPEN THE LOADOUT`;$('interaction-hint').classList.toggle('show',(gateNear||gunNear||stationNear||shopNear)&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup);
   updateRoom();
 }
 function lineBlocked(x1,y1,x2,y2){const start={x:x1,y:y1},end={x:x2,y:y2},length=Math.hypot(x2-x1,y2-y1),steps=Math.ceil(length/8);for(let i=1;i<steps;i++){const t=i/steps,tx=Math.floor((x1+(x2-x1)*t)/TILE),ty=Math.floor((y1+(y2-y1)*t)/TILE);if(state.solidMap[ty]?.[tx]!==0)return true;}return state.crates.some(crate=>segmentIntersectsCircle(start,end,crate,17))||state.cover.some(cover=>!cover.crate&&segmentIntersectsCircle(start,end,cover,cover.radius));}
@@ -659,7 +671,7 @@ function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/st
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
 function newRun(){
-  const chosenSeed=parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));ROT.RNG.setSeed(state.seed);$('seed-display').textContent=String(state.seed);
+  input.keys.clear();input.firing=false;input.interact=false;const chosenSeed=parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));ROT.RNG.setSeed(state.seed);$('seed-display').textContent=String(state.seed);
   state.mode='play';state.paused=false;state.merchantOpen=false;state.merchantRoom=null;state.pendingGunPickup=null;$('weapon-pickup').hidden=true;$('weapon-pickup').setAttribute('aria-hidden','true');state.running=true;state.paidOut=false;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.armor=0;state.maxArmor=0;state.gear=null;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=progressionStats(state.progress).carryCapacity;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.attachments=new Map(GUNS.map(gun=>[gun.id,new Set()]));state.throwables={smoke:1,flash:1,frag:2,incendiary:1};state.throwableIndex=2;state.shotgunShellId='buckshot';state.lastAction=0;state.lastActionKind='other';state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');$('run-result').hidden=true;$('start-button').textContent='ENTER THE SECTOR ↗';$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();updateThrowableHud();toast('MOVE ALONE AT 1× · FIRE STAYS BLENDED · STOP TO PLAN',3200);}
 function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);const aspect=innerWidth/innerHeight,halfH=260;camera.left=-aspect*halfH;camera.right=aspect*halfH;camera.top=halfH;camera.bottom=-halfH;camera.updateProjectionMatrix();}
 function render(){renderer.render(scene,camera);}
@@ -677,7 +689,18 @@ function setupControls(){
     const slider=$(id),output=$(`${id}-value`);slider.value=String(Math.round(visualSettings[key]*100));output.textContent=`${slider.value}%`;
     slider.addEventListener('input',event=>{visualSettings={...visualSettings,[key]:Number(event.currentTarget.value)/100};output.textContent=`${event.currentTarget.value}%`;try{saveVisualSettings(localStorage,visualSettings);}catch{toast('VISUAL SETTING CHANGED FOR THIS SESSION ONLY');}});
   }
-  addEventListener('keydown',e=>{const key=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(key))e.preventDefault();input.keys.add(key);
+  controls.bindings=loadKeyBindings(localStorage);renderKeyBindings();renderKeyGuide();updateThrowableHud();
+  $('key-bindings').addEventListener('click',event=>{const button=event.target.closest('[data-bind-action]');if(!button)return;controls.waitingFor=button.dataset.bindAction;$('binding-status').textContent=`Press a key for ${KEY_BINDING_ACTIONS.find(action=>action.id===controls.waitingFor)?.label.toLowerCase()}. Escape cancels.`;renderKeyBindings(controls.waitingFor);});
+  addEventListener('keydown',e=>{const key=normalizeKey(e.key);if(controls.waitingFor||key==='space'||key.startsWith('arrow')||Object.values(controls.bindings).includes(key))e.preventDefault();
+    if(controls.waitingFor){
+      if(key==='escape'){controls.waitingFor=null;$('binding-status').textContent='Binding cancelled.';renderKeyBindings();return;}
+      const action=controls.waitingFor,result=rebindKey(controls.bindings,action,key);
+      if(!result.ok){$('binding-status').textContent=result.reason==='in-use'?'That key is already assigned. Choose another key or press Escape.':'Use one letter, number, arrow, Space, or Shift.';return;}
+      controls.bindings=result.bindings;controls.waitingFor=null;renderKeyBindings(action);renderKeyGuide();updateThrowableHud();
+      try{saveKeyBindings(localStorage,controls.bindings);$('binding-status').textContent='Controls saved.';}catch{$('binding-status').textContent='Changed for this session only.';toast('CONTROL CHANGED FOR THIS SESSION ONLY');}
+      return;
+    }
+    input.keys.add(key);
     if(e.repeat)return;
     if(state.pendingLoadoutChange){
       if(key==='escape')closeLoadoutPreview();
@@ -687,20 +710,21 @@ function setupControls(){
       }
       return;
     }
-    if(state.pendingGunPickup){if(key==='1'||key==='2')acceptWeaponPickup(Number(key)-1);else if(key==='escape')closeWeaponPickup(true);return;}
+    if(state.pendingGunPickup){if(key===binding('weaponOne'))acceptWeaponPickup(0);else if(key===binding('weaponTwo'))acceptWeaponPickup(1);else if(key==='escape')closeWeaponPickup(true);return;}
     if(state.merchantOpen){if(key==='escape')closeMerchant();return;}
     if(key==='tab'){e.preventDefault();if(!state.merchantOpen)toggleLoadout();markAction();}
-    if(key==='e'||key===' '){input.interact=true;markAction();}
-    if(key==='q'&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}
-    if(key==='c')cycleShotgunShell();
-    if(key==='g'&&state.mode==='play'&&!state.merchantOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
+    if(key===binding('interact')){input.interact=true;markAction();}
+    if(key===binding('throwableCycle')&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}
+    if(key===binding('shellCycle'))cycleShotgunShell();
+    if(key===binding('throwableUse')&&state.mode==='play'&&!state.merchantOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
     if(key==='r'&&(state.mode==='dead'||state.mode==='won'))newRun();
     if(key==='escape'){if(state.merchantOpen)closeMerchant();else if(state.loadoutOpen)toggleLoadout(false);else state.paused=!state.paused;toast(state.paused?'PAUSED':'BACK IN');}
-    if(key==='1'||key==='2')switchWeapon(Number(key)-1);
+    if(key===binding('weaponOne'))switchWeapon(0);
+    if(key===binding('weaponTwo'))switchWeapon(1);
     if(key==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.();}
-    if(key==='shift')reload();
+    if(key===binding('reload'))reload();
   });
-  addEventListener('keyup',e=>input.keys.delete(e.key.toLowerCase()));
+  addEventListener('keyup',e=>input.keys.delete(normalizeKey(e.key)));
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
   addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});

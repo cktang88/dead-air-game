@@ -230,4 +230,12 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added saved title-screen sliders for camera-shake strength and flash-grenade screen brightness. Zero shake removes camera movement; zero flash brightness removes the brief screen overlay without changing grenade stun or range.
 - The flash overlay fades on real time, including while paused or after a run ends, so a pause cannot leave a bright screen stuck in place.
 - Added settings-store and effect-scaling tests. `npm test` passes 78 tests; syntax and diff checks pass. The in-app preview's accessibility tree shows both sliders at 100%. Full gameplay visual verification remains limited because the Playwright browser fails to launch under this host's Chromium Mach-port permissions.
-- Next: complete a manual flash-grenade playtest, then continue run-balance and accessibility work, including remappable controls.
+- Next: complete a manual flash-grenade playtest, then continue run-balance and combat-accessibility work.
+
+## Remappable keyboard controls
+
+- Added saved bindings for four movement directions, interaction, reload, weapon slots, throwable select/use, and shotgun shell cycling. Escape, Tab, F, and R remain fixed for pause, loadout, fullscreen, and restart. Key hints update with the selected bindings.
+- Rebinding rejects duplicate and reserved keys, supports letters, numbers, arrows, Space, and Shift, and falls back to defaults if saved data is corrupt. Starting a run clears any held key input.
+- Unit tests cover storage, collisions, reserved keys, recovery from invalid saves, custom movement vectors, and diagonal normalization. `npm test` passes 83 tests; syntax and diff checks pass.
+- A live preview caught a missing key-guide element id that stopped boot; it is fixed. I rebound Interact to T, confirmed the key guide updated, restored E, and reloaded to confirm the default. The controls panel shows all 11 actions. The prescribed Playwright check still cannot launch Chromium on this host.
+- Next: playtest controls through a full run, then focus on healing/armor balance, combat tuning, and room-to-room pacing.

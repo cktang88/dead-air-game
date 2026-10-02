@@ -131,7 +131,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 ## Tactical items and merchants
 
-- Planned throwables: smoke, flash, frag, and incendiary. Each should have a visible throw arc/landing point, fuse, effect radius, inventory count, and clear area feedback.
+- Smoke, flash, frag, and incendiary have distinct throw arcs, fuses, effect radii, inventory counts, and area feedback.
 - Smoke should break enemy sight/targeting. Flash should briefly stun enemies with line of sight. Frag should deal radial damage and knockback, with walls stopping the blast. Incendiary should create a timed damaging area.
 - `tactical.js` defines item stats, inventory consumption, radius checks, and occlusion rules with unit tests. Q cycles the selected throwable; G throws it with physics-based travel and a fuse.
 - Smoke blocks ranged enemies' sight, flash stuns, frag deals radial damage and knockback, and incendiary creates a timed damaging area. Walls and intact crates block direct effects.
@@ -306,7 +306,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
 - [ ] Add compact visual/behavior checks for the browser build and a repeatable manual seed.
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
-- [x] Add adjustable camera shake and flash brightness options; remappable controls remain planned.
+- [x] Add adjustable camera shake and flash brightness options.
+- [x] Add remappable keyboard controls while keeping Escape, Tab, F, and R fixed for pause, loadout, fullscreen, and restart.
 - [ ] Profile a full run; cap particles and dispose every removed geometry/material/body.
 - [ ] Run an architecture review after the next major milestone; remove abstractions that do not own real rules.
 - [ ] Update this document when actual game behavior changes; mark delivered items only after verification.
