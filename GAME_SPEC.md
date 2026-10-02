@@ -305,7 +305,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### Next: polish and maintainability
 
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
-- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, crate damage, reload, an attachment purchase, frag detonation, pause, and loadout (`tests/game-smoke.html`).
+- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.
 - [x] Add remappable keyboard controls with WASD and fallback arrow movement, while keeping Escape, Tab, F, and R fixed for pause, loadout, fullscreen, and restart.

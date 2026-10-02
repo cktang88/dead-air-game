@@ -1,4 +1,5 @@
 import {DEFAULT_KEY_BINDINGS,loadKeyBindings} from '../keybindings.js';
+import {emptyProgress,SAVE_KEY} from '../progression.js';
 
 const report=document.querySelector('#result');
 const frame=document.querySelector('#game');
@@ -16,6 +17,14 @@ async function waitForBoot(doc,win){
 
 function press(win,key,type){
   win.dispatchEvent(new win.KeyboardEvent(type,{key,bubbles:true,cancelable:true}));
+}
+
+function reloadGame(){
+  return new Promise((resolve,reject)=>{
+    const timeout=setTimeout(()=>reject(new Error('Game frame did not reload')),30000);
+    frame.addEventListener('load',()=>{clearTimeout(timeout);resolve();},{once:true});
+    frame.src='../index.html?browser-smoke';
+  });
 }
 
 async function run(){
@@ -95,8 +104,37 @@ async function run(){
   press(win,'Tab','keydown');
   press(win,'Tab','keyup');
   if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Tab did not close the loadout');
+
+  const originalProgress=window.localStorage.getItem(SAVE_KEY);
+  try{
+    const fixture={...emptyProgress(),coins:25};
+    window.localStorage.setItem(SAVE_KEY,JSON.stringify(fixture));
+    await reloadGame();
+    let metaWin=frame.contentWindow,metaDoc=frame.contentDocument;
+    await waitForBoot(metaDoc,metaWin);
+    metaDoc.querySelector('#meta-button').click();
+    const runner=metaDoc.querySelector('#meta-list [data-upgrade="runner"]');
+    if(!runner||runner.disabled)throw new Error('Runner upgrade was not available for the 25-coin fixture');
+    runner.click();
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
+      throw new Error('Safehouse purchase did not spend coins and raise Runner’s Legs to level 1');
+    }
+    await reloadGame();
+    metaWin=frame.contentWindow;metaDoc=frame.contentDocument;
+    await waitForBoot(metaDoc,metaWin);
+    metaDoc.querySelector('#meta-button').click();
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
+      throw new Error('Safehouse upgrade and remaining coins did not survive a reload');
+    }
+  }finally{
+    if(originalProgress===null)window.localStorage.removeItem(SAVE_KEY);
+    else window.localStorage.setItem(SAVE_KEY,originalProgress);
+    await reloadGame();
+    await waitForBoot(frame.contentDocument,frame.contentWindow);
+  }
+
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine applied · saved coins ${savedCoins}`;
+  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine · safehouse upgrade survives reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
