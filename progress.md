@@ -12,7 +12,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate starts with two durability points, absorbs damage before health, and competes with heavier weapon choices; the entry workbench repairs it for scrap. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
-- Four base enemy types plus the Warden elite variant, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
+- Four base enemy types plus the Warden elite variant with an overhead health bar, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
 ## Verification
@@ -207,4 +207,5 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Larger floors now guarantee one WARDEN room. It pairs a guard with a tougher, slower brute that has 200 health, 2-damage contact hits, a larger collider, and a distinct amber silhouette. The encounter uses existing enemy tactics and collision rules. Its room guarantees scrap and an attachment reward; clearing it still earns the normal fight reward.
 - Small floors keep their existing role count and may receive a regular utility room instead. FIELD CLINIC already acts as a safe rest stop with a guaranteed healing pickup.
 - Added room-role checks for the elite's roster, count, rewards, and large-floor guarantee. The production dungeon harness passes 64 deterministic seeds twice each and the fallback map; a live seeded run starts with no browser errors. `npm test` passes 67 tests; syntax and diff checks pass.
-- Next: give the Warden an in-game health bar and playtest its fight/reward balance; test armor breaking and repair during combat. Real locked doors still need explicit room edges plus collision and route state.
+- Added an overhead Warden health bar that tracks its position and health, then disappears when it is defeated. `npm test` passes 67 tests; `node --check game.js` and `git diff --check` pass. A seeded run starts in the in-app browser and the live screen renders correctly; the automated Playwright runner remains blocked by this machine's Chromium sandbox.
+- Next: playtest the Warden fight/reward balance and test armor breaking and repair during combat. Real locked doors still need explicit room edges plus collision and route state.

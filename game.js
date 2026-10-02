@@ -363,8 +363,10 @@ function breakCrate(crate){
 function spawnEnemy(type,x,y,roomIndex,elite=false){
   const base=ENEMY_TYPES[type],def=elite?{...base,name:'WARDEN',hp:200,speed:26,damage:2,color:0xff9566}:base,radius=elite?13:type==='brute'?10:8,body=makeBody({x,y},radius,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
   const mesh=createActorMesh(type,radius,def.color);mesh.position.set(x,0,y);
+  let healthBar=null,healthFill=null;
+  if(elite){healthBar=new THREE.Group();healthBar.visible=true;const back=new THREE.Mesh(new THREE.BoxGeometry(38,1,5),new THREE.MeshBasicMaterial({color:0x211820}));healthFill=new THREE.Mesh(new THREE.BoxGeometry(34,1.4,3),new THREE.MeshBasicMaterial({color:0xff9566}));healthFill.position.y=.8;healthBar.add(back,healthFill);scene.add(healthBar);}
   const points=[new THREE.Vector3(),new THREE.Vector3()];const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xff4d61,transparent:true,opacity:.76,depthWrite:false}));aimLine.visible=false;scene.add(aimLine);
-  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
+  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,healthBar,healthFill,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
 }
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&[0,1].some(slot=>weaponReplacement(state.weaponSlots,slot,index,GUNS,state.carryCapacity,GEAR.find(item=>item.id===state.gear)?.weight||0).canCarry));
@@ -406,7 +408,7 @@ function burst(x,y,color,count=10,power=1){
 }
 function disposeObject(object){scene.remove(object);object.traverse(child=>{child.geometry?.dispose();if(Array.isArray(child.material))child.material.forEach(material=>material.dispose());else child.material?.dispose();});}
 function killEnemy(enemy,bullet){
-  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.aimLine.visible=false;disposeObject(enemy.aimLine);for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);enemy.body.setLinvel({x:bullet.vx*.17,y:bullet.vy*.17},true);enemy.hp=0;
+  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.aimLine.visible=false;disposeObject(enemy.aimLine);if(enemy.healthBar)disposeObject(enemy.healthBar);for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);enemy.body.setLinvel({x:bullet.vx*.17,y:bullet.vy*.17},true);enemy.hp=0;
   enemy.mesh.userData.body.rotation.z=Math.PI/2;enemy.mesh.userData.body.material.color.setHex(0x542d42);enemy.mesh.userData.body.material.emissive.setHex(0x260d1a);enemy.mesh.userData.body.material.transparent=true;enemy.mesh.userData.body.material.opacity=.76;
   state.kills++;state.scrap+=6+Math.floor(random()*8);state.shake=Math.max(state.shake,3.8);state.hitstop=.045;burst(enemy.x,enemy.y,enemy.def.color,17,1.4);
   if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
@@ -570,7 +572,7 @@ function updateEnemies(dt){
     if(e.stun>0){vx=0;vy=0;e.navGoal=null;e.aimTimer=0;e.aimLine.visible=false;}
     for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}
     e.body.setLinvel({x:vx+e.knock.x,y:vy+e.knock.y},true);e.knock.x*=Math.pow(.1,dt);e.knock.y*=Math.pow(.1,dt);
-    const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);const facing=e.aimTimer>0?e.aim:{x:nx,y:ny},reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.scale.setScalar(e.type==='brute'?1.22:1);
+    const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);if(e.healthBar){e.healthBar.position.set(e.x,e.radius*1.85,e.y-20);e.healthFill.scale.x=clamp(e.hp/e.maxHp,0,1);e.healthFill.position.x=-17*(1-e.healthFill.scale.x);}const facing=e.aimTimer>0?e.aim:{x:nx,y:ny},reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.scale.setScalar(e.type==='brute'?1.22:1);
     if(d<e.def.range&&e.def.brain==='rush'&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
   }
 }
