@@ -105,6 +105,8 @@ Room compositions should use a threat budget rather than an unbounded random cou
 - Gun definitions have distinct fire stats, weight, ammo, and visual dimensions. All 13 are wired into combat and can be selected through the loadout, merchant, or a weight-checked pickup when the carry rig allows them.
 - Five attachment definitions exist; compatibility filtering and per-gun installation are wired into the workbench and weapon stat calculations.
 - A run starts with the machine pistol and Street Sweeper. Other catalog guns can be selected at the workbench, bought from a merchant, or accepted from a specific pickup.
+- The Street Sweeper has three shell choices on `C`: buckshot fires 9 hard-hitting pellets, birdshot fires 16 weaker and wider pellets at shorter range, and slug fires one accurate, longer-range pellet. Each trigger consumes one shotgun round; the HUD shows the selected shell.
+- Lynx and Quill rounds can continue through up to four additional enemies and three crates. The Mule can continue through five additional enemies, four crates, and one continuous wall section. Hits are swept across each frame so fast rounds do not skip targets; walls and cover stop ordinary rounds.
 
 ### Inventory rules
 

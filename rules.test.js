@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS} from './catalog.js';
-import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentIntersectsCircle, timeScale, weaponLoadoutWeight, weaponReplacement, weaponStats} from './rules.js';
+import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS} from './catalog.js';
+import {canCarryWeapons, chooseEncounterTypes, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -100,6 +100,51 @@ test('attachment compatibility gates the actual weapon stats and shop options',(
   ]).map(item=>item.id),['hollow','longbarrel']);
   assert.equal(reloadSeconds(new Set(),mule),mule.reload);
   assert.equal(reloadSeconds(new Set(['stabilizer']),GUNS[0]),1.25);
+});
+
+test('shotgun shells trade pellet count, spread, damage, and range',()=>{
+  const gun=GUNS.find(item=>item.id==='shotgun'),base=weaponStats(gun,new Set());
+  const buck=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='buckshot'),base);
+  const bird=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='birdshot'),base);
+  const slug=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='slug'),base);
+  assert.equal(buck.pellets,9);assert.equal(buck.damage,base.damage*.42);
+  assert.equal(bird.pellets,16);assert.ok(bird.spread>buck.spread);assert.ok(bird.range<buck.range);
+  assert.equal(slug.pellets,1);assert.ok(slug.spread<buck.spread);assert.ok(slug.range>buck.range);
+  assert.ok(buck.damage*buck.pellets<base.damage*gun.count,'buckshot should stay below the old five-pellet volley total');
+});
+
+test('snipers pierce multiple enemies and crates; anti-materiel adds one wall',()=>{
+  const mods=new Set(),lynx=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_lynx'),mods),quill=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_quill'),mods),mule=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_mule'),mods);
+  for(const rifle of [lynx,quill]){assert.ok(rifle.enemies>=3);assert.ok(rifle.crates>=2);assert.equal(rifle.walls,0);}
+  assert.ok(mule.enemies>=3);assert.ok(mule.crates>=2);assert.equal(mule.walls,1);
+  assert.equal(weaponPenetration(GUNS[0],new Set()).enemies,0);
+  assert.equal(weaponPenetration(GUNS[0],new Set(['longbarrel'])).enemies,1);
+  let budget={enemies:2,crates:1,walls:1};
+  budget=consumePenetration(budget,'enemies');assert.deepEqual(budget,{enemies:1,crates:1,walls:1});
+  budget=consumePenetration(budget,'walls');assert.equal(budget.walls,0);assert.equal(consumePenetration(budget,'walls'),null);
+  assert.equal(consumePenetration(budget,'cover'),null,'ordinary cover always stops rounds');
+  let sniper=lynx;for(let i=0;i<4;i++)sniper=consumePenetration(sniper,'enemies');
+  assert.equal(sniper.enemies,0);assert.equal(consumePenetration(sniper,'enemies'),null,'the fifth enemy stops the sniper round');
+  sniper=consumePenetration(sniper,'crates');assert.equal(sniper.crates,2,'each crate consumes its own pierce allowance');
+});
+
+test('swept projectile checks find first contacts without tunneling',()=>{
+  assert.equal(segmentCircleHitTime({x:0,y:0},{x:100,y:0},{x:50,y:0},5),.45);
+  assert.equal(segmentCircleHitTime({x:0,y:0},{x:100,y:0},{x:50,y:20},5),null);
+  const map=Array.from({length:3},()=>Array(6).fill(0));map[1][2]=1;map[1][3]=1;
+  assert.deepEqual(segmentBlockedTiles({x:8,y:24},{x:88,y:24},map,16).map(({x,y})=>[x,y]),[[2,1],[3,1]]);
+});
+
+test('anti-materiel wall penetration treats thick connected tiles as one wall',()=>{
+  const map=Array.from({length:3},()=>Array(8).fill(0));map[1][2]=1;map[1][3]=1;map[1][5]=1;
+  const crossing=segmentWallRuns({x:8,y:24},{x:120,y:24},map,16);
+  assert.deepEqual(crossing.runs.map(({x,y})=>[x,y]),[[2,1],[5,1]],'a gap makes a second wall');
+  assert.equal(crossing.endsInsideWall,false);
+  const ongoing=segmentWallRuns({x:40,y:24},{x:55,y:24},map,16,true);
+  assert.deepEqual(ongoing.runs,[],'remaining inside the same wall spends no second penetration');
+  assert.equal(ongoing.endsInsideWall,true);
+  const nextWall=segmentWallRuns({x:55,y:24},{x:96,y:24},map,16,true);
+  assert.deepEqual(nextWall.runs.map(({x,y})=>[x,y]),[[5,1]],'a new wall after a floor gap still counts');
 });
 
 test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{

@@ -165,3 +165,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added tests for scan range boundaries, exact room edges, visited contacts, persistence, and capped purchases. `npm test` passes 58 tests, and syntax plus `git diff --check` pass.
 - Browser verification: the current preview at `http://127.0.0.1:8767/` shows the Room Sense card, exact range tiers, and its 35-coin first purchase; a fresh run shows only the entry room on the minimap. This uses a separate preview origin from the existing `8766` save. The headless Playwright runner remains blocked by the macOS Mach-port permission error.
 - Next: add a health item / gear scanner and armor durability; then playtest scan range in combat and tune the remaining room and run balance.
+
+## Shotgun shells and rifle penetration
+
+- Added three selectable Street Sweeper shells on `C`: 9-pellet buckshot, wide/short 16-pellet birdshot, and accurate long-range slug. Each volley consumes one shell and the active type appears in the HUD and game-state text.
+- Lynx and Quill pierce multiple enemies and crates; the Mule pierces more targets and one connected wall section. Projectile impacts are swept and processed in travel order, and sensor colliders let the combat rules handle impact and penetration consistently.
+- Added tests for shell tradeoffs, weapon penetration budgets, swept enemy hits, wall traversal, and connected multi-tile wall thickness. `npm test` passes 63 tests; syntax and diff checks pass.
+- Live in-app browser check: started a fresh seeded run, selected the Street Sweeper, cycled from buckshot to birdshot, and fired once; ammo changed from 6 to 5 and the HUD showed Birdshot. The screenshot showed the visible shell toast and active ammo label. The standalone Playwright runner still cannot start Chromium because this sandbox denies Chromium's macOS Mach-port registration; the in-app browser provided the gameplay check.
+- Next: do a longer encounter pass for rifle penetration and shotgun balance; proceed with the remaining run-quality and accessibility items in the spec.

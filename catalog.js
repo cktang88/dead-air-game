@@ -10,6 +10,12 @@ export const MODS = [
   { id:'longbarrel', name:'LONG BARREL', info:'+35% range · piercing rounds', cost:70 },
 ];
 
+export const SHOTGUN_SHELLS = [
+  {id:'buckshot',name:'BUCKSHOT',pellets:9,damageMultiplier:.42,spreadMultiplier:1.35,rangeMultiplier:1,description:'WIDE · HARD HITS'},
+  {id:'birdshot',name:'BIRDSHOT',pellets:16,damageMultiplier:.14,spreadMultiplier:2.1,rangeMultiplier:.7,description:'WIDEST · CLOSE RANGE'},
+  {id:'slug',name:'SLUG',pellets:1,damageMultiplier:1.55,spreadMultiplier:.035,rangeMultiplier:1.35,description:'SINGLE · LONG RANGE'},
+];
+
 // `rate` is the delay between shots in seconds. Attachment IDs are also the
 // IDs in MODS; keeping them on each weapon makes shop/loadout filtering direct.
 const allAttachments=['extended','suppressor','hollow','stabilizer','longbarrel'];
@@ -30,9 +36,10 @@ export const GUNS = [
   { id:'pistol_9', name:'MICA 9', short:'LIGHT · QUICK DRAW', category:'PISTOL', weight:1.1, damage:25, rate:.28, speed:700, range:300, mag:15, reserve:60, spread:.025, reload:1.25, color:0xffdf9b, ammo:'9mm', visual:{length:17,width:4}, attachments:attachments('extended','suppressor','hollow','stabilizer') },
   { id:'pistol_45', name:'TALON .45', short:'SLOW · HEAVY HIT', category:'PISTOL', weight:1.7, damage:43, rate:.48, speed:750, range:330, mag:8, reserve:40, spread:.04, reload:1.55, color:0xffb987, visual:{length:20,width:5}, ammo:'.45', attachments:attachments('suppressor','hollow','stabilizer','longbarrel') },
   // Precision rifles: exceptional reach and impact, slow cycling and costly weight.
-  { id:'sniper_lynx', name:'LYNX MARKSMAN', short:'PRECISE · QUICK CYCLE', category:'SNIPER', weight:4.8, damage:78, rate:.78, speed:1120, range:760, mag:6, reserve:30, spread:.006, reload:2.2, color:0x8bc8ff, ammo:'7.62mm', visual:{length:43,width:6}, attachments:attachments('suppressor','hollow','stabilizer','longbarrel') },
-  { id:'sniper_mule', name:'MULE ANTI-MATERIEL', short:'EXTREME POWER · SLOW', category:'ANTI-MATERIEL', weight:6.8, damage:150, rate:1.45, speed:1450, range:980, mag:4, reserve:16, spread:.003, reload:2.8, color:0xb0a2ff, visual:{length:52,width:8}, ammo:'.50 BMG', attachments:attachments('hollow','stabilizer','longbarrel') },
-  { id:'sniper_quill', name:'QUILL SCOUT', short:'LIGHT · PIERCING', category:'SNIPER', weight:3.8, damage:62, rate:.62, speed:1050, range:700, mag:8, reserve:40, spread:.009, reload:1.95, color:0x72d8e8, visual:{length:38,width:5}, ammo:'5.56mm', attachments:attachments('extended','suppressor','hollow','stabilizer','longbarrel') },
+  // Penetration values count targets the round passes through before stopping on the next hit.
+  { id:'sniper_lynx', name:'LYNX MARKSMAN', short:'PRECISE · QUICK CYCLE · PIERCES ENEMIES / CRATES', category:'SNIPER', penetration:{enemies:4,crates:3,walls:0}, weight:4.8, damage:78, rate:.78, speed:1120, range:760, mag:6, reserve:30, spread:.006, reload:2.2, color:0x8bc8ff, ammo:'7.62mm', visual:{length:43,width:6}, attachments:attachments('suppressor','hollow','stabilizer','longbarrel') },
+  { id:'sniper_mule', name:'MULE ANTI-MATERIEL', short:'EXTREME POWER · PIERCES ONE WALL', category:'ANTI-MATERIEL', penetration:{enemies:5,crates:4,walls:1}, weight:6.8, damage:150, rate:1.45, speed:1450, range:980, mag:4, reserve:16, spread:.003, reload:2.8, color:0xb0a2ff, visual:{length:52,width:8}, ammo:'.50 BMG', attachments:attachments('hollow','stabilizer','longbarrel') },
+  { id:'sniper_quill', name:'QUILL SCOUT', short:'LIGHT · PIERCES ENEMIES / CRATES', category:'SNIPER', penetration:{enemies:4,crates:3,walls:0}, weight:3.8, damage:62, rate:.62, speed:1050, range:700, mag:8, reserve:40, spread:.009, reload:1.95, color:0x72d8e8, visual:{length:38,width:5}, ammo:'5.56mm', attachments:attachments('extended','suppressor','hollow','stabilizer','longbarrel') },
 ];
 
 export const BASE_CARRY_CAPACITY = 7;

@@ -12,6 +12,26 @@ export function weaponStats(gun, mods) {
   };
 }
 
+export function shotgunShellStats(shell, gunStats) {
+  return {
+    pellets:shell.pellets,
+    damage:gunStats.damage*shell.damageMultiplier,
+    spread:gunStats.spread*shell.spreadMultiplier,
+    range:gunStats.range*shell.rangeMultiplier,
+  };
+}
+
+export function weaponPenetration(gun, mods) {
+  const compatible=new Set(gun.attachments||[]),hasLongbarrel=compatible.has('longbarrel')&&mods.has('longbarrel');
+  const base=gun.penetration||{enemies:0,crates:0,walls:0};
+  return {...base,enemies:base.enemies+(hasLongbarrel?1:0)};
+}
+
+export function consumePenetration(budget, target) {
+  if (!budget || !Number.isInteger(budget[target]) || budget[target]<=0) return null;
+  return {...budget,[target]:budget[target]-1};
+}
+
 export function reloadSeconds(mods, gun, reloadMultiplier=1) {
   let seconds=1.65;
   if (!gun) {
@@ -58,6 +78,42 @@ export function segmentIntersectsCircle(start, end, center, radius) {
   const dx=end.x-start.x,dy=end.y-start.y,lengthSquared=dx*dx+dy*dy;
   const projection=Math.max(0,Math.min(1,((center.x-start.x)*dx+(center.y-start.y)*dy)/(lengthSquared||1)));
   return Math.hypot(center.x-(start.x+dx*projection),center.y-(start.y+dy*projection))<=radius;
+}
+
+export function segmentCircleHitTime(start, end, center, radius) {
+  if (![start.x,start.y,end.x,end.y,center.x,center.y,radius].every(Number.isFinite)||radius<0) return null;
+  const dx=end.x-start.x,dy=end.y-start.y,fx=start.x-center.x,fy=start.y-center.y;
+  const a=dx*dx+dy*dy,c=fx*fx+fy*fy-radius*radius;
+  if (c<=0)return 0;
+  if (a===0)return null;
+  const b=2*(fx*dx+fy*dy),discriminant=b*b-4*a*c;
+  if (discriminant<0)return null;
+  const t=(-b-Math.sqrt(discriminant))/(2*a);
+  return t>=0&&t<=1?t:null;
+}
+
+export function segmentBlockedTiles(start, end, tileMap, tileSize) {
+  const length=Math.hypot(end.x-start.x,end.y-start.y),steps=Math.max(1,Math.ceil(length/(tileSize/4)));
+  const hits=[],seen=new Set();
+  for(let i=1;i<=steps;i++){
+    const t=i/steps,x=Math.floor((start.x+(end.x-start.x)*t)/tileSize),y=Math.floor((start.y+(end.y-start.y)*t)/tileSize),key=`${x},${y}`;
+    if(seen.has(key))continue;
+    seen.add(key);
+    if(tileMap[y]?.[x]!==0)hits.push({x,y,t});
+  }
+  return hits;
+}
+
+export function segmentWallRuns(start, end, tileMap, tileSize, startsInsideWall=false) {
+  const cells=segmentBlockedTiles(start,end,tileMap,tileSize),runs=[];
+  let previous=null,skipCurrentRun=startsInsideWall;
+  for(const cell of cells){
+    const continues=previous&&Math.abs(cell.x-previous.x)<=1&&Math.abs(cell.y-previous.y)<=1;
+    if(!continues){if(!skipCurrentRun)runs.push(cell);skipCurrentRun=false;}
+    previous=cell;
+  }
+  const x=Math.floor(end.x/tileSize),y=Math.floor(end.y/tileSize);
+  return {runs,endsInsideWall:tileMap[y]?.[x]!==0};
 }
 
 export function weaponLoadoutWeight(weapons, guns) {
