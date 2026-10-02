@@ -46,6 +46,38 @@ async function run(){
   if(fired.player.ammo>=moved.player.ammo)throw new Error('Firing did not consume ammunition');
   if(!(Number(fired.timeScale)>Number(initial.timeScale)&&Number(fired.timeScale)<1))throw new Error(`Firing should keep a blended tempo, got ${fired.timeScale}×`);
 
+  const crate=fired.crates.map(item=>({...item,distance:Math.hypot(item.x-fired.player.x,item.y-fired.player.y)}))
+    .filter(item=>item.distance>35&&item.distance<220).sort((a,b)=>a.distance-b.distance)[0];
+  if(!crate)throw new Error('No reachable test crate near the entry');
+  const aimScale=win.innerHeight/520;
+  win.dispatchEvent(new win.MouseEvent('mousemove',{clientX:win.innerWidth/2+(crate.x-fired.player.x)*aimScale,clientY:win.innerHeight/2+(crate.y-fired.player.y)*aimScale,bubbles:true}));
+  win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
+  win.advanceTime(2000);
+  const crateHit=stateOf(win);
+  win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
+  const remainingCrate=crateHit.crates.find(item=>item.x===crate.x&&item.y===crate.y);
+  const crateHealthAfter=remainingCrate?.health||0;
+  if(crateHealthAfter>=crate.health)throw new Error('Player bullets did not damage the targeted crate');
+
+  press(win,bindings.reload,'keydown');
+  press(win,bindings.reload,'keyup');
+  const reloading=stateOf(win);
+  if(!reloading.player.reloading)throw new Error('Reload input did not begin a reload');
+  win.advanceTime(12000);
+  const reloaded=stateOf(win);
+  if(reloaded.player.reloading||reloaded.player.ammo<=crateHit.player.ammo)throw new Error('Reload did not refill the current magazine');
+
+  press(win,bindings.throwableUse,'keydown');
+  press(win,bindings.throwableUse,'keyup');
+  const thrown=stateOf(win);
+  if(thrown.throwables.projectiles!==1||thrown.throwables.counts.frag!==1)throw new Error('Frag throw did not launch and consume one grenade');
+  let detonated=thrown;
+  for(let step=0;step<20&&!detonated.throwables.effects.includes('frag');step++){
+    win.advanceTime(500);
+    detonated=stateOf(win);
+  }
+  if(!detonated.throwables.effects.includes('frag')||detonated.throwables.projectiles!==0)throw new Error('Frag projectile did not detonate into an effect');
+
   press(win,'Escape','keydown');
   press(win,'Escape','keyup');
   if(stateOf(win).timeScale!=='0.00')throw new Error('Pause did not stop game time');
@@ -55,11 +87,16 @@ async function run(){
   if(!doc.querySelector('#loadout').classList.contains('show')||loadout.loadout.slots.length!==2||doc.querySelectorAll('#loadout-gun .loadout-weapon').length<2){
     throw new Error('Loadout did not show two weapon slots with the weapon list');
   }
+  const extended=doc.querySelector('#mod-list [data-mod="extended"]');
+  if(!extended||extended.disabled)throw new Error('Extended magazine was not available at the starting scrap budget');
+  extended.click();
+  const attached=stateOf(win);
+  if(!attached.loadout.attachments.includes('extended'))throw new Error('Purchased attachment did not change the active weapon');
   press(win,'Tab','keydown');
   press(win,'Tab','keyup');
   if(doc.querySelector('#loadout').classList.contains('show'))throw new Error('Tab did not close the loadout');
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · ammo ${moved.player.ammo} → ${fired.player.ammo} · pause · loadout ${loadout.loadout.slots.length} slots · saved coins ${savedCoins}`;
+  report.textContent=`PASS · seed ${seed} · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · pause · loadout ${loadout.loadout.slots.length} slots · extended magazine applied · saved coins ${savedCoins}`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
