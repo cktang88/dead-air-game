@@ -1,3 +1,5 @@
+import {DEFAULT_KEY_BINDINGS,loadKeyBindings} from '../keybindings.js';
+
 const report=document.querySelector('#result');
 const frame=document.querySelector('#game');
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -21,15 +23,17 @@ async function run(){
   await waitForBoot(doc,win);
   const savedCoins=doc.querySelector('#meta-balance').textContent;
   const seed=213838321;
+  const bindings=loadKeyBindings(win.localStorage);
+  const movementKey=bindings.moveRight===DEFAULT_KEY_BINDINGS.moveRight&&!Object.values(bindings).includes('arrowright')?'ArrowRight':bindings.moveRight;
   const seedInput=doc.querySelector('#seed-input');
   seedInput.value=String(seed);
   doc.querySelector('#start-button').click();
   const initial=stateOf(win);
   if(initial.mode!=='play'||initial.seed!==seed||!initial.player)throw new Error('Seeded run did not start with a player');
 
-  press(win,'d','keydown');
+  press(win,movementKey,'keydown');
   win.advanceTime(500);
-  press(win,'d','keyup');
+  press(win,movementKey,'keyup');
   const moved=stateOf(win);
   if(moved.player.x<=initial.player.x+20)throw new Error('Right input did not move the player');
   if(moved.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moved.timeScale}×`);

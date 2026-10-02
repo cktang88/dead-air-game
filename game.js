@@ -16,7 +16,7 @@ import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
 import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
-import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,saveKeyBindings} from './keybindings.js';
+import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,resolveMovementKey,saveKeyBindings} from './keybindings.js';
 
 const $ = (id) => document.getElementById(id);
 const attachmentsFor=(gun)=>state.attachments.get(gun.id)||new Set();
@@ -733,7 +733,7 @@ function setupControls(){
       try{saveKeyBindings(localStorage,controls.bindings);$('binding-status').textContent='Controls saved.';}catch{$('binding-status').textContent='Changed for this session only.';toast('CONTROL CHANGED FOR THIS SESSION ONLY');}
       return;
     }
-    input.keys.add(key);
+    input.keys.add(resolveMovementKey(key,controls.bindings));
     if(e.repeat)return;
     if(state.pendingLoadoutChange){
       if(key==='escape')closeLoadoutPreview();
@@ -758,7 +758,7 @@ function setupControls(){
     if(key==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.();}
     if(key===binding('reload'))reload();
   });
-  addEventListener('keyup',e=>input.keys.delete(normalizeKey(e.key)));
+  addEventListener('keyup',e=>input.keys.delete(resolveMovementKey(normalizeKey(e.key),controls.bindings)));
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
   addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.merchantOpen&&!state.pendingGunPickup)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});

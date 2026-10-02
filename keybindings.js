@@ -14,6 +14,7 @@ export const KEY_BINDING_ACTIONS=Object.freeze([
 ]);
 const VERSION=1;
 const RESERVED_KEYS=new Set(['escape','tab','f','r']);
+const ARROW_MOVEMENT_ACTIONS=Object.freeze({arrowup:'moveUp',arrowdown:'moveDown',arrowleft:'moveLeft',arrowright:'moveRight'});
 
 export function normalizeKey(key){
   if(typeof key!=='string')return '';
@@ -34,6 +35,12 @@ export function movementFromKeys(keys,bindings){
   const left=keys.has(bindings.moveLeft),right=keys.has(bindings.moveRight),up=keys.has(bindings.moveUp),down=keys.has(bindings.moveDown);
   const x=(right?1:0)-(left?1:0),y=(down?1:0)-(up?1:0),length=Math.hypot(x,y)||1;
   return {x:x/length,y:y/length};
+}
+
+export function resolveMovementKey(key,bindings){
+  const action=ARROW_MOVEMENT_ACTIONS[key];
+  if(!action||Object.values(bindings).includes(key)||bindings[action]!==DEFAULT_KEY_BINDINGS[action])return key;
+  return DEFAULT_KEY_BINDINGS[action];
 }
 
 export function rebindKey(bindings,action,key){

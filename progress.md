@@ -283,3 +283,8 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - Removed the duplicate Room Sense tile-size constant by deriving its pixel range from `catalog.js`'s `TILE`; the capped-tier test now calculates expected ranges from the same shared unit. `npm test` passes all 92 tests.
 - Reviewed `makeLevel()` and kept it as the lifecycle coordinator: extracting a room-population helper would move code but still share the same global game state, without improving a current change path. The browser harnesses remain manual checks alongside the Node suite.
+
+## Arrow-key movement
+
+- The README advertised arrow keys, but isolated browser play exposed that only WASD actually moved the player. Added arrow aliases for default movement; an arrow bound to another action or a remapped direction keeps its assigned meaning.
+- Added mapping tests and changed the browser smoke check to exercise right-arrow movement when that key is free, while honoring saved remaps. `npm test` passes all 93 tests. The browser smoke confirms +53 movement at 1×, firing at 0.42×, ammo use, pause, and the two-slot loadout. An isolated browser action burst moved the player 106 world units with the arrow key; its screenshot was inspected.

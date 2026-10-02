@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_KEY_BINDINGS,isBindableKey,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,parseKeyBindings,rebindKey,saveKeyBindings,serializeKeyBindings,KEY_BINDINGS_KEY} from './keybindings.js';
+import {DEFAULT_KEY_BINDINGS,isBindableKey,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,parseKeyBindings,rebindKey,resolveMovementKey,saveKeyBindings,serializeKeyBindings,KEY_BINDINGS_KEY} from './keybindings.js';
 
 test('default bindings cover movement and all key-driven combat actions',()=>{
   assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c'});
@@ -30,6 +30,14 @@ test('custom movement bindings preserve normalized diagonal speed and opposing-k
   const diagonal=movementFromKeys(new Set(['i','l']),bindings);
   assert.ok(Math.abs(Math.hypot(diagonal.x,diagonal.y)-1)<1e-10);
   assert.deepEqual(movementFromKeys(new Set(['j','l']),bindings),{x:0,y:0});
+});
+
+test('default arrow aliases follow movement but never override assigned keys',()=>{
+  assert.equal(resolveMovementKey('arrowright',DEFAULT_KEY_BINDINGS),'d');
+  assert.deepEqual(movementFromKeys(new Set([resolveMovementKey('arrowright',DEFAULT_KEY_BINDINGS)]),DEFAULT_KEY_BINDINGS),{x:1,y:0});
+  assert.equal(resolveMovementKey('arrowright',{...DEFAULT_KEY_BINDINGS,moveRight:'x'}),'arrowright');
+  assert.equal(resolveMovementKey('arrowright',{...DEFAULT_KEY_BINDINGS,throwableCycle:'arrowright'}),'arrowright');
+  assert.equal(resolveMovementKey('x',DEFAULT_KEY_BINDINGS),'x');
 });
 
 test('saved bindings round-trip and corrupt or conflicting saves fall back as a whole',()=>{
