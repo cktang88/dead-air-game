@@ -2,9 +2,10 @@ export const BRUTE_WINDUP_SECONDS=0.48;
 export const BRUTE_RECOVERY_SECONDS=0.9;
 
 // Brutes commit to one visible swing instead of dealing random contact damage.
-export function stepBruteMelee({windup=0,cooldown=0},dt,inRange){
+export function stepBruteMelee({windup=0,cooldown=0},dt,inRange,interrupt=false){
   const elapsed=Number.isFinite(dt)?Math.max(0,dt):0;
   const remainingCooldown=Math.max(0,(Number.isFinite(cooldown)?cooldown:0)-elapsed);
+  if(interrupt)return {windup:0,cooldown:remainingCooldown,started:false,strike:false};
   const remainingWindup=Math.max(0,(Number.isFinite(windup)?windup:0)-elapsed);
   if(windup>0){
     const strike=remainingWindup===0;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BRUTE_RECOVERY_SECONDS,BRUTE_WINDUP_SECONDS,bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
+import {chooseEnemyTactic} from './enemy-tactics.js';
 
 test('Brute commits to a readable wind-up and strikes once when it ends',()=>{
   const windup=stepBruteMelee({windup:0,cooldown:0},1/60,true);
@@ -33,4 +34,14 @@ test('Brute swing hits its committed forward arc and can be dodged sideways',()=
   assert.equal(bruteMeleeHits({...base,distance:36,targetDirection:{x:1,y:0}}),false);
   assert.equal(bruteMeleeHits({...base,targetDirection:{x:0,y:0}}),false);
   assert.equal(bruteMeleeHits({...base,canSee:false,targetDirection:{x:1,y:0}}),false);
+});
+
+test('a Brute cancels its swing when it chooses to dodge an incoming bullet',()=>{
+  const actor={x:0,y:0,brain:'rush',range:40,hp:80,maxHp:80,radius:12,side:1};
+  const tactic=chooseEnemyTactic({actor,target:{x:25,y:0},canSee:true,projectiles:[{x:-20,y:0,vx:100,vy:0}]});
+  assert.equal(tactic.intent,'dodge');
+  const interrupted=stepBruteMelee({windup:BRUTE_WINDUP_SECONDS/2,cooldown:0},1/60,true,tactic.intent==='dodge');
+  assert.equal(interrupted.windup,0);
+  assert.equal(interrupted.strike,false);
+  assert.equal(interrupted.started,false);
 });

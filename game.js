@@ -658,7 +658,8 @@ function updateEnemies(dt){
     if(e.type==='brute'){
       if(e.stun>0){e.meleeWindup=0;e.aimLine.visible=false;e.meleeTelegraph.visible=false;}
       else{
-        const attack=stepBruteMelee({windup:e.meleeWindup,cooldown:e.meleeCooldown},dt,d<e.def.range&&canSee);
+        const evasive=['dodge','retreat','cover'].includes(e.intent);
+        const attack=stepBruteMelee({windup:e.meleeWindup,cooldown:e.meleeCooldown},dt,d<e.def.range&&canSee&&!evasive,evasive);
         e.meleeWindup=attack.windup;e.meleeCooldown=attack.cooldown;
         if(attack.started)e.aim={x:nx,y:ny};
         if(e.meleeWindup>0){e.aimLine.visible=false;e.meleeTelegraph.position.set(e.x+e.aim.x*21,1.1,e.y+e.aim.y*21);e.meleeTelegraph.rotation.y=Math.atan2(e.aim.x,e.aim.y);e.meleeTelegraph.visible=true;}
