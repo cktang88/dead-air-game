@@ -42,6 +42,9 @@ async function run(){
   if(initial.enemyCount!==initial.enemies.length||initial.pickupCount!==initial.pickups.length){
     throw new Error('Gameplay snapshot omitted enemies or pickups from its reported counts');
   }
+  if(initial.enemyCount<=12||initial.pickupCount<=8){
+    throw new Error('Seeded snapshot no longer exercises the former enemy and pickup output limits');
+  }
 
   press(win,movementKey,'keydown');
   win.advanceTime(500);
