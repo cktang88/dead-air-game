@@ -201,7 +201,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - Use readable top-down shapes and strong value contrast. The player, enemy warnings, bullets, loot, crates, walls, and exits need different silhouettes.
 - Room palettes can vary while gameplay colors stay consistent.
-- Add layered gun sounds, reload cues, enemy tells, crate break, pickup, room-clear, and extraction audio. Provide volume sliders and mute.
+- Add layered gun sounds, reload cues, enemy tells, crate break, pickup, room-clear, and extraction audio. Provide volume sliders and mute. (Reload, tell, pickup, clear, extraction cues and saved mute control are implemented; live browser check pending.)
 - Keep particles brief and capped. Reuse or pool effects if measured browser performance requires it.
 - Use Three.js InstancedMesh for repeated floor/wall geometry. Keep object counts visible during profiling.
 - Rapier 2D handles actor and projectile collision. ROT.js handles room topology. A full ECS is not needed until independent systems or object counts justify it.

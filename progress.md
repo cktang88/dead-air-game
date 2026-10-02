@@ -291,6 +291,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A pure cache-choice rule keeps the scrap option available when ammo, health, and attachment rewards are exhausted. Regression tests cover that full-inventory case.
 - Verification: `npm test` passes 100 tests and JavaScript syntax checks pass. The browser smoke could not load the game libraries in the locked desktop session; the new dialog therefore still needs a live in-browser check. The prior seed smoke passed before this cache change.
 
+## Combat and run audio cues
+
+- Added reload sounds for player and enemy reloads, a throttled enemy aim tell, distinct pickup cues, room-clear music sting, and an extraction cue.
+- Added a mute button next to the volume slider. The mute preference is saved with the existing volume setting, while older saved volume records still load as unmuted. Muting leaves the chosen volume intact.
+- Verification: `npm test` passes all 102 tests; `node --check audio.js`, `node --check game.js`, and `git diff --check` pass. The live browser check is pending because the desktop Mac is locked and automatic unlock failed; the game tab remains open at localhost for a later check.
+- Next: unlock the desktop and verify the mute button and audio cues during play, including that changing volume while muted remains quiet and unmutes to the saved level.
+
 ## Room-aware combat probe
 
 - The gameplay snapshot now includes each living enemy's encounter room and a per-room count of living enemies. The seeded browser smoke checks that all 20 enemies belong to a reported room and that the snapshot exceeds the old 12-enemy and 8-pickup caps.

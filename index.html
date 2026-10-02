@@ -38,7 +38,7 @@
           <p id="run-result" hidden></p>
           <button id="start-button" disabled>LOADING THE SECTOR…</button>
           <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">…</span> COINS</button>
-          <label class="audio-volume" for="master-volume"><span>MASTER VOLUME <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label>
+          <div class="audio-control-row"><label class="audio-volume" for="master-volume"><span>MASTER VOLUME <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label><button id="mute-audio" type="button" aria-pressed="false">MUTE</button></div>
           <label class="audio-volume visual-volume" for="shake-strength"><span>SCREEN SHAKE <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
           <label class="audio-volume visual-volume" for="flash-strength"><span>FLASH BRIGHTNESS <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
           <details id="controls-settings">
