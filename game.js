@@ -11,7 +11,7 @@ import {shapeDungeon, shortestFloorPath} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js';
 import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
-import {roomEnemyCount, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 
 const $ = (id) => document.getElementById(id);
@@ -251,10 +251,10 @@ function makeLevel(){
   for(const [i,room] of state.rooms.entries()){
     if(i===0)continue;
     if(room.merchant)continue;
-    const count=roomEnemyCount(room.role,random()),encounter=chooseEncounterTypes(count,state.seed+i*7919);
+    const count=roomEnemyCount(room.role,random()),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
     for(let j=0;j<count;j++){
-      const point=findEnemySpawn(room,encounter[j]);
-      if(point)spawnEnemy(encounter[j],point.x,point.y,i);
+      const elite=room.role==='elite'&&encounter[j]==='brute',point=findEnemySpawn(room,encounter[j],elite);
+      if(point)spawnEnemy(encounter[j],point.x,point.y,i,elite);
     }
     if(!roomPickupKinds(room.role).length){
       if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
@@ -275,8 +275,8 @@ function clearLevel(){
   physics=new RAPIER.World({x:0,y:0});state.physics=physics;
   state.floorMesh=null;
 }
-function createActorMesh(type,colorHex=0xffffff,radius=8){
-  const color=type==='player'?0x62e1ad:(ENEMY_TYPES[type]?.color||colorHex);
+function createActorMesh(type,radius=8,colorHex){
+  const color=type==='player'?0x62e1ad:(colorHex??ENEMY_TYPES[type]?.color??0xffffff);
   const mesh=new THREE.Group();
   const shadow=new THREE.Mesh(new THREE.CircleGeometry(radius*1.22,16),new THREE.MeshBasicMaterial({color:0x080710,transparent:true,opacity:.47,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=.11;mesh.add(shadow);
   const body=new THREE.Mesh(new THREE.CylinderGeometry(radius*.68,radius,radius*1.1,8),new THREE.MeshStandardMaterial({color,roughness:.55,emissive:color,emissiveIntensity:.05}));body.position.y=radius*.55;body.castShadow=true;mesh.add(body);
@@ -316,13 +316,13 @@ function spawnCrate(x,y){
   physics.createCollider(RAPIER.ColliderDesc.cuboid(12,12),body);state.colliders.push({body});
   const crate={x,y,hp:60,maxHp:60,mesh,body,healthBar,healthFill:fill,healthBarTimer:0,damageStage:0,cracks:[]};state.crates.push(crate);state.cover.push({x,y,radius:17,kind:'crate',crate});return crate;
 }
-function findEnemySpawn(room,type){
-  const radius=type==='brute'?10:8;
+function findEnemySpawn(room,type,elite=false){
+  const radius=elite?13:type==='brute'?10:8;
   const clear=(x,y)=>state.tileMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]===0&&
     state.doors.every(door=>Math.hypot(x-(door.x+.5)*TILE,y-(door.y+.5)*TILE)>=TILE*1.2)&&
     !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
     !state.pickups.some(pickup=>pickup.available&&Math.hypot(x-pickup.x,y-pickup.y)<radius+18)&&
-    !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+(enemy.type==='brute'?10:8)+4);
+    !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+enemy.radius+4);
   for(let attempt=0;attempt<48;attempt++){
     const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
     if(clear(x,y))return {x,y};
@@ -360,11 +360,11 @@ function breakCrate(crate){
   state.shake=Math.max(state.shake,1.8);burst(crate.x,crate.y,0xb98258,11,1.1);
   if(random()<progressionStats(state.progress).crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(random()*13));
 }
-function spawnEnemy(type,x,y,roomIndex){
-  const def=ENEMY_TYPES[type],body=makeBody({x,y},type==='brute'?10:8,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
-  const mesh=createActorMesh(type);mesh.position.set(x,0,y);
+function spawnEnemy(type,x,y,roomIndex,elite=false){
+  const base=ENEMY_TYPES[type],def=elite?{...base,name:'WARDEN',hp:200,speed:26,damage:2,color:0xff9566}:base,radius=elite?13:type==='brute'?10:8,body=makeBody({x,y},radius,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
+  const mesh=createActorMesh(type,radius,def.color);mesh.position.set(x,0,y);
   const points=[new THREE.Vector3(),new THREE.Vector3()];const aimLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xff4d61,transparent:true,opacity:.76,depthWrite:false}));aimLine.visible=false;scene.add(aimLine);
-  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,x,y,roomIndex,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
+  const mag=type==='gunner'?5:type==='guard'?3:0;state.enemies.push({type,def,body,mesh,aimLine,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
 }
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&[0,1].some(slot=>weaponReplacement(state.weaponSlots,slot,index,GUNS,state.carryCapacity,GEAR.find(item=>item.id===state.gear)?.weight||0).canCarry));
@@ -523,7 +523,7 @@ function lineBlocked(x1,y1,x2,y2){const start={x:x1,y:y1},end={x:x2,y:y2},length
 function smokeBlocksLine(x1,y1,x2,y2){return state.effects.some(effect=>effect.id==='smoke'&&effect.remaining>0&&segmentIntersectsCircle({x:x1,y:y1},{x:x2,y:y2},effect,effect.item.radius));}
 function enemyPassableTile(e,x,y){
   if(state.tileMap[y]?.[x]!==0)return false;
-  const cx=(x+.5)*TILE,cy=(y+.5)*TILE,radius=e.type==='brute'?10:8;
+  const cx=(x+.5)*TILE,cy=(y+.5)*TILE,radius=e.radius;
   return !state.crates.some(crate=>Math.hypot(cx-crate.x,cy-crate.y)<25)&&
     !state.cover.some(cover=>!cover.crate&&Math.hypot(cx-cover.x,cy-cover.y)<cover.radius+radius+2);
 }
@@ -545,7 +545,7 @@ function updateEnemies(dt){
   const player=state.player;
   const playerShots=state.bullets.filter(b=>b.owner==='player');
   for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.fire-=dt;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
-    const ranged=e.def.brain==='shoot'||e.def.brain==='guard',actor={x:e.x,y:e.y,brain:e.def.brain,minRange:e.def.minRange,range:e.def.range,hp:e.hp,maxHp:e.maxHp,reloadTimer:e.reloadTimer,side:e.side,radius:e.type==='brute'?10:8};
+    const ranged=e.def.brain==='shoot'||e.def.brain==='guard',actor={x:e.x,y:e.y,brain:e.def.brain,minRange:e.def.minRange,range:e.def.range,hp:e.hp,maxHp:e.maxHp,reloadTimer:e.reloadTimer,side:e.side,radius:e.radius};
     e.tacticTimer-=dt;
     if(e.tacticTimer<=0||hasIncomingProjectile(actor,playerShots)){
       const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y);

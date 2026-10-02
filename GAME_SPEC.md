@@ -261,7 +261,9 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Validate every room layout for a path from entry to exit and reachable doorways. Browser integration checks cover 64 deterministic ROT.js seeds twice, plus the low-room-count larger-map retry.
 - [x] Add seeded room roles that change enemy counts and provide guaranteed cache, armory, and clinic rewards.
 - [x] Detect rooms that can be bypassed on the entry-to-extraction route and prefer one for the cache; label it SIDE CACHE. If a generated floor has no bypassable room, place the cache in a reachable middle room.
-- [ ] Add real locked/reward doors and rest/miniboss rooms; closed doors need a room graph plus collision, projectile, and route handling.
+- [ ] Add real locked/reward doors; closed doors need a room graph plus collision, projectile, and route handling.
+- [x] Keep FIELD CLINIC rooms as quiet, guaranteed-heal rest stops.
+- [x] Add a Warden miniboss and guaranteed loot to sufficiently large floors.
 - [x] Turn the guaranteed optional cache branch into a secret room hidden from the minimap until found.
 - [ ] Tune enemy budgets, ranged telegraphs, player damage, health drops, and run length through repeated play.
 - [x] Improve workbench signposting and add a preview before replacing a gun or gear item.
@@ -309,4 +311,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms and a hidden cache branch, change time by acting or waiting, use two weighted weapon slots, equip and repair armor with durability separate from health, fight several enemy roles, dodge telegraphed ranged shots, use throwables, shop in a rare merchant room, break crates for possible loot, clear rooms, and extract or die. Death and extraction award persistent coins for capped upgrades that change speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, locked/reward doors, rest/miniboss rooms, and other roadmap items above.
+A player can launch a run, explore generated connected rooms, discover a hidden cache branch, and find a Warden miniboss and safe FIELD CLINIC on larger floors. Runs use two weighted weapon slots, armor with durability separate from health, dodgeable ranged attacks, throwables, a rare merchant, destructible crates, room-clear rewards, and extraction or death. Both outcomes award persistent coins for capped upgrades to speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, real locked doors, and other roadmap items above.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignRoomRoles, roomEnemyCount, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {assignRoomRoles, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 
 const rooms=Array.from({length:10},(_,index)=>({index,name:`ROOM ${index}`}));
 
@@ -17,11 +17,10 @@ test('every generated floor gets a cache and room variety grows with floor size'
   const small=assignRoomRoles(rooms.slice(0,6),417).map(room=>room.role);
   const large=assignRoomRoles(rooms,417).map(room=>room.role);
   assert.equal(small.filter(role=>role==='cache').length,1);
-  assert.ok(small.includes('armory')||small.includes('clinic')||small.includes('hazard'));
+  assert.ok(small.some(role=>['armory','clinic','hazard','elite'].includes(role)));
   assert.ok(large.includes('cache'));
-  assert.ok(large.includes('armory'));
-  assert.ok(large.includes('clinic'));
-  assert.ok(large.includes('hazard'));
+  assert.equal(large.filter(role=>role==='elite').length,1);
+  assert.ok(large.some(role=>['armory','clinic','hazard'].includes(role)));
   assert.equal(large.filter(role=>role==='combat').length,4);
 });
 
@@ -51,6 +50,10 @@ test('room roles control safe rewards and combat pressure',()=>{
   assert.deepEqual(roomPickupKinds('cache'),['scrap','mod']);
   assert.deepEqual(roomPickupKinds('clinic'),['heal']);
   assert.equal(roomEnemyCount('armory'),3);
+  assert.equal(roomEnemyCount('elite'),2);
+  assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner']),['brute','guard']);
+  assert.deepEqual(roomEncounterTypes('combat',['chaser','gunner']),['chaser','gunner']);
+  assert.deepEqual(roomPickupKinds('elite'),['scrap','mod']);
   assert.deepEqual(roomPickupKinds('armory'),['gun']);
   assert.equal(roomEnemyCount('hazard',0),4);
   assert.equal(roomEnemyCount('hazard',.99),5);

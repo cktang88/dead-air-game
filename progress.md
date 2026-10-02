@@ -12,7 +12,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - A rare black-market room pauses the run and sells a gun, compatible attachment, armor, healing, or throwable refill for scrap. Weapon purchases replace the secondary and obey carry weight.
 - A weighted armor plate starts with two durability points, absorbs damage before health, and competes with heavier weapon choices; the entry workbench repairs it for scrap. Death and extraction award persistent coins; safehouse upgrades change movement speed, idle time, crate loot, or carrying capacity.
 - The 1.0-weight ammo harness is a utility alternative to armor; it cuts reload time 15% for both manual and automatic reloads on either carried gun. Workbench previews and the merchant expose the choice.
-- Four enemy types, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
+- Four base enemy types plus the Warden elite variant, destructible 60-HP crates, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
 ## Verification
@@ -200,4 +200,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Safe clinic, merchant, and empty rooms no longer grant the 20-scrap encounter-clear payout. The room still counts as visited/cleared; the bonus requires that the room actually spawned an enemy encounter.
 - Added a focused regression test that distinguishes an empty room from a defeated encounter; the room ownership check still credits enemies that leave their spawn room.
 - Verification: `npm test` passes 67 tests; JavaScript syntax and `git diff --check` pass. The web-game Playwright runner remains blocked by the local Chromium Mach-port permission error.
-- Next: playtest armor damage and repair in a full encounter, then build a meaningful rest/miniboss room role. Real locked doors remain a larger map/collision/pathfinding feature.
+- Next: playtest armor damage and repair in a full encounter; the Warden miniboss and FIELD CLINIC rest loop are covered below. Real locked doors remain a larger map/collision/pathfinding feature.
+
+## Warden miniboss room
+
+- Larger floors now guarantee one WARDEN room. It pairs a guard with a tougher, slower brute that has 200 health, 2-damage contact hits, a larger collider, and a distinct amber silhouette. The encounter uses existing enemy tactics and collision rules. Its room guarantees scrap and an attachment reward; clearing it still earns the normal fight reward.
+- Small floors keep their existing role count and may receive a regular utility room instead. FIELD CLINIC already acts as a safe rest stop with a guaranteed healing pickup.
+- Added room-role checks for the elite's roster, count, rewards, and large-floor guarantee. The production dungeon harness passes 64 deterministic seeds twice each and the fallback map; a live seeded run starts with no browser errors. `npm test` passes 67 tests; syntax and diff checks pass.
+- Next: give the Warden an in-game health bar and playtest its fight/reward balance; test armor breaking and repair during combat. Real locked doors still need explicit room edges plus collision and route state.

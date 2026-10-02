@@ -1,6 +1,6 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {TILE} from '../catalog.js';
-import {generateDungeon} from '../dungeon.js?secret-room-check';
+import {generateDungeon} from '../dungeon.js?elite-room-check';
 import {roomsAvoidableOnRoute, shortestFloorPath} from '../layout.js';
 import {findRoomCratePosition, findRoomPropPosition} from '../room-props.js';
 
@@ -42,14 +42,16 @@ try {
     if(cache.secret!==bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} secret status does not match the cache branch`);
     if(cache.secret&&(cache.name!=='UNMARKED ROOM'||cache.revealedName!=='SIDE CACHE'))throw new Error(`Seed ${seed} did not hide and name its secret cache consistently`);
     for(const [index,room] of dungeon.rooms.entries())if(Boolean(room.branch)!==bypassable.has(index))throw new Error(`Seed ${seed} has an incorrect branch marker`);
-    if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
+    if(dungeon.rooms.some(room=>!['entry','combat','cache','armory','clinic','hazard','elite','extraction'].includes(room.role)))throw new Error(`Seed ${seed} has an unknown room role`);
+    if(dungeon.rooms.length>=7&&dungeon.rooms.filter(room=>room.role==='elite').length!==1)throw new Error(`Seed ${seed} did not assign its large-floor Warden encounter`);
+    if(dungeon.rooms.some(room=>room.role==='elite'&&room.name!=='WARDEN'))throw new Error(`Seed ${seed} did not name the Warden encounter`);
     for(const room of dungeon.rooms){
       const reserved=[],placement={room,cells:dungeon.cells,doors:dungeon.doors,occupied:reserved,tileSize:TILE,random:()=>ROT.RNG.getUniform()};
       const crate=findRoomCratePosition(placement);
       if(!crate)throw new Error(`Seed ${seed} room ${room.index} has no safe guaranteed-crate tile`);
       if(dungeon.cells[Math.floor(crate.y/TILE)]?.[Math.floor(crate.x/TILE)]!==0)throw new Error(`Seed ${seed} placed a room crate off the floor`);
       reserved.push({...crate,radius:17});
-      const rewardCount=room.role==='cache'?2:['armory','clinic'].includes(room.role)?1:0;
+      const rewardCount=['cache','elite'].includes(room.role)?2:['armory','clinic'].includes(room.role)?1:0;
       for(let reward=0;reward<rewardCount;reward++){
         const point=findRoomPropPosition({...placement,random:()=>ROT.RNG.getUniform()});
         if(!point||dungeon.cells[Math.floor(point.y/TILE)]?.[Math.floor(point.x/TILE)]!==0)throw new Error(`Seed ${seed} has no valid ${room.role} reward position`);

@@ -1,4 +1,4 @@
-const UTILITY_ROLES=['armory','clinic','hazard'];
+const UTILITY_ROLES=['armory','clinic','hazard','elite'];
 
 function shuffled(values,seed){
   let value=seed>>>0;
@@ -17,7 +17,9 @@ export function assignRoomRoles(rooms,seed){
   const middle=shuffled(roles.map((_,index)=>index).slice(1,-1),seed);
   if(!middle.length)return roles;
   const utilityCount=Math.min(UTILITY_ROLES.length,Math.floor(Math.max(0,middle.length-2)/2));
-  const selectedRoles=['cache',...shuffled(UTILITY_ROLES,seed).slice(0,utilityCount)];
+  const availableRoles=shuffled(UTILITY_ROLES,seed);
+  const selectedUtilities=middle.length>=5?['elite',...availableRoles.filter(role=>role!=='elite').slice(0,utilityCount-1)]:availableRoles.slice(0,utilityCount);
+  const selectedRoles=['cache',...selectedUtilities];
   const branchRooms=middle.filter(index=>roles[index].branch),cacheIndex=branchRooms.length?shuffled(branchRooms,seed)[0]:middle[0];
   const roleRooms=[cacheIndex,...middle.filter(index=>index!==cacheIndex).slice(0,utilityCount)];
   selectedRoles.forEach((role,index)=>{roles[roleRooms[index]].role=role;});
@@ -29,6 +31,7 @@ export function roomEnemyCount(role,roll=0.5){
   if(role==='entry'||role==='clinic'||role==='merchant')return 0;
   if(role==='cache')return 2;
   if(role==='armory')return 3;
+  if(role==='elite')return 2;
   const boundedRoll=Math.max(0,Math.min(1-Number.EPSILON,roll));
   if(role==='hazard')return 4+Math.floor(boundedRoll*2);
   return 2+Math.floor(boundedRoll*3);
@@ -38,7 +41,12 @@ export function roomPickupKinds(role){
   if(role==='cache')return ['scrap','mod'];
   if(role==='clinic')return ['heal'];
   if(role==='armory')return ['gun'];
+  if(role==='elite')return ['scrap','mod'];
   return [];
+}
+
+export function roomEncounterTypes(role,ordinaryTypes){
+  return role==='elite'?['brute','guard']:ordinaryTypes;
 }
 
 export function roomHasLivingEnemies(roomIndex,enemies){

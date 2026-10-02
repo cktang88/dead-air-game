@@ -42,7 +42,7 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
     roleRooms[0].name = 'ENTRY';
     roleRooms[0].visited = true;
     for(const room of roleRooms.slice(1,-1))if(room.role!=='combat'){
-      room.name=room.secret?'UNMARKED ROOM':({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX'})[room.role];
+      room.name=room.secret?'UNMARKED ROOM':({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX',elite:'WARDEN'})[room.role];
       if(room.secret)room.revealedName='SIDE CACHE';
     }
     roleRooms.at(-1).name='EXTRACTION';
