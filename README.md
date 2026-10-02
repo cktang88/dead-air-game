@@ -28,4 +28,6 @@ Generated runs use ROT.js's Digger room and corridor generator. Walls are indest
 npm test
 ```
 
+Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement, and firing in the actual game frame.
+
 Room Sense is a permanent safehouse upgrade that reveals nearby room outlines and enemy blips through walls at increasing ranges. Progress is saved in this browser, with a reset option in the Safehouse upgrades panel. See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist; more gear types remain planned.

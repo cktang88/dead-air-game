@@ -36,8 +36,8 @@
           <p class="tempo-explainer">The speed number is world time. Stand still to slow it down. Firing keeps a blended pace even while you move.</p>
           <label class="seed-control" for="seed-input">RUN SEED <input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
           <p id="run-result" hidden></p>
-          <button id="start-button">ENTER THE SECTOR ↗</button>
-          <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">0</span> COINS</button>
+          <button id="start-button" disabled>LOADING THE SECTOR…</button>
+          <button id="meta-button" class="meta-button">SAFEHOUSE UPGRADES · <span id="meta-balance">…</span> COINS</button>
           <label class="audio-volume" for="master-volume"><span>MASTER VOLUME <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label>
           <label class="audio-volume visual-volume" for="shake-strength"><span>SCREEN SHAKE <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
           <label class="audio-volume visual-volume" for="flash-strength"><span>FLASH BRIGHTNESS <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
@@ -101,6 +101,15 @@
       </section>
       <footer><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span>ESC PAUSE &nbsp; · &nbsp; F FULLSCREEN</span></footer>
     </main>
-    <script type="module" src="./game.js"></script>
+    <script type="module">
+      import('./game.js').catch(error=>{
+        console.error(error);
+        const button=document.querySelector('#start-button');
+        button.disabled=true;
+        button.textContent='GAME COULD NOT LOAD';
+        document.querySelector('#overlay').classList.add('show');
+        document.querySelector('.title-card p').textContent='The game could not load. Start a local web server and check that the three game libraries are reachable.';
+      });
+    </script>
   </body>
 </html>

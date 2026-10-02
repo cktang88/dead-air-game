@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DEAD AIR browser smoke check</title>
+    <style>
+      body { margin: 0; background: #100e19; color: #eee8df; font: 12px/1.5 ui-monospace, monospace; }
+      #result { margin: 0; padding: 10px 16px; background: #191622; }
+      #result.pass { color: #70e5b2; }
+      #result.fail { color: #ed5a68; white-space: pre-wrap; }
+      iframe { display: block; width: 100vw; height: calc(100vh - 42px); border: 0; }
+    </style>
+  </head>
+  <body>
+    <pre id="result" aria-live="polite">Starting seeded gameplay check…</pre>
+    <iframe id="game" title="DEAD AIR gameplay"></iframe>
+    <script type="module" src="./game-smoke.js"></script>
+  </body>
+</html>
