@@ -268,6 +268,16 @@ test('weapon pickup cannot equip the same gun in both slots',()=>{
   assert.deepEqual(weaponReplacement(current,0,2,GUNS,BASE_CARRY_CAPACITY).weapons,[2,1]);
 });
 
+test('an unlocked third slot appends a distinct gun only when weapon and gear weight fit',()=>{
+  const current=[0,1],lightPistol=GUNS.findIndex(gun=>gun.id==='pistol_9'),third=weaponReplacement(current,2,lightPistol,GUNS,BASE_CARRY_CAPACITY+3,1.5);
+  assert.deepEqual(third.weapons,[0,1,lightPistol]);
+  assert.equal(third.canCarry,true);
+  assert.equal(third.totalWeight,8.1);
+  assert.equal(weaponReplacement(current,2,lightPistol,GUNS,8,1.5).canCarry,false);
+  assert.equal(weaponReplacement(current,2,0,GUNS,BASE_CARRY_CAPACITY+3).canCarry,false);
+  assert.deepEqual(current,[0,1]);
+});
+
 test('run coins reward death and extraction while upgrades persist as capped levels',()=>{
   const deathPayout=runCoinPayout({won:false,roomsCleared:2,kills:4});
   const winPayout=runCoinPayout({won:true,roomsCleared:2,kills:4});
@@ -279,6 +289,7 @@ test('run coins reward death and extraction while upgrades persist as capped lev
   progress=purchase.progress;
   assert.equal(progress.coins,44);
   assert.equal(progressionStats(progress).carryCapacity,8);
+  assert.equal(progressionStats(progress).maxWeaponSlots,2);
   const restored=parseProgress(JSON.stringify(progress));
   assert.deepEqual(restored,progress);
   assert.equal(parseProgress('{bad json').coins,0);
@@ -296,12 +307,13 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,crateDropChance:.35,scannerRange:0});
+  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,crateDropChance:.35,scannerRange:0});
+  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,scannerRange:0});
+  assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
 });
 
 test('Room Sense is a capped saved upgrade with increasing scan range',()=>{

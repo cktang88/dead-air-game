@@ -239,3 +239,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Unit tests cover storage, collisions, reserved keys, recovery from invalid saves, custom movement vectors, and diagonal normalization. `npm test` passes 83 tests; syntax and diff checks pass.
 - A live preview caught a missing key-guide element id that stopped boot; it is fixed. I rebound Interact to T, confirmed the key guide updated, restored E, and reloaded to confirm the default. The controls panel shows all 11 actions. The prescribed Playwright check still cannot launch Chromium on this host.
 - Next: playtest controls through a full run, then focus on healing/armor balance, combat tuning, and room-to-room pacing.
+
+## Optional third weapon slot
+
+- The final CARRY RIG tier now unlocks a third weapon slot while the starting loadout stays at two. A third gun can be added at the loadout station, from a pickup, or through a shop purchase; once the rig is full, the active slot is the default replacement choice at the station and shops.
+- All add, replace, pickup, and merchant paths use the shared weight-aware replacement rule, including equipped gear weight. The slot uses the remappable `3` weapon binding; older keybinding saves retain their other choices.
+- Added tests for the tier unlock, legacy binding saves (including a prior key mapped to `3`), and third-slot weight/duplicate behavior. `npm test` passes 85 tests; JavaScript syntax checks and `git diff --check` pass. The in-app browser loads the current build, shows the remappable tertiary key, and starts a run with the expected two-weapon default. A live unlock/pickup of slot 3 still needs a profile with enough permanent coins to buy the final Carry Rig tier.

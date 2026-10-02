@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DEFAULT_KEY_BINDINGS,isBindableKey,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,parseKeyBindings,rebindKey,saveKeyBindings,serializeKeyBindings,KEY_BINDINGS_KEY} from './keybindings.js';
 
 test('default bindings cover movement and all key-driven combat actions',()=>{
-  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',shellCycle:'c'});
+  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c'});
   assert.equal(normalizeKey('ArrowUp'),'arrowup');
   assert.equal(normalizeKey(' '),'space');
   assert.equal(keyLabel('arrowleft'),'←');
@@ -41,6 +41,17 @@ test('saved bindings round-trip and corrupt or conflicting saves fall back as a 
   const conflict={...DEFAULT_KEY_BINDINGS,moveUp:'d'};
   assert.deepEqual(parseKeyBindings(JSON.stringify({version:1,bindings:conflict})),{version:1,...DEFAULT_KEY_BINDINGS});
   assert.equal(KEY_BINDINGS_KEY,'dead-air.keys.v1');
+});
+
+test('legacy saves keep the new weapon slot binding at its default',()=>{
+  const legacy={...DEFAULT_KEY_BINDINGS};
+  delete legacy.weaponThree;
+  assert.deepEqual(parseKeyBindings(JSON.stringify({version:1,bindings:legacy})),{version:1,...DEFAULT_KEY_BINDINGS});
+  legacy.shellCycle='3';
+  const migrated=parseKeyBindings(JSON.stringify({version:1,bindings:legacy}));
+  assert.equal(migrated.shellCycle,'3');
+  assert.notEqual(migrated.weaponThree,'3');
+  assert.equal(new Set(Object.values(migrated).filter(value=>typeof value==='string')).size,Object.keys(DEFAULT_KEY_BINDINGS).length);
 });
 
 test('key bindings persist through the storage boundary and tolerate denied reads',()=>{

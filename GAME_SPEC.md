@@ -290,7 +290,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [ ] Tune healing, armor repair cost, and durability through longer runs.
 - [x] Add a confirmation preview when replacing a weapon or gear item.
 - [x] Implement permanent carry capacity upgrades; playtest different weapon/armor choices.
-- [ ] Add a third slot only as a later upgrade; keep it optional and weight-limited.
+- [x] Add an optional third weapon slot at the final Carry Rig tier; keep every pickup, shop purchase, and swap weight-limited.
 - [x] Make weapon pickups show the exact gun and weight, swap either slot when capacity allows, or decline while leaving the pickup in place.
 
 ### Combat and run services

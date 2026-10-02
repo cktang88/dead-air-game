@@ -1,7 +1,7 @@
 export const KEY_BINDINGS_KEY='dead-air.keys.v1';
 export const DEFAULT_KEY_BINDINGS=Object.freeze({
   moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',
-  throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',shellCycle:'c',
+  throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c',
 });
 export const KEY_BINDING_ACTIONS=Object.freeze([
   {id:'moveUp',label:'Move up'}, {id:'moveDown',label:'Move down'},
@@ -9,6 +9,7 @@ export const KEY_BINDING_ACTIONS=Object.freeze([
   {id:'interact',label:'Interact'}, {id:'reload',label:'Reload'},
   {id:'throwableCycle',label:'Cycle throwable'}, {id:'throwableUse',label:'Throw throwable'},
   {id:'weaponOne',label:'Primary weapon'}, {id:'weaponTwo',label:'Secondary weapon'},
+  {id:'weaponThree',label:'Tertiary weapon'},
   {id:'shellCycle',label:'Shotgun shell'},
 ]);
 const VERSION=1;
@@ -48,11 +49,19 @@ export function parseKeyBindings(serialized){
   try{
     const saved=JSON.parse(serialized),values=saved?.bindings;
     if(saved?.version!==VERSION||!values||typeof values!=='object')return fallback();
-    let bindings={...DEFAULT_KEY_BINDINGS};
+    const bindings={};
     for(const action of KEY_BINDING_ACTIONS){
-      const result=rebindKey(bindings,action.id,values[action.id]);
-      if(!result.ok)return fallback();
-      bindings=result.bindings;
+      if(!Object.hasOwn(values,action.id))continue;
+      const key=normalizeKey(values[action.id]);
+      if(!isBindableKey(key)||Object.values(bindings).includes(key))return fallback();
+      bindings[action.id]=key;
+    }
+    for(const action of KEY_BINDING_ACTIONS){
+      if(Object.hasOwn(bindings,action.id))continue;
+      const preferred=DEFAULT_KEY_BINDINGS[action.id];
+      const replacement=Object.values(bindings).includes(preferred)?'abcdefghijklmnopqrstuvwxyz0123456789'.split('').find(key=>!Object.values(bindings).includes(key)):preferred;
+      if(!replacement)return fallback();
+      bindings[action.id]=replacement;
     }
     return {version:VERSION,...bindings};
   }catch{return fallback();}
