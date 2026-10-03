@@ -3,10 +3,13 @@ import {generateDungeon} from '../dungeon.js?v=room-names-3';
 import {shortestFloorPath} from '../layout.js';
 import {hasIncomingProjectile} from '../enemy-tactics.js';
 import {parseRunSeed} from '../seeds.js';
+import {progressionStats} from '../progression.js';
+import {readSavedProgress} from '../progress-storage.js';
 
 const result = document.querySelector('#result');
 const frame = document.querySelector('#game');
 const seed = parseRunSeed(new URLSearchParams(location.search).get('seed')) ?? 213838321;
+const idleScale=progressionStats(readSavedProgress(localStorage)).idleScale;
 let topology;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const frameDoc = () => frame.contentDocument;
@@ -416,7 +419,7 @@ async function run() {
     if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
       report.error='The probe could not open an affordable scrap gate';
     }
-    if(!report.error&&report.rangedDodge&&(!report.rangedDodge.telegraphSeen||report.rangedDodge.planningTimeScale!=='0.18'||
+    if(!report.error&&report.rangedDodge&&(!report.rangedDodge.telegraphSeen||report.rangedDodge.planningTimeScale!==idleScale.toFixed(2)||
       report.rangedDodge.movementTimeScale!=='1.00'||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
       report.rangedDodge.healthEvents?.length>0||report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||
       report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
