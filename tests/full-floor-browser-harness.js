@@ -69,14 +69,14 @@ function releaseMovement() {
 
 function press(name) { key(name); key(name, 'keyup'); }
 
-function moveTo(target) {
+function moveTo(target, tolerance = 16) {
   let stagnant = 0, previous = Infinity;
   for (let step = 0; step < 1200; step++) {
     const state = serviceDialogs();
     if (state.mode !== 'play' || !state.player) return false;
     const dx = target.x - state.player.x, dy = target.y - state.player.y;
     const distance = Math.hypot(dx, dy);
-    if (distance < 16) { releaseMovement(); return true; }
+    if (distance < tolerance) { releaseMovement(); return true; }
     if (distance >= previous - 0.2) stagnant++; else stagnant = 0;
     if (stagnant > 40) { releaseMovement(); return false; }
     previous = distance;
@@ -88,7 +88,7 @@ function moveTo(target) {
   return false;
 }
 
-function movePath(path) {
+function movePath(path, finalTolerance = 16) {
   if(!path.length)return false;
   const waypoints=[];
   let direction=null;
@@ -98,8 +98,9 @@ function movePath(path) {
     direction=nextDirection;
   }
   waypoints.push(path.at(-1));
-  for (const cell of waypoints) {
-    if (!moveTo({x: (cell.x + 0.5) * 32, y: (cell.y + 0.5) * 32})) return false;
+  for (const [index,cell] of waypoints.entries()) {
+    const tolerance=index===waypoints.length-1?finalTolerance:16;
+    if (!moveTo({x: (cell.x + 0.5) * 32, y: (cell.y + 0.5) * 32},tolerance)) return false;
   }
   releaseMovement();
   return true;
@@ -166,7 +167,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-5';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-9';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -260,7 +261,7 @@ async function run() {
       if(report.rooms.length===1){
         for(const gate of gameState().lockedDoors.filter(item=>!item.opened&&gameState().scrap>=item.cost)){
           const gatePath=gateApproachPath(gate);
-          if(!gatePath.length||!movePath(gatePath))continue;
+        if(!gatePath.length||!movePath(gatePath,2))continue;
           press('e');advance(2);state=serviceDialogs();
           const opened=gameState().lockedDoors.find(item=>item.x===gate.x&&item.y===gate.y)?.opened;
           if(opened){report.events.push({event:'reward-gate-opened',room:gate.room,cost:gate.cost});break;}
@@ -271,6 +272,10 @@ async function run() {
     report.final = sample(gameState());
     if (report.rooms.length < 2 || !report.rooms[0].cleared || !report.rooms.slice(1).some(room=>room.fightSteps>0)) {
       report.error = 'The probe did not clear its first encounter and fight the later room';
+    }
+    const affordableGate=report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
+    if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
+      report.error='The probe could not open an affordable scrap gate';
     }
   } catch (error) {
     report.error = String(error?.stack || error);
