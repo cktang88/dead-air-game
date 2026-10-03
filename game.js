@@ -769,6 +769,7 @@ function renderGameToText(){
     merchant:!!room?.merchant,merchantOpen:state.merchantOpen,cacheOpen:state.cacheOpen,
     weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,
     enemyCount:enemies.length,enemies,
+    bullets:state.bullets.map(bullet=>({owner:bullet.owner,x:Math.round(bullet.x),y:Math.round(bullet.y),vx:Math.round(bullet.vx),vy:Math.round(bullet.vy)})),
     crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp,radius:17})),
     cover:state.cover.filter(cover=>!cover.crate).map(({x,y,radius,kind})=>({x:Math.round(x),y:Math.round(y),radius,kind})),
     pickupCount:pickups.length,pickups,

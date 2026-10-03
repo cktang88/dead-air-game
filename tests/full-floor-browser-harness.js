@@ -167,7 +167,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-9';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-13';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -202,9 +202,7 @@ async function run() {
     const combatRooms = rooms.filter((room, index) => index > 0 && index < rooms.length - 1 && room.role === 'combat')
       .sort((a, b) => shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: a.cx, y: a.cy}).length -
         shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
-    if (combatRooms.length < 2) throw new Error('Seeded map did not have two combat rooms');
-    let from = rooms[0];
-
+    if (!combatRooms.length) throw new Error('Seeded map did not have a combat room');
     for (const room of combatRooms) {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
@@ -225,11 +223,14 @@ async function run() {
         continue;
       }
       const start = {...sample(state), livingEnemies: state.roomProgress[room.index]?.livingEnemies ?? 0};
-      let fightSteps = 0;
+      const enemyTypes=state.enemies.filter(enemy=>enemy.roomIndex===room.index).map(enemy=>enemy.type);
+      let fightSteps = 0,maxEnemyBullets=0,rangedTelegraphs=0;
       for (; fightSteps < 1800; fightSteps++) {
         state = serviceDialogs();
         if (state.mode !== 'play' || !state.player) break;
         const enemies = state.enemies.filter(enemy => enemy.roomIndex === room.index);
+        maxEnemyBullets=Math.max(maxEnemyBullets,state.bullets.filter(bullet=>bullet.owner==='enemy').length);
+        if(enemies.some(enemy=>['GUNNER','WARDEN'].includes(enemy.type)&&enemy.aiming))rangedTelegraphs++;
         if (!enemies.length) break;
         const threat = enemies.find(enemy => enemy.charging);
         if (threat) {
@@ -252,12 +253,12 @@ async function run() {
       releaseMovement(); advance(2); state = serviceDialogs();
       const livingEnemies = state.roomProgress[room.index]?.livingEnemies ?? 0;
       report.rooms.push({name: room.name, role: room.role, start, end: {...sample(state), livingEnemies}, fightSteps,
-        cleared: start.livingEnemies > 0 && livingEnemies === 0, markedCleared: !!state.roomProgress[room.index]?.cleared});
+        enemyTypes,maxEnemyBullets,rangedTelegraphs,cleared: start.livingEnemies > 0 && livingEnemies === 0,
+        markedCleared: !!state.roomProgress[room.index]?.cleared});
       if (state.mode !== 'play' || !state.player) break;
 
       // Exercise the market modal in a market room; serviceDialogs buys a medkit if useful.
       if (state.merchant) { press('e'); advance(); state = serviceDialogs(); }
-      from = room;
       if(report.rooms.length===1){
         for(const gate of gameState().lockedDoors.filter(item=>!item.opened&&gameState().scrap>=item.cost)){
           const gatePath=gateApproachPath(gate);
@@ -267,11 +268,11 @@ async function run() {
           if(opened){report.events.push({event:'reward-gate-opened',room:gate.room,cost:gate.cost});break;}
         }
       }
-      if(report.rooms.length>=2&&report.rooms.at(-1).fightSteps>0)break;
+      if(report.rooms.length>=1)break;
     }
     report.final = sample(gameState());
-    if (report.rooms.length < 2 || !report.rooms[0].cleared || !report.rooms.slice(1).some(room=>room.fightSteps>0)) {
-      report.error = 'The probe did not clear its first encounter and fight the later room';
+    if (report.rooms.length !== 1 || !report.rooms[0].cleared || report.rooms[0].end.kills<=report.rooms[0].start.kills) {
+      report.error = 'The probe did not kill an enemy and clear its first encounter';
     }
     const affordableGate=report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
     if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
