@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {isAudioMuted, loadAudioSettings, playCrateBreak, playEnemyTell, playExtraction, playGunshot, playPickup, playReload, playRoomClear, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js?v=burst-1';
-import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js?v=aim-view-2';
+import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js?v=aim-view-2';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -15,6 +15,7 @@ import {hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEnc
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
+import {resolveProjectileImpacts} from './projectile-impacts.js';
 import {lootTier,lootTierForRoll} from './loot.js';
 import {cacheRewardAvailable} from './cache-rewards.js';
 import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
@@ -716,26 +717,23 @@ function updateBullets(dt){
     if(b.owner==='enemy'&&state.player){const t=segmentCircleHitTime(previous,b,state.player,10);if(t!==null)impacts.push({t,kind:'player',target:state.player});}
     const wallState=segmentWallRuns(previous,b,state.solidMap,TILE,b.insideWall);b.insideWall=wallState.endsInsideWall;
     for(const wall of wallState.runs)impacts.push({...wall,kind:'wall'});
-    impacts.sort((a,b)=>a.t-b.t);
-    let removed=false;
-    for(const impact of impacts){
+    const resolution=resolveProjectileImpacts(impacts,b.penetration);
+    b.penetration=resolution.penetration;
+    let removed=resolution.stopped;
+    for(const impact of resolution.impacts){
       if(impact.kind==='enemy'){
         const enemy=impact.target;b.hitEnemies.add(enemy);enemy.hp-=b.damage;enemy.stun=.1;const len=Math.hypot(b.vx,b.vy)||1;enemy.knock.x=b.vx/len*(enemy.type==='brute'?7:13);enemy.knock.y=b.vy/len*(enemy.type==='brute'?7:13);burst(enemy.x,enemy.y,0xffd3aa,6,.72);state.hitstop=.018;
         if(enemy.hp<=0)killEnemy(enemy,b);else{enemy.mesh.userData.body.material.emissiveIntensity=.5;setTimeout(()=>{if(enemy.mesh?.userData.body)enemy.mesh.userData.body.material.emissiveIntensity=.05;},80);}
       }else if(impact.kind==='crate'){
         const crate=impact.target;b.hitCrates.add(crate);crate.hp=damageDurability(crate.hp,b.damage);updateCrateDamageVisual(crate);burst(crate.x,crate.y,0xb98258,4,.65);if(crate.hp===0)breakCrate(crate);
       }else if(impact.kind==='player'){
-        hitPlayer(b.damage,b.x,b.y);removed=true;
+        hitPlayer(b.damage,b.x,b.y);
       }else if(impact.kind==='cover'){
-        burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);removed=true;
-      }else{
-        // One connected run of solid map tiles counts as a single wall.
+        burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);
       }
-      if(removed)break;
-      const next=consumePenetration(b.penetration,impact.kind==='enemy'?'enemies':impact.kind==='crate'?'crates':impact.kind==='wall'?'walls':'cover');
-      if(!next){burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);removed=true;break;}
-      b.penetration=next;
     }
+    if(removed&&resolution.impacts.at(-1)?.kind!=='cover'&&resolution.impacts.at(-1)?.kind!=='player')
+      burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);
     if(removed){removeBullet(i);continue;}
   }
 }

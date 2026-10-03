@@ -222,6 +222,8 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ### Unit coverage
 
+- Projectile impacts resolve in swept-contact order; test enemy, crate, wall, cover, and player stops against the same function used by the live collision loop.
+
 - Tempo is slow while idle, between slow and normal while firing (including when moving), 1.00× while moving without firing, and zero in menus.
 - Every attachment changes only the intended weapon values.
 - Carry weight sums correctly; an overweight swap is rejected; a valid replacement preserves the two-slot invariant.
@@ -249,6 +251,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Browser playable with Three.js rendering, Rapier 2D physics, and ROT.js room generation.
 - [x] Idle/action tempo shift, aim, fire, reload, pause, and restart.
 - [x] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into combat, loadout, merchant, and weight-checked pickup choices.
+- [x] Resolve swept bullet contacts in travel order; ordinary rounds stop after their first hit, precision rounds use separate enemy/crate budgets, anti-materiel rounds can pass one wall, and cover always stops a round.
 - [x] Apply compatible attachments per weapon; restrict workbench options and retain attachments when switching guns.
 - [x] Primary and secondary slots; `1` / `2` switching; weapon weight and capacity at the workbench.
 - [x] Four enemy roles, knockback, hit stop, screen shake, particles, and short corpse slide.

@@ -367,3 +367,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Added scheduler tests for interval timing, ammo limits, partial bursts, switch cancellation, and the distinct shotgun profile. Expanded browser smoke to equip KITE BURST, fire one click, release, verify the two queued shots spend the remaining rounds, and ensure reload cannot interrupt the sequence.
 - Verification: `npm test` passes all 111 tests; JavaScript syntax and `git diff --check` pass. In-app browser smoke on seed 213838321 passes the complete run of existing checks plus KITE BURST ammo 24 → 21 after one released trigger. The smoke also confirms the active burst keeps firing at 0.42×. The browser reported one unattributed `MutationObserver.observe` error; no matching observer code exists in this repository, so the console is not claimed clean.
 - An initial browser attempt exposed that the iframe served a cached `catalog.js`; adding a versioned import makes the updated burst profile load reliably. The final smoke passed after cache-busting both the game and catalog modules.
+
+## Ordered bullet impacts
+
+- Extracted the live bullet-impact ordering and penetration-budget decision into `projectile-impacts.js`; `updateBullets()` now applies damage/effects only to the ordered impacts returned by that same policy. This keeps swept hit detection and Three.js/Rapier effects in the browser adapter.
+- Added tests for a sniper's ordered enemy hits, independent enemy/crate budgets, the anti-materiel wall allowance, ordinary cover/player stops, and candidate ordering without mutation. This closes the prior gap where tests covered penetration counters but not which in-flight contacts the runtime accepts.
+- Verification: `npm test` passes all 115 tests; game/module syntax checks and `git diff --check` pass. In-app browser run loaded the cache-busted module, began a run, and fired a shot (ammo 18 → 17) without browser errors.
