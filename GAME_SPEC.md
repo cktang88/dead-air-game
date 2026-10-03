@@ -316,6 +316,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.
 - [x] Add remappable keyboard controls with WASD and fallback arrow movement, while keeping Escape, Tab, F, and R fixed for pause, loadout, fullscreen, and restart.
+- [x] Keep keyboard focus within loadout, safehouse, weapon-pickup, cache, and merchant dialogs; unit-test the shared wrap and redirect behavior.
 - [ ] Profile a full run for sustained performance.
 - [x] Cap active particles at 240, dispose evicted/expired effects, and free the old Rapier world on run reset.
 - [ ] Run an architecture review after the next major milestone; remove abstractions that do not own real rules.

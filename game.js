@@ -19,6 +19,7 @@ import {resolveProjectileImpacts} from './projectile-impacts.js';
 import {lootTier,lootTierForRoll} from './loot.js';
 import {cacheRewardAvailable} from './cache-rewards.js';
 import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
+import {trapDialogTab} from './dialog-focus.js';
 import {advanceWeaponBurst,beginWeaponBurst} from './weapon-burst.js';
 import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,resolveMovementKey,saveKeyBindings} from './keybindings.js';
 
@@ -616,14 +617,6 @@ function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projec
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;effect.mesh.material.opacity=(effect.id==='smoke'?.27:.17)*Math.min(1,effect.remaining/.45);if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);burst(enemy.x,enemy.y,0xff6a35,3,.6);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){disposeObject(effect.mesh);state.effects.splice(i,1);}}}
 function updateThrowableHud(){const item=selectedThrowable();$('throwable-readout').textContent=`${keyLabel(binding('throwableCycle'))} ${item.name.toUpperCase()} · ${state.throwables[item.id]||0}`;$('throwable-hint').textContent=`${keyLabel(binding('throwableCycle'))} SELECT · ${keyLabel(binding('throwableUse'))} THROW`;}
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else state.renderer.domElement.focus();}
-function trapDialogTab(event,panel){
-  const focusable=[...panel.querySelectorAll('button:not(:disabled)')].filter(button=>!button.closest('[hidden]'));
-  const first=focusable[0],last=focusable.at(-1),focused=document.activeElement;
-  if(!first)return;
-  if(!panel.contains(focused)){event.preventDefault();first.focus();}
-  else if(event.shiftKey&&focused===first){event.preventDefault();last.focus();}
-  else if(!event.shiftKey&&focused===last){event.preventDefault();first.focus();}
-}
 function getTimeScale(){return timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),firing:input.firing||!!state.weaponBurst,now:performance.now()/1000,lastAction:state.lastAction,lastActionKind:state.lastActionKind,idleScale:progressionStats(state.progress).idleScale});}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
@@ -834,13 +827,13 @@ function setupControls(){
     }
     if(!$('meta-panel').hidden){
       if(key==='escape'){$('meta-panel').hidden=true;$('meta-button').focus();}
-      else if(key==='tab')trapDialogTab(e,$('meta-panel'));
+      else if(key==='tab')trapDialogTab(e,$('meta-panel'),document.activeElement);
       return;
     }
-    if(state.loadoutOpen&&key==='tab'){trapDialogTab(e,$('loadout'));return;}
-    if(state.pendingGunPickup){if(key===binding('weaponOne'))acceptWeaponPickup(0);else if(key===binding('weaponTwo'))acceptWeaponPickup(1);else if(key===binding('weaponThree'))acceptWeaponPickup(2);else if(key==='escape')closeWeaponPickup(true);return;}
-    if(state.cacheOpen){if(key==='escape')closeCache();return;}
-    if(state.merchantOpen){if(key==='escape')closeMerchant();return;}
+    if(state.loadoutOpen&&key==='tab'){trapDialogTab(e,$('loadout'),document.activeElement);return;}
+    if(state.pendingGunPickup){if(key==='tab')trapDialogTab(e,$('weapon-pickup'),document.activeElement);else if(key===binding('weaponOne'))acceptWeaponPickup(0);else if(key===binding('weaponTwo'))acceptWeaponPickup(1);else if(key===binding('weaponThree'))acceptWeaponPickup(2);else if(key==='escape')closeWeaponPickup(true);return;}
+    if(state.cacheOpen){if(key==='tab')trapDialogTab(e,$('cache-panel'),document.activeElement);else if(key==='escape')closeCache();return;}
+    if(state.merchantOpen){if(key==='tab')trapDialogTab(e,$('merchant-panel'),document.activeElement);else if(key==='escape')closeMerchant();return;}
     if(key==='tab'){e.preventDefault();if(!state.merchantOpen&&!state.cacheOpen)toggleLoadout();markAction();}
     if(key===binding('interact')){input.interact=true;markAction();}
     if(key===binding('throwableCycle')&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}

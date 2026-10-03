@@ -1,5 +1,6 @@
 import {DEFAULT_KEY_BINDINGS,loadKeyBindings} from '../keybindings.js';
-import {emptyProgress,SAVE_KEY} from '../progression.js';
+import {emptyProgress,progressionStats,SAVE_KEY} from '../progression.js';
+import {readSavedProgress} from '../progress-storage.js';
 
 const report=document.querySelector('#result');
 const frame=document.querySelector('#game');
@@ -48,6 +49,7 @@ async function run(){
   doc.querySelector('#start-button').click();
   const initial=stateOf(win);
   if(initial.mode!=='play'||initial.seed!==seed||!initial.player)throw new Error('Seeded run did not start with a player');
+  const expectedFireScale=Math.sqrt(progressionStats(readSavedProgress(win.localStorage)).idleScale).toFixed(2);
   if(initial.enemyCount!==initial.enemies.length||initial.pickupCount!==initial.pickups.length){
     throw new Error('Gameplay snapshot omitted enemies or pickups from its reported counts');
   }
@@ -168,7 +170,7 @@ async function run(){
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
   burstState=stateOf(win);
-  if(burstState.player.ammo!==burstAmmo-1||burstState.burstShotsRemaining!==2||burstState.timeScale!=='0.42'){
+  if(burstState.player.ammo!==burstAmmo-1||burstState.burstShotsRemaining!==2||burstState.timeScale!==expectedFireScale){
     throw new Error(`A single KITE BURST click did not start a two-round committed burst at blended tempo: before ${JSON.stringify({burstAmmo,weapon:burstState.player.weapon,ammo:burstState.player.ammo,queued:burstState.burstShotsRemaining,timeScale:burstState.timeScale,mode:burstState.mode,paused:burstState.paused})}`);
   }
   press(win,bindings.reload,'keydown');press(win,bindings.reload,'keyup');

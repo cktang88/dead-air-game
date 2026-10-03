@@ -373,3 +373,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Extracted the live bullet-impact ordering and penetration-budget decision into `projectile-impacts.js`; `updateBullets()` now applies damage/effects only to the ordered impacts returned by that same policy. This keeps swept hit detection and Three.js/Rapier effects in the browser adapter.
 - Added tests for a sniper's ordered enemy hits, independent enemy/crate budgets, the anti-materiel wall allowance, ordinary cover/player stops, and candidate ordering without mutation. This closes the prior gap where tests covered penetration counters but not which in-flight contacts the runtime accepts.
 - Verification: `npm test` passes all 115 tests; game/module syntax checks and `git diff --check` pass. In-app browser run loaded the cache-busted module, began a run, and fired a shot (ammo 18 → 17) without browser errors.
+
+## Modal keyboard focus
+
+- Applied the shared Tab-wrap rule to weapon pickup, room cache, and merchant dialogs; existing safehouse and loadout traps now call the same tested helper.
+- The seeded browser smoke had assumed every profile fired at exactly 0.42×. It now derives the expected blended tempo from the saved idle-time upgrade, so the check also works with a progressed profile.
+- Verification: `npm test` passes all 119 tests; syntax checks and `git diff --check` pass. The in-app browser smoke passes on seed 213838321, including movement, crate destruction, reload, KITE BURST, throwables, loadout, and persistent upgrades. Browser tooling reported an unattributed `MutationObserver.observe` error from the harness environment; the smoke itself passed.
