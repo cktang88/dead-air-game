@@ -819,10 +819,7 @@ function setupControls(){
     if(e.repeat)return;
     if(state.pendingLoadoutChange){
       if(key==='escape')closeLoadoutPreview();
-      else if(key==='tab'){
-        e.preventDefault();const first=$('loadout-cancel'),last=$('loadout-accept'),focused=document.activeElement;
-        (e.shiftKey?(focused===first?last:first):(focused===last?first:last)).focus();
-      }
+      else if(key==='tab')trapDialogTab(e,$('loadout-confirm'),document.activeElement);
       return;
     }
     if(!$('meta-panel').hidden){

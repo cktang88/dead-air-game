@@ -151,6 +151,12 @@ async function run(){
     if(!kiteButton||kiteButton.disabled)throw new Error('KITE BURST was not available within the starting carry limit');
     kiteButton.click();
     if(doc.querySelector('#loadout-confirm').hidden)throw new Error('KITE BURST replacement did not show its confirmation preview');
+    doc.querySelector('#loadout-accept').focus();
+    const confirmTab=new win.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});win.dispatchEvent(confirmTab);
+    if(!confirmTab.defaultPrevented||doc.activeElement!==doc.querySelector('#loadout-cancel'))throw new Error('Tab escaped the nested loadout confirmation dialog');
+    doc.querySelector('#loadout-cancel').focus();
+    const confirmShiftTab=new win.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true});win.dispatchEvent(confirmShiftTab);
+    if(!confirmShiftTab.defaultPrevented||doc.activeElement!==doc.querySelector('#loadout-accept'))throw new Error('Shift+Tab escaped the nested loadout confirmation dialog');
     doc.querySelector('#loadout-accept').click();
   }
   let burstState=stateOf(win);

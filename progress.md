@@ -376,6 +376,6 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 ## Modal keyboard focus
 
-- Applied the shared Tab-wrap rule to weapon pickup, room cache, and merchant dialogs; existing safehouse and loadout traps now call the same tested helper.
+- Applied the shared Tab-wrap rule to weapon pickup, room cache, merchant, and nested loadout-confirmation dialogs; safehouse and loadout use the same helper.
 - The seeded browser smoke had assumed every profile fired at exactly 0.42×. It now derives the expected blended tempo from the saved idle-time upgrade, so the check also works with a progressed profile.
-- Verification: `npm test` passes all 119 tests; syntax checks and `git diff --check` pass. The in-app browser smoke passes on seed 213838321, including movement, crate destruction, reload, KITE BURST, throwables, loadout, and persistent upgrades. Browser tooling reported an unattributed `MutationObserver.observe` error from the harness environment; the smoke itself passed.
+- Verification: `npm test` passes all 119 tests; syntax checks and `git diff --check` pass. The in-app browser smoke passes on seed 213838321, including movement, crate destruction, reload, KITE BURST, throwables, loadout, nested-confirmation Tab/Shift+Tab wrap, and persistent upgrades. Browser tooling reported an unattributed `MutationObserver.observe` error from the harness environment; the smoke itself passed.

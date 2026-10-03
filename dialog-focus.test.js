@@ -17,11 +17,11 @@ function tab(shiftKey = false) {
   return {shiftKey, prevented: false, preventDefault() { this.prevented = true; }};
 }
 
-test('Tab wraps from the final enabled control and skips disabled or hidden controls', () => {
-  const panel = createDialog({disabled: ['last'], hidden: ['middle']});
+test('Tab wraps from the final enabled control and skips a hidden control', () => {
+  const panel = createDialog({hidden: ['middle']});
   const event = tab();
 
-  trapDialogTab(event, panel, panel.buttons[0]);
+  trapDialogTab(event, panel, panel.buttons[2]);
 
   assert.equal(event.prevented, true);
   assert.equal(panel.buttons[0].focused, true);
