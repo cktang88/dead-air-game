@@ -174,18 +174,17 @@ async function probeRangedDodge(roomIndex){
   for(let frameIndex=0;frameIndex<1200;frameIndex++){
     let state=serviceDialogs();
     const enemies=state.enemies.filter(enemy=>enemy.roomIndex===roomIndex);
-    const bulletCount=state.bullets.filter(bullet=>bullet.owner==='enemy').length;
-    if(bulletCount){result.enemyBulletSeen=true;break;}
     const ranged=enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type));
     if(!ranged)return result;
     if(ranged.aiming){
       result.telegraphSeen=true;result.planningTimeScale=state.timeScale;
+      result.shooterId=ranged.id;
       const target={x:state.player.x,y:state.player.y};
       let incoming=null;
       for(let step=0;step<360;step++){
         advance();
         const waiting=gameState();
-        incoming=waiting.bullets.find(bullet=>bullet.owner==='enemy')||null;
+        incoming=waiting.bullets.find(bullet=>bullet.owner==='enemy'&&bullet.enemyId===ranged.id)||null;
         if(incoming){state=waiting;break;}
       }
       if(!incoming)return result;
@@ -242,7 +241,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-20';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-21';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);

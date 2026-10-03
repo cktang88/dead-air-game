@@ -436,7 +436,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   const body=makeBody({x:x+dx*13,y:y+dy*13},2.3,false,true);body.enableCcd(true);body.setLinearDamping(0);body.setGravityScale(0,true);body.setLinvel({x:dx*speed,y:dy*speed},true);
   const color=owner==='player'?gun.color:0xff6a64;const mesh=makeBulletMesh(color);mesh.position.set(x+dx*13,.85,y+dy*13);
   const mods=owner==='player'?attachmentsFor(gun):new Set();
-  const bullet={owner,body,mesh,x:x+dx*13,y:y+dy*13,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'?weaponPenetration(gun,mods):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false};
+  const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body,mesh,x:x+dx*13,y:y+dy*13,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'?weaponPenetration(gun,mods):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false};
   state.bullets.push(bullet);state.bulletMeshes.set(bullet,mesh);
   if(owner==='player'){state.shake=Math.max(state.shake,gun.id==='shotgun'?3.6:2.2);state.hitstop=.025;burst(x+dx*15,y+dy*15,0xffd08a,4);}
 }
@@ -451,7 +451,7 @@ function playerShoot(){
   hud();markAction(hasMovementInput()?'move':'fire');
 }
 function enemyShoot(enemy,dx,dy){
-  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1);
+  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1,{enemyId:enemy.id});
 }
 function burst(x,y,color,count=10,power=1){
   const budget=particleBurstBudget(state.particles.length,count);
@@ -756,7 +756,7 @@ function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);c
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
   const gear=GEAR.find(item=>item.id===state.gear),room=state.rooms[state.currentRoom];
-  const enemies=state.enemies.filter(enemy=>enemy.alive).map(enemy=>({type:enemy.def.name,roomIndex:enemy.roomIndex,x:Math.round(enemy.x),y:Math.round(enemy.y),health:Math.round(enemy.hp),aiming:enemy.aimTimer>0||enemy.meleeWindup>0,charging:enemy.meleeWindup>0,telegraphVisible:!!enemy.meleeTelegraph?.visible,reloading:enemy.reloadTimer>0,tactic:enemy.intent}));
+  const enemies=state.enemies.filter(enemy=>enemy.alive).map(enemy=>({id:enemy.id,type:enemy.def.name,roomIndex:enemy.roomIndex,x:Math.round(enemy.x),y:Math.round(enemy.y),health:Math.round(enemy.hp),aiming:enemy.aimTimer>0||enemy.meleeWindup>0,charging:enemy.meleeWindup>0,telegraphVisible:!!enemy.meleeTelegraph?.visible,reloading:enemy.reloadTimer>0,tactic:enemy.intent}));
   const roomEnemyCounts=Array(state.rooms.length).fill(0);
   for(const enemy of enemies)if(Number.isInteger(enemy.roomIndex)&&roomEnemyCounts[enemy.roomIndex]!==undefined)roomEnemyCounts[enemy.roomIndex]++;
   const pickups=state.pickups.filter(pickup=>pickup.available).map(pickup=>({type:pickup.kind,x:Math.round(pickup.x),y:Math.round(pickup.y),gun:pickup.kind==='gun'?GUNS[pickup.gunIndex].name:undefined,rarity:pickup.rarity||undefined}));
@@ -770,7 +770,7 @@ function renderGameToText(){
     merchant:!!room?.merchant,merchantOpen:state.merchantOpen,cacheOpen:state.cacheOpen,
     weaponPickup:state.pendingGunPickup?{gun:GUNS[state.pendingGunPickup.gunIndex].name,availableSlots:weaponTargets().map(slot=>weaponReplacement(state.weaponSlots,slot,state.pendingGunPickup.gunIndex,GUNS,state.carryCapacity,gear?.weight||0).canCarry)}:null,
     enemyCount:enemies.length,enemies,
-    bullets:state.bullets.map(bullet=>({owner:bullet.owner,x:Math.round(bullet.x),y:Math.round(bullet.y),vx:Math.round(bullet.vx),vy:Math.round(bullet.vy)})),
+    bullets:state.bullets.map(bullet=>({owner:bullet.owner,enemyId:bullet.enemyId,x:bullet.x,y:bullet.y,vx:bullet.vx,vy:bullet.vy})),
     crates:state.crates.map(crate=>({x:Math.round(crate.x),y:Math.round(crate.y),health:crate.hp,radius:17})),
     cover:state.cover.filter(cover=>!cover.crate).map(({x,y,radius,kind})=>({x:Math.round(x),y:Math.round(y),radius,kind})),
     pickupCount:pickups.length,pickups,
