@@ -299,7 +299,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Add visible player/enemy weapons that track aim and tilt during reload.
 - [x] Add enemy aim telegraphs and committed projectile directions so shots can be dodged at both tempo speeds.
-- [x] Start ranged aim tells only when the enemy is within the camera view, so warnings do not begin entirely off-screen.
+- [x] Start ranged aim tells only when the enemy is within the camera view, and cancel the shot if it leaves view before firing.
 - [x] Connect smoke, flash, frag, and incendiary throwables to input, counts, physics, effects, and enemy behavior.
 - [x] Add rare shopkeeper rooms and scrap purchases for guns, per-gun attachments, armor/health, and throwable refills.
 - [ ] Playtest and tune line of sight, enemy interruptions, throw fuses, rare shop frequency, and carry limits.

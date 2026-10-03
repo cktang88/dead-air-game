@@ -212,8 +212,8 @@ function fightInCurrentRoom(state){
 async function probeRangedDodge(roomIndex){
   const result={telegraphSeen:false,planningTimeScale:null,dodgeKey:null,movementTimeScale:null,
     enemyBulletSeen:false,stationaryPathMiss:null,wouldHitIfStill:false,
-    healthBefore:null,healthAfter:null,armorBefore:null,armorAfter:null};
-  let restedAfterMelee=false;
+    nonThreateningShots:0,healthBefore:null,healthAfter:null,armorBefore:null,armorAfter:null};
+  let restedAfterCombat=false;
   releaseMovement();
   await wait(400);
   for(let frameIndex=0;frameIndex<1200;frameIndex++){
@@ -221,22 +221,21 @@ async function probeRangedDodge(roomIndex){
     const enemies=state.enemies.filter(enemy=>enemy.roomIndex===roomIndex);
     const ranged=enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type));
     if(!ranged)return result;
-    const nonRanged=enemies.find(enemy=>!['GUNNER','WARDEN'].includes(enemy.type));
-    if(nonRanged){
-      restedAfterMelee=false;
+    const distraction=enemies.find(enemy=>enemy.id!==ranged.id);
+    if(distraction){
+      restedAfterCombat=false;
       if(dodgeIncomingProjectile(state)){await wait(5);continue;}
       if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press('Shift');advance();continue;}
-      shootAt(nonRanged,state);advance();continue;
+      shootAt(distraction,state);advance();continue;
     }
-    if(!restedAfterMelee){await wait(400);restedAfterMelee=true;continue;}
+    if(!restedAfterCombat){await wait(400);restedAfterCombat=true;continue;}
     if(ranged.aiming){
-      if(state.bullets.some(bullet=>bullet.owner==='enemy'&&bullet.enemyId===ranged.id)){
+      if(state.bullets.some(bullet=>bullet.owner==='enemy')){
         advance();
         continue;
       }
       result.telegraphSeen=true;result.planningTimeScale=state.timeScale;
       result.shooterId=ranged.id;
-      const target={x:state.player.x,y:state.player.y};
       let incoming=null;
       for(let step=0;step<360;step++){
         advance();
@@ -247,9 +246,11 @@ async function probeRangedDodge(roomIndex){
       if(!incoming)return result;
       result.enemyBulletSeen=true;
       result.incomingShot={x:incoming.x,y:incoming.y,vx:incoming.vx,vy:incoming.vy};
+      const target={x:state.player.x,y:state.player.y};
       const velocity=Math.hypot(incoming.vx,incoming.vy)||1,offsetX=target.x-incoming.x,offsetY=target.y-incoming.y;
       result.stationaryPathMiss=Math.abs(offsetX*incoming.vy-offsetY*incoming.vx)/velocity;
       result.wouldHitIfStill=(offsetX*incoming.vx+offsetY*incoming.vy)>0&&result.stationaryPathMiss<=10;
+      if(!result.wouldHitIfStill){result.nonThreateningShots++;continue;}
       result.dodgeKey=safeDodgeKey(state,incoming);
       if(!result.dodgeKey)return result;
       result.healthBefore=state.player.health;result.armorBefore=state.player.armor;
@@ -276,11 +277,6 @@ async function probeRangedDodge(roomIndex){
       result.otherShootersDuringDodge=[...new Set(after.bullets.filter(bullet=>bullet.owner==='enemy').map(bullet=>bullet.enemyId))];
       return result;
     }
-    const melee=enemies.find(enemy=>enemy.charging);
-    if(melee){
-      const dodge=safeDodgeKey(state,melee);
-      if(dodge){key(dodge);advance(26);key(dodge,'keyup');releaseMovement();await wait(400);continue;}
-    }
     advance();
     if(frameIndex%30===29)await wait(5);
   }
@@ -306,7 +302,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-36';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-39';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -422,7 +418,8 @@ async function run() {
     }
     if(!report.error&&report.rangedDodge&&(!report.rangedDodge.telegraphSeen||report.rangedDodge.planningTimeScale!=='0.18'||
       report.rangedDodge.movementTimeScale!=='1.00'||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
-      report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
+      report.rangedDodge.healthEvents?.length>0||report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||
+      report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
       report.error='The ranged attack was not confirmed as a dodged real bullet';
     }
   } catch (error) {

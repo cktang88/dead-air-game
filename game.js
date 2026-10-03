@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {isAudioMuted, loadAudioSettings, playCrateBreak, playEnemyTell, playExtraction, playGunshot, playPickup, playReload, playRoomClear, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
-import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js?v=aim-view-1';
+import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js?v=aim-view-2';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -655,7 +655,7 @@ function updateEnemies(dt){
       const tactic=chooseEnemyTactic({actor,target:{x:player.x,y:player.y},canSee,projectiles:playerShots,covers,canMoveTo:goal=>enemyCanMoveTo(e,goal)});
       if(tactic.intent==='dodge'||e.tacticTimer<=0){e.intent=tactic.intent;e.intentGoal=tactic.goal;e.navGoal=tactic.intent==='dodge'?tactic.goal:routedEnemyGoal(e,tactic.goal);e.tacticTimer=tactic.intent==='dodge'?.14:.42;}
     }
-    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),visibleForAim=withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT,24),canAcquire=ranged&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
+    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),visibleForAim=withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT),canAcquire=ranged&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
     if(e.type==='brute'){
       if(e.stun>0){e.meleeWindup=0;e.aimLine.visible=false;e.meleeTelegraph.visible=false;}
       else{
@@ -675,7 +675,7 @@ function updateEnemies(dt){
     }
     if(e.intentGoal&&!e.navGoal)e.navGoal=routedEnemyGoal(e,e.intentGoal);
     if(e.navGoal){const gx=e.navGoal.x-e.x,gy=e.navGoal.y-e.y,length=Math.hypot(gx,gy);if(length>9){vx=gx/length*e.def.speed;vy=gy/length*e.def.speed;}else if(!e.intentGoal)e.navGoal=null;}
-    if(e.aimTimer>0){e.aimTimer-=dt;const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;if(e.aimTimer<=0){e.aimTimer=0;e.aimLine.visible=false;const fired=e.stun<=0&&d>=e.def.minRange&&d<e.def.range&&canSee;if(fired){enemyShoot(e,e.aim.x,e.aim.y);e.ammo--;}if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;e.fire=0;playReload();}else e.fire=fired?(e.def.brain==='guard'?rand(1.7,2.7):rand(1.1,2.2)):.18;}}
+    if(e.aimTimer>0){e.aimTimer-=dt;const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;if(e.aimTimer<=0){e.aimTimer=0;e.aimLine.visible=false;const fired=e.stun<=0&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee;if(fired){enemyShoot(e,e.aim.x,e.aim.y);e.ammo--;}if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;e.fire=0;playReload();}else e.fire=fired?(e.def.brain==='guard'?rand(1.7,2.7):rand(1.1,2.2)):.18;}}
     else if(canAcquire&&e.fire<=0&&e.stun<=0){e.aim={x:nx,y:ny};e.aimTimer=e.def.brain==='guard'?.62:.48;playEnemyTell();}
     if(e.stun>0){vx=0;vy=0;e.navGoal=null;e.aimTimer=0;e.aimLine.visible=false;}
     for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}

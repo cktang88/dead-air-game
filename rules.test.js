@@ -40,13 +40,13 @@ test('ranged enemy shots leave time for a sidestep at idle and action tempo',()=
 });
 
 test('ranged aim starts only when its tell is inside the camera view',()=>{
-  const player={x:400,y:300},halfWidth=450,halfHeight=260,margin=24;
-  assert.equal(withinWorldView({x:874,y:584},player,halfWidth,halfHeight,margin),true);
-  assert.equal(withinWorldView({x:875,y:300},player,halfWidth,halfHeight,margin),false);
-  assert.equal(withinWorldView({x:400,y:585},player,halfWidth,halfHeight,margin),false);
-  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,halfHeight,0),true);
-  assert.equal(withinWorldView({x:Infinity,y:300},player,halfWidth,halfHeight,margin),false);
-  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,-1,margin),false);
+  const player={x:400,y:300},halfWidth=450,halfHeight=260;
+  assert.equal(withinWorldView({x:850,y:560},player,halfWidth,halfHeight),true);
+  assert.equal(withinWorldView({x:851,y:300},player,halfWidth,halfHeight),false);
+  assert.equal(withinWorldView({x:400,y:561},player,halfWidth,halfHeight),false);
+  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,halfHeight),true);
+  assert.equal(withinWorldView({x:Infinity,y:300},player,halfWidth,halfHeight),false);
+  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,-1),false);
 });
 
 test('gun mods change the weapon values consumed by combat',()=>{
