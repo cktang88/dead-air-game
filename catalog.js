@@ -16,8 +16,8 @@ export const SHOTGUN_SHELLS = [
   {id:'slug',name:'SLUG',pellets:1,damageMultiplier:1.55,spreadMultiplier:.035,rangeMultiplier:1.35,description:'SINGLE · LONG RANGE'},
 ];
 
-// `rate` is the delay between shots in seconds. Attachment IDs are also the
-// IDs in MODS; keeping them on each weapon makes shop/loadout filtering direct.
+// `rate` is the delay between shots, or between burst triggers, in seconds.
+// Attachment IDs match MODS so shop and loadout filtering stay direct.
 const allAttachments=['extended','suppressor','hollow','stabilizer','longbarrel'];
 const attachments=(...ids)=>ids;
 export const GUNS = [
@@ -27,7 +27,7 @@ export const GUNS = [
   { id:'shotgun', name:'STREET SWEEPER', short:'WIDE · BRUTAL', category:'SHOTGUN', weight:3.5, damage:17, rate:.58, speed:510, range:190, mag:6, reserve:30, spread:.28, count:5, reload:2.25, color:0xffad78, ammo:'12 gauge', visual:{length:31,width:7}, attachments:attachments('extended','hollow','stabilizer','longbarrel') },
   { id:'rifle', name:'HARDLINE RIFLE', short:'STEADY · LONG', category:'ASSAULT RIFLE', weight:4, damage:41, rate:.42, speed:880, range:510, mag:10, reserve:50, spread:.018, reload:2.0, color:0x84e1bd, ammo:'5.56mm', visual:{length:34,width:6}, attachments:allAttachments },
   { id:'smg_vector', name:'VECTOR 9', short:'FASTEST · CONTROLLED', category:'SMG', weight:2.5, damage:17, rate:.105, speed:710, range:220, mag:30, reserve:120, spread:.075, reload:1.65, color:0xffc66d, ammo:'9mm', visual:{length:23,width:5}, attachments:attachments('extended','suppressor','stabilizer') },
-  { id:'smg_burst', name:'KITE BURST', short:'3-ROUND BURST · PRECISE', category:'SMG', weight:2.7, damage:21, rate:.31, speed:760, range:310, mag:24, reserve:96, spread:.032, count:3, reload:1.8, color:0xffdf83, ammo:'9mm', visual:{length:26,width:5}, attachments:attachments('extended','suppressor','hollow','stabilizer','longbarrel') },
+  { id:'smg_burst', name:'KITE BURST', short:'3-ROUND BURST · PRECISE', category:'SMG', weight:2.7, damage:21, rate:.31, speed:760, range:310, mag:24, reserve:96, spread:.032, burst:{shots:3,interval:.075}, reload:1.8, color:0xffdf83, ammo:'9mm', visual:{length:26,width:5}, attachments:attachments('extended','suppressor','hollow','stabilizer','longbarrel') },
   { id:'smg_heavy', name:'CINDER .45', short:'HEAVY · HARD HITTING', category:'SMG', weight:3.3, damage:31, rate:.24, speed:640, range:255, mag:20, reserve:80, spread:.09, reload:2.05, color:0xffa873, ammo:'.45', visual:{length:25,width:6}, attachments:attachments('extended','hollow','stabilizer','longbarrel') },
   // Assault rifles: flexible all-rounders, trading weight and shot speed.
   { id:'ar_ash', name:'ASH CARBINE', short:'RAPID · LIGHT', category:'ASSAULT RIFLE', weight:3.5, damage:28, rate:.22, speed:820, range:390, mag:24, reserve:96, spread:.047, reload:1.85, color:0x76ddb1, ammo:'5.56mm', visual:{length:30,width:5}, attachments:attachments('extended','suppressor','hollow','stabilizer','longbarrel') },

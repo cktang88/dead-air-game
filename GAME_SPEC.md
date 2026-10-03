@@ -103,6 +103,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 ### Current weapon baseline
 
 - The catalog now defines 13 guns: three assault rifles, four SMGs (including the original machine pistol), two pistols, three precision/anti-materiel rifles, and one shotgun.
+- KITE BURST fires a committed three-round sequence with short spacing between bullets; every emitted round spends one round, releasing the trigger does not cancel the burst, manual reload is ignored until it finishes, and switching weapons cancels its remaining rounds. A nearly empty magazine can produce a shorter final burst. The preview reports its sustained cyclic rate rather than trigger rate.
 - Gun definitions have distinct fire stats, weight, ammo, and visual dimensions. All 13 are wired into combat and can be selected through the loadout, merchant, or a weight-checked pickup when the carry rig allows them.
 - Five attachment definitions exist; compatibility filtering and per-gun installation are wired into the workbench and weapon stat calculations.
 - A run starts with the machine pistol and Street Sweeper. Other catalog guns can be selected at the workbench, bought from a merchant, or accepted from a specific pickup.
@@ -307,7 +308,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### Next: polish and maintainability
 
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
-- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
+- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, a released three-round KITE BURST and reload lock, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
 - [x] Add a seeded encounter browser probe for clearing the first room, opening an affordable reward gate, and dodging a fresh ranged shot that would hit a stationary player (`tests/full-floor-browser-harness.html`).
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.

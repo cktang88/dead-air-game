@@ -23,7 +23,7 @@ function reloadGame(){
   return new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('Game frame did not reload')),30000);
     frame.addEventListener('load',()=>{clearTimeout(timeout);resolve();},{once:true});
-    frame.src='../index.html?browser-smoke';
+    frame.src='../index.html?browser-smoke&v=burst-3';
   });
 }
 
@@ -143,8 +143,41 @@ async function run(){
   firstMenuButton.focus();
   const backwardTab=new win.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true});win.dispatchEvent(backwardTab);
   if(!backwardTab.defaultPrevented||doc.activeElement!==lastMenuButton)throw new Error('Shift+Tab did not wrap focus from the start of the loadout to its last control');
+  let kiteSlot=loadout.loadout.slots.indexOf('KITE BURST');
+  if(kiteSlot<0){
+    const kiteButton=doc.querySelector('#loadout-gun [data-gun="4"]');
+    if(!kiteButton||kiteButton.disabled)throw new Error('KITE BURST was not available within the starting carry limit');
+    kiteButton.click();
+    if(doc.querySelector('#loadout-confirm').hidden)throw new Error('KITE BURST replacement did not show its confirmation preview');
+    doc.querySelector('#loadout-accept').click();
+  }
+  let burstState=stateOf(win);
+  kiteSlot=burstState.loadout.slots.indexOf('KITE BURST');
+  if(kiteSlot<0)throw new Error('Confirmed loadout change did not add KITE BURST to the rig');
   press(win,'Escape','keydown');press(win,'Escape','keyup');
   if(doc.querySelector('#loadout').classList.contains('show')||doc.activeElement!==doc.querySelector('#game canvas'))throw new Error('Closing the loadout did not return focus to the game');
+  burstState=stateOf(win);
+  if(burstState.paused){press(win,'Escape','keydown');press(win,'Escape','keyup');burstState=stateOf(win);}
+  if(burstState.loadout.activeSlot!==kiteSlot){
+    const weaponAction=['weaponOne','weaponTwo','weaponThree'][kiteSlot];
+    press(win,bindings[weaponAction],'keydown');press(win,bindings[weaponAction],'keyup');
+  }
+  burstState=stateOf(win);
+  if(burstState.player.weapon!=='KITE BURST'||burstState.player.ammo<3)throw new Error('KITE BURST did not become the active weapon with a usable magazine');
+  const burstAmmo=burstState.player.ammo;
+  win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
+  win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
+  burstState=stateOf(win);
+  if(burstState.player.ammo!==burstAmmo-1||burstState.burstShotsRemaining!==2||burstState.timeScale!=='0.42'){
+    throw new Error(`A single KITE BURST click did not start a two-round committed burst at blended tempo: before ${JSON.stringify({burstAmmo,weapon:burstState.player.weapon,ammo:burstState.player.ammo,queued:burstState.burstShotsRemaining,timeScale:burstState.timeScale,mode:burstState.mode,paused:burstState.paused})}`);
+  }
+  press(win,bindings.reload,'keydown');press(win,bindings.reload,'keyup');
+  if(stateOf(win).player.reloading)throw new Error('Reload interrupted a committed KITE BURST sequence');
+  win.advanceTime(500);
+  burstState=stateOf(win);
+  if(burstState.player.ammo!==burstAmmo-3||burstState.burstShotsRemaining!==0){
+    throw new Error(`KITE BURST did not emit and spend three spaced rounds after trigger release: ${JSON.stringify(burstState.player)}`);
+  }
   press(win,'Tab','keydown');press(win,'Tab','keyup');
   loadout=stateOf(win);
   const extended=doc.querySelector('#mod-list [data-mod="extended"]');
@@ -191,11 +224,11 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
   report.className='fail';
   report.textContent=`FAIL\n${error.stack||error.message}`;
 }),{once:true});
-frame.src='../index.html?browser-smoke';
+frame.src='../index.html?browser-smoke&v=burst-3';
