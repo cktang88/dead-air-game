@@ -213,6 +213,7 @@ async function probeRangedDodge(roomIndex){
   const result={telegraphSeen:false,planningTimeScale:null,dodgeKey:null,movementTimeScale:null,
     enemyBulletSeen:false,stationaryPathMiss:null,wouldHitIfStill:false,
     healthBefore:null,healthAfter:null,armorBefore:null,armorAfter:null};
+  let restedAfterMelee=false;
   releaseMovement();
   await wait(400);
   for(let frameIndex=0;frameIndex<1200;frameIndex++){
@@ -222,10 +223,12 @@ async function probeRangedDodge(roomIndex){
     if(!ranged)return result;
     const nonRanged=enemies.find(enemy=>!['GUNNER','WARDEN'].includes(enemy.type));
     if(nonRanged){
+      restedAfterMelee=false;
       if(dodgeIncomingProjectile(state)){await wait(5);continue;}
       if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press('Shift');advance();continue;}
       shootAt(nonRanged,state);advance();continue;
     }
+    if(!restedAfterMelee){await wait(400);restedAfterMelee=true;continue;}
     if(ranged.aiming){
       if(state.bullets.some(bullet=>bullet.owner==='enemy'&&bullet.enemyId===ranged.id)){
         advance();
@@ -303,7 +306,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-35';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-36';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
