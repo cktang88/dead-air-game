@@ -63,13 +63,18 @@ async function run(){
     initial.enemies.some(enemy=>!Number.isInteger(enemy.roomIndex))){
     throw new Error('Seeded snapshot lost room ownership for a live enemy');
   }
+  const roomNames=initial.roomProgress.map(room=>room.name);
+  if(new Set(roomNames).size!==roomNames.length){
+    throw new Error(`Generated floor reused a room name: ${JSON.stringify(roomNames)}`);
+  }
 
   press(win,movementKey,'keydown');
   win.advanceTime(500);
+  const moving=stateOf(win);
+  if(moving.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moving.timeScale}×`);
   press(win,movementKey,'keyup');
   const moved=stateOf(win);
   if(moved.player.x<=initial.player.x+20)throw new Error('Right input did not move the player');
-  if(moved.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moved.timeScale}×`);
 
   win.dispatchEvent(new win.MouseEvent('mousemove',{clientX:win.innerWidth/2+100,clientY:win.innerHeight/2,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
@@ -186,7 +191,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moved.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{

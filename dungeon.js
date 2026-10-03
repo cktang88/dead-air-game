@@ -1,7 +1,16 @@
 import {chooseRewardDoor, roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
 import {assignRoomRoles} from './room-roles.js';
 
-const ROOM_NAMES = ['ENTRY', 'FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
+const ROOM_NAMES = ['FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
+
+export function nameDungeonRooms(rooms){
+  return rooms.map((room,index)=>{
+    if(index===0)return {...room,name:'ENTRY'};
+    if(index===rooms.length-1)return {...room,name:'EXTRACTION'};
+    const name=ROOM_NAMES[(index-1)%ROOM_NAMES.length],floor=Math.floor((index-1)/ROOM_NAMES.length);
+    return {...room,name:floor?`${name} ${floor+1}`:name};
+  });
+}
 
 export function generateDungeon(ROT, seed, width = 96, height = 72) {
   const attempts = [[width, height], [Math.max(width, 108), Math.max(height, 82)]];
@@ -16,7 +25,7 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       const [cx, cy] = room.getCenter();
       return {
         cx, cy, x1: room.getLeft(), x2: room.getRight(), y1: room.getTop(), y2: room.getBottom(),
-        index, name: ROOM_NAMES[index % ROOM_NAMES.length], cleared: false, visited: false,
+        index, cleared: false, visited: false,
       };
     });
     if (!generatedRooms.length) continue;
@@ -38,17 +47,15 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
 
     if (rooms.length < 6) continue;
     const branchRooms=new Set(roomsAvoidableOnRoute(shaped.cells,rooms));
-    const roleInputs=rooms.map((room,index)=>({...room,branch:branchRooms.has(index)})),withSecretBranches=roleInputs.map(room=>({...room,secret:room.branch}));
-    const gateableCacheIndexes=roleInputs.map((room,index)=>room.branch&&chooseRewardDoor(shaped.cells,shaped.doors,withSecretBranches,index)?index:-1).filter(index=>index>=0);
-    const roleRooms=assignRoomRoles(roleInputs,seed,gateableCacheIndexes);
+    const roleInputs=rooms.map((room,index)=>({...room,branch:branchRooms.has(index)})),gateCheckRooms=roleInputs.map(room=>({...room,secret:room.branch}));
+    const gateableCacheIndexes=roleInputs.map((room,index)=>room.branch&&chooseRewardDoor(shaped.cells,shaped.doors,gateCheckRooms,index)?index:-1).filter(index=>index>=0);
+    const roleRooms=nameDungeonRooms(assignRoomRoles(roleInputs,seed,gateableCacheIndexes));
     const cacheIndex=roleRooms.findIndex(room=>room.role==='cache'&&room.secret),lockedDoor=cacheIndex>=0?chooseRewardDoor(shaped.cells,shaped.doors,roleRooms,cacheIndex):null;
-    roleRooms[0].name = 'ENTRY';
     roleRooms[0].visited = true;
     for(const room of roleRooms.slice(1,-1))if(room.role!=='combat'){
       room.name=room.secret?'UNMARKED ROOM':({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX',elite:'WARDEN'})[room.role];
       if(room.secret)room.revealedName='SIDE CACHE';
     }
-    roleRooms.at(-1).name='EXTRACTION';
     return {cells: shaped.cells, doors: shaped.doors, lockedDoors:lockedDoor?[lockedDoor]:[], rooms:roleRooms, start: roleRooms[0], width: mapWidth, height: mapHeight};
   }
   throw new Error(`ROT.js could not generate six reachable rooms for seed ${seed}`);

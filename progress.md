@@ -16,6 +16,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Four base enemy types plus the Warden elite variant with an overhead health bar, destructible 60-HP crates, scrap-gated cache doors, room-clear rewards, extraction, minimap, screen shake, hit stop, knockback, particles, and sliding corpses.
 - Runs accept an optional positive numeric seed in the start screen and display the active seed. ROT.js's seeded generator now drives map generation, encounter placement, loot, combat rolls, and visual effects.
 
+## Room naming and browser route probes
+
+- Default room labels now follow the sorted entry-to-extraction route, stay unique on longer floors, and keep the first/last labels reserved for ENTRY and EXTRACTION. A selected cache alone receives the hidden-secret flag; other optional branches no longer appear as secret rooms.
+- Added deterministic coverage for large-floor room-name uniqueness and the unselected-cache case. The current seeded browser smoke passes and covers room-name uniqueness, movement at 1× while held, blended firing, crate damage, reload, throwables, focus, loadout, and persistent upgrades.
+- Improved the full-floor browser probe to avoid closed gate tiles and crate/cover obstacles, pick accessible points inside rooms, find gate interaction approaches, and reject empty paths. The seeded run cleared FURNACE and reached COLD STORAGE without runtime errors; its simple shooter did not clear that second encounter, and it did not exercise a gate purchase, so this is navigation coverage rather than a player balance result.
+- Verification: `npm test` passes all 106 tests; `node --check` passes for the touched JavaScript; `git diff --check` passes. The latest smoke run passed with 18 enemies, 9 pickups, movement Δx 53 at 1.00×, firing at 0.42×, a crate destroyed, reload and frag checks, focus and loadout checks, and Runner/Lucky Find persistence.
+
 ## Verification
 
 - Firing uses the geometric mean of idle and normal time whether stationary or moving. At the default 0.18× idle rate, firing is about 0.42×; idle-only movement remains 1×.

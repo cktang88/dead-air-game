@@ -1,10 +1,11 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {generateDungeon} from '../dungeon.js';
+import {generateDungeon} from '../dungeon.js?v=room-names-3';
 import {shortestFloorPath} from '../layout.js';
 
 const result = document.querySelector('#result');
 const frame = document.querySelector('#game');
 const seed = 213838321;
+let topology;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const frameDoc = () => frame.contentDocument;
 const frameWin = () => frame.contentWindow;
@@ -88,11 +89,62 @@ function moveTo(target) {
 }
 
 function movePath(path) {
-  for (const cell of path.slice(1)) {
+  if(!path.length)return false;
+  const waypoints=[];
+  let direction=null;
+  for(let i=1;i<path.length;i++){
+    const nextDirection={x:path[i].x-path[i-1].x,y:path[i].y-path[i-1].y};
+    if(direction&& (nextDirection.x!==direction.x||nextDirection.y!==direction.y))waypoints.push(path[i-1]);
+    direction=nextDirection;
+  }
+  waypoints.push(path.at(-1));
+  for (const cell of waypoints) {
     if (!moveTo({x: (cell.x + 0.5) * 32, y: (cell.y + 0.5) * 32})) return false;
   }
   releaseMovement();
   return true;
+}
+
+function navigationPath(target){
+  const state=gameState(),start={x:Math.floor(state.player.x/32),y:Math.floor(state.player.y/32)};
+  const closedDoors=new Set(state.lockedDoors.filter(door=>!door.opened).flatMap(door=>door.tiles||[]).map(tile=>`${tile.x},${tile.y}`));
+  const obstacles=[...state.crates,...(state.cover||[])];
+  const canPass=(x,y)=>{
+    if(x===start.x&&y===start.y)return true;
+    if(topology.cells[y]?.[x]!==0||closedDoors.has(`${x},${y}`))return false;
+    const cx=(x+.5)*32,cy=(y+.5)*32;
+    return obstacles.every(obstacle=>Math.hypot(cx-obstacle.x,cy-obstacle.y)>=obstacle.radius+14);
+  };
+  return shortestFloorPath(topology.cells,start,target,canPass);
+}
+
+function roomNavigationPath(room){
+  const state=gameState(),start={x:Math.floor(state.player.x/32),y:Math.floor(state.player.y/32)};
+  const candidates=[];
+  for(let y=room.y1+1;y<room.y2;y++)for(let x=room.x1+1;x<room.x2;x++){
+    if(topology.cells[y]?.[x]===0)candidates.push({x,y,distance:(x-room.cx)**2+(y-room.cy)**2});
+  }
+  candidates.sort((a,b)=>a.distance-b.distance);
+  for(const candidate of candidates){
+    const path=navigationPath(candidate);
+    if(path.length)return path;
+  }
+  return [];
+}
+
+function gateApproachPath(gate){
+  const gx=gate.x/32,gy=gate.y/32,centerX=Math.floor(gx),centerY=Math.floor(gy);
+  const candidates=[];
+  for(let y=centerY-1;y<=centerY+1;y++)for(let x=centerX-1;x<=centerX+1;x++){
+    const distance=Math.hypot((x+.5)*32-gate.x,(y+.5)*32-gate.y);
+    if(distance<38)candidates.push({x,y,distance});
+  }
+  candidates.sort((a,b)=>a.distance-b.distance);
+  for(const candidate of candidates){
+    const path=navigationPath(candidate);
+    if(path.length)return path;
+  }
+  return [];
 }
 
 function sample(state) {
@@ -114,7 +166,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-5';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -123,7 +175,7 @@ async function run() {
     frameWin().addEventListener('unhandledrejection', event => browserErrors.push(String(event.reason)));
     await waitForGame();
 
-    const topology = generateDungeon(ROT, seed);
+    topology = generateDungeon(ROT, seed);
     frameDoc().querySelector('#seed-input').value = String(seed);
     frameDoc().querySelector('#start-button').click();
     await wait(100);
@@ -144,10 +196,11 @@ async function run() {
     clickIfVisible('#close-loadout');
 
     const rooms = topology.rooms.map((room, index) => ({...room, index}));
+    report.combatCandidates = rooms.filter(room => room.role === 'combat').map(({name,index,branch,cx,cy})=>({name,index,branch,cx,cy}));
+    report.initialGates = state.lockedDoors;
     const combatRooms = rooms.filter((room, index) => index > 0 && index < rooms.length - 1 && room.role === 'combat')
       .sort((a, b) => shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: a.cx, y: a.cy}).length -
-        shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length)
-      .slice(0, 2);
+        shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
     if (combatRooms.length < 2) throw new Error('Seeded map did not have two combat rooms');
     let from = rooms[0];
 
@@ -155,17 +208,16 @@ async function run() {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
       if (gate) {
-        const tile = {x: Math.floor(gate.x / 32), y: Math.floor(gate.y / 32)};
-        const gatePath = shortestFloorPath(topology.cells, {x: from.cx, y: from.cy}, tile);
-        if (!movePath(gatePath)) throw new Error(`Could not reach cache gate before ${room.name}`);
+        const gatePath = gateApproachPath(gate);
+        if (!gatePath.length||!movePath(gatePath)) throw new Error(`Could not reach cache gate before ${room.name}`);
         press('e'); advance(2); state = serviceDialogs();
         if (state.lockedDoors.some(door => door.room === room.name && !door.opened)) {
           report.events.push({event: 'room-skipped', room: room.name, reason: 'gate could not be opened'});
           continue;
         }
       }
-      const path = shortestFloorPath(topology.cells, {x: from.cx, y: from.cy}, {x: room.cx, y: room.cy});
-      const entered = movePath(path);
+      const path = roomNavigationPath(room);
+      const entered = path.length>0&&movePath(path);
       state = serviceDialogs();
       if ((!entered && state.room !== room.name) || state.mode !== 'play') {
         report.events.push({event: 'room-skipped', room: room.name, reason: 'could not reach'});
@@ -205,9 +257,19 @@ async function run() {
       // Exercise the market modal in a market room; serviceDialogs buys a medkit if useful.
       if (state.merchant) { press('e'); advance(); state = serviceDialogs(); }
       from = room;
+      if(report.rooms.length===1){
+        for(const gate of gameState().lockedDoors.filter(item=>!item.opened&&gameState().scrap>=item.cost)){
+          const gatePath=gateApproachPath(gate);
+          if(!gatePath.length||!movePath(gatePath))continue;
+          press('e');advance(2);state=serviceDialogs();
+          const opened=gameState().lockedDoors.find(item=>item.x===gate.x&&item.y===gate.y)?.opened;
+          if(opened){report.events.push({event:'reward-gate-opened',room:gate.room,cost:gate.cost});break;}
+        }
+      }
+      if(report.rooms.length>=2&&report.rooms.at(-1).fightSteps>0)break;
     }
     report.final = sample(gameState());
-    if (report.rooms.length !== 2 || !report.rooms[0].cleared || report.rooms[1].fightSteps === 0) {
+    if (report.rooms.length < 2 || !report.rooms[0].cleared || !report.rooms.slice(1).some(room=>room.fightSteps>0)) {
       report.error = 'The probe did not clear its first encounter and fight the later room';
     }
   } catch (error) {

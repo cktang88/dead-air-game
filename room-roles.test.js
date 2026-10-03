@@ -28,6 +28,7 @@ test('cache assignment prefers branch rooms that can support a validated gate',(
   const candidates=rooms.map((room,index)=>({...room,index,branch:[1,3].includes(index)}));
   const assigned=assignRoomRoles(candidates,417,[3]);
   assert.equal(assigned.find(room=>room.role==='cache').index,3);
+  assert.equal(assigned.find(room=>room.index===1).secret,undefined,'only the selected cache room receives the secret flag');
   const fallback=assignRoomRoles(candidates,417,[]);
   assert.equal(fallback.find(room=>room.role==='cache').branch,true);
 });
