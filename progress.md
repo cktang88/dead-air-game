@@ -360,6 +360,13 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Seed audit: 213838321, 417, and 9001 each cleared their first combat encounter; 213838321 and 417 also opened the affordable 18-scrap gate. The fresh-shot dodge passed on all three after allowing the 0.35-second post-fire blend to settle when necessary. Seed 123456789 was much harsher: the simple probe driver died after 7 kills and 3 rooms before it could finish its selected encounter, so it remains a balance and route stress case rather than a passing probe.
 - Remaining: improve the probe's stalled-route diagnostics, manually play a full floor for balance, and profile sustained full-floor performance. These short browser probes do not replace that longer human playtest.
 
+## Seeded combat probe reliability follow-up
+
+- The combat driver now dodges incoming bullets before fighting enemies encountered while navigating, and the dodge check still proves that a real ranged bullet would hit a stationary player before the sidestep. It also selects the Street Sweeper at close range when that weapon is in the saved loadout.
+- Verification: `npm test` passes 119 tests; the browser harness passes seeds 417 and 9001, clears the first combat room, confirms a 0.16× planning pace and 1× dodge movement, and reports no browser errors. Seed 417 also opens the affordable cache gate.
+- Seed 123456789 remains an unresolved stress probe: it cannot reach its selected rooms and the player dies after 7 kills. A read-only review points to weaknesses in the scripted driver (stationary shooting, poor Brute evasion, and no throwable or pickup use), so this result does not establish a normal-player balance failure. The navigation failures also need route-position diagnostics before attributing them to the game.
+- Remaining: improve the probe's movement/combat policy and route-failure diagnostics, play a full floor manually for balance, and profile sustained full-floor performance.
+
 ## Timed KITE BURST
 
 - KITE BURST was labeled as a three-round burst but `playerShoot()` emitted its `count:3` bullets in one frame and spent one round. It now spends one round per bullet across a committed, world-time-spaced sequence; releasing fire lets the sequence finish, manual reload is ignored until it ends, and switching guns cancels queued shots. Final partial bursts use only the rounds still in the magazine. This keeps shotgun pellets as one trigger and one shell.

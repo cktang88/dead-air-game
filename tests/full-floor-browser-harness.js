@@ -5,11 +5,13 @@ import {hasIncomingProjectile} from '../enemy-tactics.js';
 import {parseRunSeed} from '../seeds.js';
 import {progressionStats} from '../progression.js';
 import {readSavedProgress} from '../progress-storage.js';
+import {loadKeyBindings} from '../keybindings.js';
 
 const result = document.querySelector('#result');
 const frame = document.querySelector('#game');
 const seed = parseRunSeed(new URLSearchParams(location.search).get('seed')) ?? 213838321;
 const idleScale=progressionStats(readSavedProgress(localStorage)).idleScale;
+const bindings=loadKeyBindings(localStorage);
 let topology;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const frameDoc = () => frame.contentDocument;
@@ -80,7 +82,13 @@ function moveTo(target, tolerance = 16, skipFightRoomIndex = null) {
   for (let step = 0; step < 1200; step++) {
     const state = serviceDialogs();
     if (state.mode !== 'play' || !state.player) return false;
-    if (state.roomIndex!==skipFightRoomIndex&&fightInCurrentRoom(state)) { stagnant=0;previous=Infinity;continue; }
+    if(state.roomIndex!==skipFightRoomIndex&&state.enemies.some(enemy=>enemy.roomIndex===state.roomIndex)){
+      stagnant=0;previous=Infinity;
+      if(dodgeIncomingProjectile(state))continue;
+      fightInCurrentRoom(state);
+      continue;
+    }
+    if(state.roomIndex===skipFightRoomIndex&&dodgeIncomingProjectile(state))continue;
     const dx = target.x - state.player.x, dy = target.y - state.player.y;
     const distance = Math.hypot(dx, dy);
     if (distance < tolerance) { releaseMovement(); return true; }
@@ -202,13 +210,21 @@ function fightInCurrentRoom(state){
   const enemies=state.enemies.filter(enemy=>enemy.roomIndex===state.roomIndex);
   if(!enemies.length)return false;
   releaseMovement();
+  enemies.sort((a,b)=>Math.hypot(a.x-state.player.x,a.y-state.player.y)-Math.hypot(b.x-state.player.x,b.y-state.player.y));
+  const target=enemies[0],distance=Math.hypot(target.x-state.player.x,target.y-state.player.y);
+  const preferredWeapon=distance<155?'STREET SWEEPER':'MACHINE PISTOL';
+  const preferredSlot=state.loadout.slots.indexOf(preferredWeapon);
+  if(preferredSlot>=0&&state.player.weapon!==preferredWeapon){
+    press(bindings[preferredSlot===0?'weaponOne':preferredSlot===1?'weaponTwo':'weaponThree']);
+    advance();
+    return true;
+  }
   if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){
     if(!state.player.reloading)press('Shift');
     advance();
     return true;
   }
-  enemies.sort((a,b)=>Math.hypot(a.x-state.player.x,a.y-state.player.y)-Math.hypot(b.x-state.player.x,b.y-state.player.y));
-  shootAt(enemies[0],state);
+  shootAt(target,state);
   return true;
 }
 
@@ -221,19 +237,25 @@ async function probeRangedDodge(roomIndex){
   await wait(400);
   for(let frameIndex=0;frameIndex<1200;frameIndex++){
     let state=serviceDialogs();
-    const enemies=state.enemies.filter(enemy=>enemy.roomIndex===roomIndex);
-    const ranged=enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type));
-    if(!ranged)return result;
-    const distraction=enemies.find(enemy=>enemy.id!==ranged.id);
-    if(distraction){
-      restedAfterCombat=false;
-      if(dodgeIncomingProjectile(state)){await wait(5);continue;}
-      if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press('Shift');advance();continue;}
-      shootAt(distraction,state);advance();continue;
+    if(state.mode!=='play'||!state.player){
+      result.aborted='player-died-before-dodge';
+      result.playerAtAbort=state.player?{health:state.player.health,armor:state.player.armor}:null;
+      result.enemyBulletsAtAbort=state.bullets.filter(bullet=>bullet.owner==='enemy');
+      return result;
     }
-    if(!restedAfterCombat){await wait(400);restedAfterCombat=true;continue;}
+    const enemies=state.enemies.filter(enemy=>enemy.roomIndex===roomIndex);
+    const ranged=enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type)&&enemy.aiming)||
+      enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type));
+    if(!ranged){result.aborted='no-living-ranged-enemy';return result;}
     if(ranged.aiming){
-      if(state.bullets.some(bullet=>bullet.owner==='enemy')){
+      if(state.timeScale!==idleScale.toFixed(2)){
+        await wait(400);
+        state=serviceDialogs();
+        const recovered=state.enemies.find(enemy=>enemy.id===ranged.id);
+        if(state.mode!=='play'||!state.player){result.aborted='player-died-while-settling';return result;}
+        if(!recovered?.aiming)continue;
+      }
+      if(state.bullets.some(bullet=>bullet.owner==='enemy'&&bullet.enemyId===ranged.id)){
         advance();
         continue;
       }
@@ -243,10 +265,16 @@ async function probeRangedDodge(roomIndex){
       for(let step=0;step<360;step++){
         advance();
         const waiting=gameState();
+        if(waiting.mode!=='play'||!waiting.player){
+          result.aborted='player-died-before-shot';
+          result.playerAtAbort=waiting.player?{health:waiting.player.health,armor:waiting.player.armor}:null;
+          result.enemyBulletsAtAbort=waiting.bullets.filter(bullet=>bullet.owner==='enemy');
+          return result;
+        }
         incoming=waiting.bullets.find(bullet=>bullet.owner==='enemy'&&bullet.enemyId===ranged.id)||null;
         if(incoming){state=waiting;break;}
       }
-      if(!incoming)return result;
+      if(!incoming){result.aborted='selected-shooter-did-not-fire';return result;}
       result.enemyBulletSeen=true;
       result.incomingShot={x:incoming.x,y:incoming.y,vx:incoming.vx,vy:incoming.vy};
       const target={x:state.player.x,y:state.player.y};
@@ -255,7 +283,7 @@ async function probeRangedDodge(roomIndex){
       result.wouldHitIfStill=(offsetX*incoming.vx+offsetY*incoming.vy)>0&&result.stationaryPathMiss<=10;
       if(!result.wouldHitIfStill){result.nonThreateningShots++;continue;}
       result.dodgeKey=safeDodgeKey(state,incoming);
-      if(!result.dodgeKey)return result;
+      if(!result.dodgeKey){result.aborted='no-safe-dodge-direction';return result;}
       result.healthBefore=state.player.health;result.armorBefore=state.player.armor;
       result.playerBeforeDodge={x:state.player.x,y:state.player.y};
       key(result.dodgeKey);
@@ -271,18 +299,28 @@ async function probeRangedDodge(roomIndex){
           result.healthEvents.push({frame:step+1,health:after.player.health,armor:after.player.armor,
             player:{x:after.player.x,y:after.player.y},bullets:after.bullets.filter(bullet=>bullet.owner==='enemy')});
         }
+        if(after.mode!=='play'||!after.player){result.aborted='player-died-during-dodge';break;}
       }
       key(result.dodgeKey,'keyup');releaseMovement();
       result.dodgeResolveFrames=resolveFrames;
       const after=gameState();
-      result.healthAfter=after.player.health;result.armorAfter=after.player.armor;
-      result.playerAfterDodge={x:after.player.x,y:after.player.y};
+      result.healthAfter=after.player?.health??null;result.armorAfter=after.player?.armor??null;
+      result.playerAfterDodge=after.player?{x:after.player.x,y:after.player.y}:null;
       result.otherShootersDuringDodge=[...new Set(after.bullets.filter(bullet=>bullet.owner==='enemy').map(bullet=>bullet.enemyId))];
       return result;
     }
+    const distraction=enemies.find(enemy=>enemy.id!==ranged.id);
+    if(distraction){
+      restedAfterCombat=false;
+      if(dodgeIncomingProjectile(state)){await wait(5);continue;}
+      if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press('Shift');advance();continue;}
+      shootAt(distraction,state);advance();continue;
+    }
+    if(!restedAfterCombat){await wait(400);restedAfterCombat=true;continue;}
     advance();
     if(frameIndex%30===29)await wait(5);
   }
+  result.aborted='probe-timeout';
   return result;
 }
 
@@ -423,7 +461,8 @@ async function run() {
       report.rangedDodge.movementTimeScale!=='1.00'||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
       report.rangedDodge.healthEvents?.length>0||report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||
       report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
-      report.error='The ranged attack was not confirmed as a dodged real bullet';
+      report.error=report.rangedDodge.aborted?`Ranged probe stopped: ${report.rangedDodge.aborted}`:
+        'The ranged attack was not confirmed as a dodged real bullet';
     }
   } catch (error) {
     report.error = String(error?.stack || error);
