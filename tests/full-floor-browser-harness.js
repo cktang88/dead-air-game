@@ -207,14 +207,35 @@ function dodgeIncomingProjectile(state=gameState()){
   key(dodge);advance(10);releaseMovement();return true;
 }
 
-function shootAt(target,state){
+function aimAt(target,state){
   const win=frameWin();
   win.dispatchEvent(new win.MouseEvent('mousemove',{
     clientX:win.innerWidth/2+(target.x-state.player.x)*win.innerHeight/520,
     clientY:win.innerHeight/2+(target.y-state.player.y)*win.innerHeight/520,bubbles:true}));
+}
+
+function throwFragAtCluster(enemies,state){
+  if((state.throwables?.counts?.frag||0)<1||enemies.length<2)return false;
+  const target={x:enemies.reduce((sum,enemy)=>sum+enemy.x,0)/enemies.length,
+    y:enemies.reduce((sum,enemy)=>sum+enemy.y,0)/enemies.length};
+  const clustered=enemies.filter(enemy=>Math.hypot(enemy.x-target.x,enemy.y-target.y)<=62);
+  if(clustered.length<2||Math.hypot(target.x-state.player.x,target.y-state.player.y)>105)return false;
+  aimAt(target,state);
+  press(bindings.throwableUse);
+  advance(2);
+  return true;
+}
+
+function shootAt(target,state,{strafe=false}={}){
+  const win=frameWin();
+  aimAt(target,state);
+  const moveKeys=strafe?safeDodgeKey(state,{x:target.x,y:target.y,
+    vx:target.x-state.player.x,vy:target.y-state.player.y}):null;
+  if(moveKeys)key(moveKeys);
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
-  advance();
+  advance(moveKeys?8:1);
   win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
+  if(moveKeys)key(moveKeys,'keyup');
 }
 
 function fightInCurrentRoom(state){
@@ -235,7 +256,8 @@ function fightInCurrentRoom(state){
     advance();
     return true;
   }
-  shootAt(target,state);
+  if(throwFragAtCluster(enemies,state))return true;
+  shootAt(target,state,{strafe:true});
   return true;
 }
 
@@ -354,7 +376,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-39';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-40';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -437,8 +459,9 @@ async function run() {
           if (!state.player.reloading) press('Shift');
           advance(); continue;
         }
+        if(throwFragAtCluster(enemies,state))continue;
         const target = enemies.sort((a, b) => Math.hypot(a.x - state.player.x, a.y - state.player.y) - Math.hypot(b.x - state.player.x, b.y - state.player.y))[0];
-        shootAt(target,state);
+        shootAt(target,state,{strafe:true});
       }
       releaseMovement(); advance(2); state = serviceDialogs();
       const livingEnemies = state.roomProgress[room.index]?.livingEnemies ?? 0;

@@ -285,6 +285,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 - [x] Build the between-run upgrade screen and buy capped permanent upgrades.
 - [x] Implement Runner’s Legs, Still Mind, Salvager crate and room-clear scrap bonuses, and Carry Rig with capped effects.
 - [x] Add Room Sense: explored rooms and known threats stay on the minimap; upgrades reveal nearby rooms and enemy blips through walls at increasing ranges.
+- [x] Add Vital Reserve: three permanent tiers add one maximum health each and start new runs fully healed.
 - [x] Test progress persistence across browser refreshes; add a visible save reset option with a confirmation prompt.
 
 ### Next: inventory and gear

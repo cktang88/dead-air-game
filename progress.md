@@ -368,6 +368,14 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Seed 123456789 now reaches THE GALLERY instead of stalling on its stale route, but the stationary test driver still fails to clear two Gunners after 1,800 steps (4/5 health, armor depleted, 5 total kills). Its result is still not a human-playtest balance verdict; the driver ignores grenades and pickups and does not strafe while firing.
 - Remaining: improve the probe's combat policy, play a full floor manually for balance, and profile sustained full-floor performance.
 
+## Vital Reserve and combat probe policy
+
+- Added the missing permanent health upgrade requested for the safehouse. Vital Reserve has three tiers, each adds one maximum health, and a new run starts fully healed at its upgraded maximum. Old version-1 saves default the new tier to zero.
+- The combat probe now fires in short strafes and can throw a frag when multiple enemies are clustered close to the player. This gives the stress test a more representative use of movement and the starting inventory.
+- Browser smoke uncovered stale cached imports after a source edit; versioned the progression and save-store imports so the browser loads the same current code that Node tests exercise.
+- Verification: `npm test` passes 120 tests. The in-app browser smoke purchased Vital Reserve, reloaded the safehouse, started a new run at 6/6 health, completed its existing movement, crate, reload, burst, frag, pause, and save-restoration checks, and reported PASS. The updated seeded probe also clears FURNACE on seed 417, opens the 18-scrap gate, and dodges a real incoming shot with no damage; no browser errors were reported. Seed 123456789 now clears THE GALLERY with 9 kills but only 1/5 health, so it remains a stress case rather than a full-run balance verdict.
+- Remaining: play a full floor manually, tune health/armor and enemy pressure across runs, and profile sustained full-floor performance.
+
 ## Timed KITE BURST
 
 - KITE BURST was labeled as a three-round burst but `playerShoot()` emitted its `count:3` bullets in one frame and spent one round. It now spends one round per bullet across a committed, world-time-spaced sequence; releasing fire lets the sequence finish, manual reload is ignored until it ends, and switching guns cancels queued shots. Final partial bursts use only the rounds still in the magazine. This keeps shotgun pellets as one trigger and one shell.

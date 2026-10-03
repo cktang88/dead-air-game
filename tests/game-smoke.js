@@ -1,6 +1,6 @@
 import {DEFAULT_KEY_BINDINGS,loadKeyBindings} from '../keybindings.js';
-import {emptyProgress,progressionStats,SAVE_KEY} from '../progression.js';
-import {readSavedProgress} from '../progress-storage.js';
+import {emptyProgress,progressionStats,SAVE_KEY} from '../progression.js?v=vital-reserve-2';
+import {readSavedProgress} from '../progress-storage.js?v=vital-reserve-2';
 
 const report=document.querySelector('#result');
 const frame=document.querySelector('#game');
@@ -24,7 +24,7 @@ function reloadGame(){
   return new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('Game frame did not reload')),30000);
     frame.addEventListener('load',()=>{clearTimeout(timeout);resolve();},{once:true});
-    frame.src='../index.html?browser-smoke&v=burst-3';
+    frame.src='../index.html?browser-smoke&v=vital-reserve-2';
   });
 }
 
@@ -199,7 +199,7 @@ async function run(){
 
   const originalProgress=window.localStorage.getItem(SAVE_KEY);
   try{
-    const fixture={...emptyProgress(),coins:55};
+    const fixture={...emptyProgress(),coins:95};
     window.localStorage.setItem(SAVE_KEY,JSON.stringify(fixture));
     await reloadGame();
     let metaWin=frame.contentWindow,metaDoc=frame.contentDocument;
@@ -208,21 +208,33 @@ async function run(){
     const runner=metaDoc.querySelector('#meta-list [data-upgrade="runner"]');
     if(!runner||runner.disabled)throw new Error('Runner upgrade was not available for the 25-coin fixture');
     runner.click();
-    if(metaDoc.querySelector('#meta-balance').textContent!=='30'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
+    if(metaDoc.querySelector('#meta-balance').textContent!=='70'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')){
       throw new Error('Safehouse purchase did not spend 25 coins and raise Runner’s Legs to level 1');
     }
     const luckyFind=metaDoc.querySelector('#meta-list [data-upgrade="luckyfind"]');
-    if(!luckyFind||luckyFind.disabled)throw new Error('Lucky Find was not available for the 30-coin balance');
+    if(!luckyFind||luckyFind.disabled)throw new Error('Lucky Find was not available for the 70-coin balance');
     luckyFind.click();
-    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')){
+    if(metaDoc.querySelector('#meta-balance').textContent!=='40'||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')){
       throw new Error('Lucky Find did not spend coins and reach level 1');
+    }
+    const vitality=metaDoc.querySelector('#meta-list [data-upgrade="vitalreserve"]');
+    if(!vitality||vitality.disabled)throw new Error('Vital Reserve was not available for the 40-coin balance');
+    vitality.click();
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('VITAL RESERVE · 1/3')){
+      throw new Error('Vital Reserve did not spend 40 coins and reach level 1');
     }
     await reloadGame();
     metaWin=frame.contentWindow;metaDoc=frame.contentDocument;
     await waitForBoot(metaDoc,metaWin);
     metaDoc.querySelector('#meta-button').click();
-    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')){
-      throw new Error('Safehouse Runner and Lucky Find upgrades did not survive a reload');
+    if(metaDoc.querySelector('#meta-balance').textContent!=='0'||!metaDoc.querySelector('#meta-list').textContent.includes('RUNNER’S LEGS · 1/3')||!metaDoc.querySelector('#meta-list').textContent.includes('LUCKY FIND · 1/3')||!metaDoc.querySelector('#meta-list').textContent.includes('VITAL RESERVE · 1/3')){
+      throw new Error('Safehouse upgrades did not survive a reload');
+    }
+    metaDoc.querySelector('#close-meta').click();
+    metaDoc.querySelector('#start-button').click();
+    const upgradedRun=stateOf(metaWin);
+    if(upgradedRun.player?.health!==6||upgradedRun.player?.maxHealth!==6){
+      throw new Error(`Vital Reserve did not increase full starting health: ${JSON.stringify(upgradedRun.player)}`);
     }
   }finally{
     if(originalProgress===null)window.localStorage.removeItem(SAVE_KEY);
@@ -232,11 +244,11 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Runner and Lucky Find persist after reload · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Vital Reserve, Runner, and Lucky Find persist after reload · upgraded run starts at 6/6 health · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{
   report.className='fail';
   report.textContent=`FAIL\n${error.stack||error.message}`;
 }),{once:true});
-frame.src='../index.html?browser-smoke&v=burst-3';
+frame.src='../index.html?browser-smoke&v=vital-reserve-2';

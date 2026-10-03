@@ -11,10 +11,11 @@ export const META_UPGRADES = [
   {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance and +2 room-clear scrap per level',costs:[20,45,75]},
   {id:'luckyfind',name:'LUCKY FIND',description:'Find higher-quality attachment drops more often',costs:[30,60,90]},
   {id:'roomsense',name:'ROOM SENSE',description:`Reveal room outlines and enemy blips through walls within ${ROOM_SENSE_RANGE_TILES.join(' / ')} tiles`,costs:[35,65,100]},
+  {id:'vitalreserve',name:'VITAL RESERVE',description:'+1 maximum health per level · start each run fully healed',costs:[40,80,130]},
 ];
 
 export function emptyProgress() {
-  return {version:SAVE_VERSION,coins:0,upgrades:{runner:0,stillmind:0,carryrig:0,salvager:0,luckyfind:0,roomsense:0}};
+  return {version:SAVE_VERSION,coins:0,upgrades:{runner:0,stillmind:0,carryrig:0,salvager:0,luckyfind:0,roomsense:0,vitalreserve:0}};
 }
 
 export function parseProgress(serialized) {
@@ -55,10 +56,11 @@ export function purchaseUpgrade(progress,id) {
 }
 
 export function progressionStats(progress) {
-  const {runner,stillmind,carryrig,salvager,luckyfind,roomsense}=progress.upgrades;
+  const {runner,stillmind,carryrig,salvager,luckyfind,roomsense,vitalreserve}=progress.upgrades;
   return {
     moveSpeed:112*(1+.06*runner),
     idleScale:Math.max(.12,.18-.015*stillmind),
+    maxHealth:5+vitalreserve,
     carryCapacity:BASE_CARRY_CAPACITY+carryrig,
     maxWeaponSlots:carryrig>=3?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),

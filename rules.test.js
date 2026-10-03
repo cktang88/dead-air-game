@@ -338,13 +338,28 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
+});
+
+test('Vital Reserve raises saved starting health by one per capped tier',()=>{
+  let progress=awardCoins(emptyProgress(),1000);
+  for(const maxHealth of [6,7,8]){
+    const purchase=purchaseUpgrade(progress,'vitalreserve');
+    assert.equal(purchase.purchased,true);
+    progress=purchase.progress;
+    assert.equal(progressionStats(progress).maxHealth,maxHealth);
+  }
+  assert.equal(purchaseUpgrade(progress,'vitalreserve').purchased,false);
+  const restored=parseProgress(JSON.stringify(progress));
+  assert.equal(restored.upgrades.vitalreserve,3);
+  assert.equal(progressionStats(restored).maxHealth,8);
+  assert.equal(progressionStats(parseProgress(JSON.stringify({version:1,coins:12,upgrades:{runner:1}}))).maxHealth,5);
 });
 
 test('Lucky Find is saved and adds capped rarity levels without changing item quantity',()=>{

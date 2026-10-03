@@ -1,4 +1,4 @@
-import {parseProgress, SAVE_KEY} from './progression.js';
+import {parseProgress, SAVE_KEY} from './progression.js?v=vital-reserve-2';
 
 export function readSavedProgress(storage) {
   return parseProgress(storage.getItem(SAVE_KEY));
