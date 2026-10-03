@@ -678,6 +678,7 @@ function updateEnemies(dt){
     else if(canAcquire&&e.fire<=0&&e.stun<=0){e.aim={x:nx,y:ny};e.aimTimer=e.def.brain==='guard'?.62:.48;playEnemyTell();}
     if(e.stun>0){vx=0;vy=0;e.navGoal=null;e.aimTimer=0;e.aimLine.visible=false;}
     for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}
+    if(e.aimTimer>0){vx=0;vy=0;}
     e.body.setLinvel({x:vx+e.knock.x,y:vy+e.knock.y},true);e.knock.x*=Math.pow(.1,dt);e.knock.y*=Math.pow(.1,dt);
     const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);if(e.healthBar){e.healthBar.position.set(e.x,e.radius*1.85,e.y-20);e.healthFill.scale.x=clamp(e.hp/e.maxHp,0,1);e.healthFill.position.x=-17*(1-e.healthFill.scale.x);}const charging=e.meleeWindup>0,facing=charging||e.aimTimer>0?e.aim:{x:nx,y:ny},reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:charging?0x8f3215:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.material.emissive.setHex(charging?0xff7738:e.def.color);e.mesh.userData.body.material.emissiveIntensity=charging?.72:.05;e.mesh.userData.body.scale.setScalar(e.type==='brute'?(charging?1.42:1.22):1);
     if(e.type==='chaser'&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);

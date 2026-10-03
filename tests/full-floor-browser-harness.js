@@ -148,6 +148,81 @@ function gateApproachPath(gate){
   return [];
 }
 
+function safeDodgeKey(state, threat){
+  const towardX=threat.x-state.player.x,towardY=threat.y-state.player.y;
+  const candidates=Math.abs(towardX)>Math.abs(towardY)?[
+    {key:'ArrowUp',dx:0,dy:-1},{key:'ArrowDown',dx:0,dy:1},
+  ]:[
+    {key:'ArrowLeft',dx:-1,dy:0},{key:'ArrowRight',dx:1,dy:0},
+  ];
+  const startX=Math.floor(state.player.x/32),startY=Math.floor(state.player.y/32);
+  const closedDoors=new Set(state.lockedDoors.filter(door=>!door.opened).flatMap(door=>door.tiles||[]).map(tile=>`${tile.x},${tile.y}`));
+  const obstacles=[...state.crates,...(state.cover||[])];
+  return candidates.find(({dx,dy})=>[1,2].every(distance=>{
+    const x=startX+dx*distance,y=startY+dy*distance,cx=(x+.5)*32,cy=(y+.5)*32;
+    return topology.cells[y]?.[x]===0&&!closedDoors.has(`${x},${y}`)&&
+      obstacles.every(obstacle=>Math.hypot(cx-obstacle.x,cy-obstacle.y)>=obstacle.radius+14);
+  }))?.key||null;
+}
+
+async function probeRangedDodge(roomIndex){
+  const result={telegraphSeen:false,planningTimeScale:null,dodgeKey:null,movementTimeScale:null,
+    enemyBulletSeen:false,stationaryPathMiss:null,wouldHitIfStill:false,
+    healthBefore:null,healthAfter:null,armorBefore:null,armorAfter:null};
+  releaseMovement();
+  await wait(400);
+  for(let frameIndex=0;frameIndex<1200;frameIndex++){
+    let state=serviceDialogs();
+    const enemies=state.enemies.filter(enemy=>enemy.roomIndex===roomIndex);
+    const bulletCount=state.bullets.filter(bullet=>bullet.owner==='enemy').length;
+    if(bulletCount){result.enemyBulletSeen=true;break;}
+    const ranged=enemies.find(enemy=>['GUNNER','WARDEN'].includes(enemy.type));
+    if(!ranged)return result;
+    if(ranged.aiming){
+      result.telegraphSeen=true;result.planningTimeScale=state.timeScale;
+      const target={x:state.player.x,y:state.player.y};
+      let incoming=null;
+      for(let step=0;step<360;step++){
+        advance();
+        const waiting=gameState();
+        incoming=waiting.bullets.find(bullet=>bullet.owner==='enemy')||null;
+        if(incoming){state=waiting;break;}
+      }
+      if(!incoming)return result;
+      result.enemyBulletSeen=true;
+      const velocity=Math.hypot(incoming.vx,incoming.vy)||1,offsetX=target.x-incoming.x,offsetY=target.y-incoming.y;
+      result.stationaryPathMiss=Math.abs(offsetX*incoming.vy-offsetY*incoming.vx)/velocity;
+      result.wouldHitIfStill=(offsetX*incoming.vx+offsetY*incoming.vy)>0&&result.stationaryPathMiss<=10;
+      result.dodgeKey=safeDodgeKey(state,incoming);
+      if(!result.dodgeKey)return result;
+      result.healthBefore=state.player.health;result.armorBefore=state.player.armor;
+      key(result.dodgeKey);
+      result.movementTimeScale=gameState().timeScale;
+      let activeBullets=0;
+      for(let step=0;step<55;step++){
+        advance();
+        activeBullets=Math.max(activeBullets,gameState().bullets.filter(bullet=>bullet.owner==='enemy').length);
+      }
+      key(result.dodgeKey,'keyup');releaseMovement();
+      for(let step=0;step<90;step++){
+        advance();
+        activeBullets=Math.max(activeBullets,gameState().bullets.filter(bullet=>bullet.owner==='enemy').length);
+      }
+      const after=gameState();
+      result.enemyBulletSeen=result.enemyBulletSeen||activeBullets>0;result.healthAfter=after.player.health;result.armorAfter=after.player.armor;
+      return result;
+    }
+    const melee=enemies.find(enemy=>enemy.charging);
+    if(melee){
+      const dodge=safeDodgeKey(state,melee);
+      if(dodge){key(dodge);advance(26);key(dodge,'keyup');releaseMovement();await wait(400);continue;}
+    }
+    advance();
+    if(frameIndex%30===29)await wait(5);
+  }
+  return result;
+}
+
 function sample(state) {
   return {room: state.room, health: state.player?.health ?? null, armor: state.player?.armor ?? null,
     scrap: state.scrap, kills: state.kills, ammo: state.player?.ammo ?? null, reserve: state.player?.reserve ?? null,
@@ -167,7 +242,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-13';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-20';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -225,6 +300,10 @@ async function run() {
       const start = {...sample(state), livingEnemies: state.roomProgress[room.index]?.livingEnemies ?? 0};
       const enemyTypes=state.enemies.filter(enemy=>enemy.roomIndex===room.index).map(enemy=>enemy.type);
       let fightSteps = 0,maxEnemyBullets=0,rangedTelegraphs=0;
+      if(enemyTypes.some(type=>['GUNNER','WARDEN'].includes(type))){
+        report.rangedDodge=await probeRangedDodge(room.index);
+        if(report.rangedDodge.enemyBulletSeen)maxEnemyBullets=1;
+      }
       for (; fightSteps < 1800; fightSteps++) {
         state = serviceDialogs();
         if (state.mode !== 'play' || !state.player) break;
@@ -277,6 +356,11 @@ async function run() {
     const affordableGate=report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
     if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
       report.error='The probe could not open an affordable scrap gate';
+    }
+    if(!report.error&&report.rangedDodge&&(!report.rangedDodge.telegraphSeen||report.rangedDodge.planningTimeScale!=='0.18'||
+      report.rangedDodge.movementTimeScale!=='1.00'||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
+      report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
+      report.error='The ranged attack was not confirmed as a dodged real bullet';
     }
   } catch (error) {
     report.error = String(error?.stack || error);
