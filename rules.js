@@ -99,6 +99,12 @@ export function distanceToRect(point, rect) {
   return Math.hypot(dx,dy);
 }
 
+export function withinWorldView(point,center,halfWidth,halfHeight,margin=0) {
+  if (![point.x,point.y,center.x,center.y,halfWidth,halfHeight,margin].every(Number.isFinite)||
+    halfWidth<0||halfHeight<0||margin<0) return false;
+  return Math.abs(point.x-center.x)<=halfWidth+margin&&Math.abs(point.y-center.y)<=halfHeight+margin;
+}
+
 export function segmentIntersectsCircle(start, end, center, radius) {
   if (![start.x,start.y,end.x,end.y,center.x,center.y,radius].every(Number.isFinite)||radius<0) return false;
   const dx=end.x-start.x,dy=end.y-start.y,lengthSquared=dx*dx+dy*dy;

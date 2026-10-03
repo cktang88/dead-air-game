@@ -3,7 +3,7 @@ import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {isAudioMuted, loadAudioSettings, playCrateBreak, playEnemyTell, playExtraction, playGunshot, playPickup, playReload, playRoomClear, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
-import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js?v=aim-view-1';
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -21,6 +21,7 @@ import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
 import {DEFAULT_KEY_BINDINGS,KEY_BINDING_ACTIONS,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,rebindKey,resolveMovementKey,saveKeyBindings} from './keybindings.js';
 
 const $ = (id) => document.getElementById(id);
+const CAMERA_HALF_HEIGHT=260;
 const attachmentsFor=(gun)=>state.attachments.get(gun.id)||new Map();
 const shellForRun=()=>SHOTGUN_SHELLS.find(shell=>shell.id===state.shotgunShellId)||SHOTGUN_SHELLS[0];
 const magSize=(gun)=>weaponStats(gun,attachmentsFor(gun)).magazine;
@@ -654,7 +655,7 @@ function updateEnemies(dt){
       const tactic=chooseEnemyTactic({actor,target:{x:player.x,y:player.y},canSee,projectiles:playerShots,covers,canMoveTo:goal=>enemyCanMoveTo(e,goal)});
       if(tactic.intent==='dodge'||e.tacticTimer<=0){e.intent=tactic.intent;e.intentGoal=tactic.goal;e.navGoal=tactic.intent==='dodge'?tactic.goal:routedEnemyGoal(e,tactic.goal);e.tacticTimer=tactic.intent==='dodge'?.14:.42;}
     }
-    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),canAcquire=ranged&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
+    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),visibleForAim=withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT,24),canAcquire=ranged&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
     if(e.type==='brute'){
       if(e.stun>0){e.meleeWindup=0;e.aimLine.visible=false;e.meleeTelegraph.visible=false;}
       else{
@@ -752,7 +753,7 @@ function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/st
 function newRun(){
   input.keys.clear();input.firing=false;input.interact=false;const chosenSeed=parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));ROT.RNG.setSeed(state.seed);$('seed-display').textContent=String(state.seed);
   state.cacheOpen=false;state.cachePickup=null;$('cache-panel').hidden=true;$('cache-panel').setAttribute('aria-hidden','true');state.mode='play';state.paused=false;state.merchantOpen=false;state.merchantRoom=null;state.pendingGunPickup=null;$('weapon-pickup').hidden=true;$('weapon-pickup').setAttribute('aria-hidden','true');state.running=true;state.paidOut=false;state.elapsed=0;state.time=0;state.kills=0;state.scrap=40;state.health=5;state.maxHealth=5;state.armor=0;state.maxArmor=0;state.gear=null;state.weaponSlots=[0,1];state.activeSlot=0;state.carryCapacity=progressionStats(state.progress).carryCapacity;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.attachments=new Map(GUNS.map(gun=>[gun.id,new Map()]));state.throwables={smoke:1,flash:1,frag:2,incendiary:1};state.throwableIndex=2;state.shotgunShellId='buckshot';state.lastAction=0;state.lastActionKind='other';state.fireCooldown=0;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');$('run-result').hidden=true;$('start-button').textContent='ENTER THE SECTOR ↗';$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';makeLevel();updateThrowableHud();toast('MOVE ALONE AT 1× · FIRE STAYS BLENDED · STOP TO PLAN',3200);}
-function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);const aspect=innerWidth/innerHeight,halfH=260;camera.left=-aspect*halfH;camera.right=aspect*halfH;camera.top=halfH;camera.bottom=-halfH;camera.updateProjectionMatrix();}
+function resize(){if(!renderer)return;renderer.setSize(innerWidth,innerHeight);const aspect=innerWidth/innerHeight;camera.left=-aspect*CAMERA_HALF_HEIGHT;camera.right=aspect*CAMERA_HALF_HEIGHT;camera.top=CAMERA_HALF_HEIGHT;camera.bottom=-CAMERA_HALF_HEIGHT;camera.updateProjectionMatrix();}
 function render(){renderer.render(scene,camera);}
 function renderGameToText(){
   const gear=GEAR.find(item=>item.id===state.gear),room=state.rooms[state.currentRoom];
@@ -852,7 +853,7 @@ function setupControls(){
 async function boot(){
   await RAPIER.init();
   scene=new THREE.Scene();scene.background=new THREE.Color(0x171420);scene.fog=new THREE.Fog(0x171420,300,1900);
-  camera=new THREE.OrthographicCamera(-260,260,260,-260,.1,240);camera.position.set(0,90,0);camera.up.set(0,0,-1);camera.lookAt(0,0,0);
+  camera=new THREE.OrthographicCamera(-CAMERA_HALF_HEIGHT,CAMERA_HALF_HEIGHT,CAMERA_HALF_HEIGHT,-CAMERA_HALF_HEIGHT,.1,240);camera.position.set(0,90,0);camera.up.set(0,0,-1);camera.lookAt(0,0,0);
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.28;renderer.domElement.tabIndex=0;renderer.domElement.setAttribute('aria-label','DEAD AIR game. Use WASD to move and the mouse to aim and fire.');$('game').appendChild(renderer.domElement);
   lighting=new THREE.Group();lighting.add(new THREE.HemisphereLight(0xbab6d2,0x35313d,2.1));const key=new THREE.DirectionalLight(0xffe9cc,2.2);key.position.set(-30,70,10);key.castShadow=true;key.shadow.mapSize.set(1024,1024);lighting.add(key);
   const ambient=new THREE.PointLight(0xff556e,55,220);ambient.position.set(0,25,0);lighting.add(ambient);scene.add(lighting);

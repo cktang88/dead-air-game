@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS, TILE} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats} from './rules.js';
+import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('firing blends idle and normal time even while moving, and menus pause',()=>{
@@ -37,6 +37,16 @@ test('ranged enemy shots leave time for a sidestep at idle and action tempo',()=
       assert.ok(sidestep>=18,`${enemy.name} should allow an 18-unit sidestep at ${scale}×`);
     }
   }
+});
+
+test('ranged aim starts only when its tell is inside the camera view',()=>{
+  const player={x:400,y:300},halfWidth=450,halfHeight=260,margin=24;
+  assert.equal(withinWorldView({x:874,y:584},player,halfWidth,halfHeight,margin),true);
+  assert.equal(withinWorldView({x:875,y:300},player,halfWidth,halfHeight,margin),false);
+  assert.equal(withinWorldView({x:400,y:585},player,halfWidth,halfHeight,margin),false);
+  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,halfHeight,0),true);
+  assert.equal(withinWorldView({x:Infinity,y:300},player,halfWidth,halfHeight,margin),false);
+  assert.equal(withinWorldView({x:400,y:300},player,halfWidth,-1,margin),false);
 });
 
 test('gun mods change the weapon values consumed by combat',()=>{

@@ -349,3 +349,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 - The README advertised arrow keys, but isolated browser play exposed that only WASD actually moved the player. Added arrow aliases for default movement; an arrow bound to another action or a remapped direction keeps its assigned meaning.
 - Added mapping tests and changed the browser smoke check to exercise right-arrow movement when that key is free, while honoring saved remaps. `npm test` passes all 93 tests. The browser smoke confirms +53 movement at 1×, firing at 0.42×, ammo use, pause, and the two-slot loadout. An isolated browser action burst moved the player 106 world units with the arrow key; its screenshot was inspected.
+
+## Visible enemy aim and seeded encounter validation
+
+- Ranged enemies now begin their aim tell only when their position is inside the orthographic camera view. The view width follows the same camera aspect calculation used on resize; a small edge margin keeps boundary targets eligible. Added finite-input and edge-boundary unit cases.
+- Improved the seeded browser encounter driver so navigation is not interrupted by its own projectile dodges, and its dodge probe isolates ranged fire from active melee attackers and previous shots. Seed 417 now clears FURNACE (3 enemies), opens the 18-scrap reward gate, and dodges a fresh gunner bullet that would hit if stationary: planning at 0.18×, movement at 1.00×, and health/armor unchanged through impact. The probe restores its saved profile and reports no browser errors.
+- Verification: `npm test` passes all 107 tests; `node --check` passes for the gameplay and browser harness modules; `git diff --check` passes. The in-app browser scene and HUD screenshot were visually inspected.
+- Remaining: repeat the combat probe with additional seeds, manually play the full floor for balance, and profile sustained full-floor performance. A browser harness is not a substitute for that longer human playtest.
