@@ -49,7 +49,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 - Enemies belong to their spawn encounter. A living enemy still blocks that room's clear reward if it chases beyond the original walls.
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
 - Each room gets a deterministic role: combat, cache, armory, clinic, hazard, merchant, or extraction. Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
-- Keep the entry and extraction roles reserved. Add optional branches, locked reward doors, rest/miniboss rooms, and secrets as later generation work.
+- Keep entry and extraction roles reserved. Optional branches, a hidden cache, topology-validated scrap gates, FIELD CLINIC rest stops, and the Warden miniboss are implemented; a cache gate appears only when it will not block the extraction route.
 - Rooms are processed by shortest route from the entry. The first two ordinary combat rooms cap at three enemies; later ordinary rooms roll two to four. Cache, armory, hazard, and elite budgets keep their role-specific counts. A room may be small and dangerous or large with scattered guards.
 - Room footprints vary between rectangles and L, U, or C outlines. Keep the center and door approaches clear, and preserve a walkable route between all connected rooms.
 - Prevent spawning enemies, pickups, crates, or the player inside solid walls or on top of another required object.
@@ -299,6 +299,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Add visible player/enemy weapons that track aim and tilt during reload.
 - [x] Add enemy aim telegraphs and committed projectile directions so shots can be dodged at both tempo speeds.
+- [x] Start ranged aim tells only when the enemy is within the camera view, so warnings do not begin entirely off-screen.
 - [x] Connect smoke, flash, frag, and incendiary throwables to input, counts, physics, effects, and enemy behavior.
 - [x] Add rare shopkeeper rooms and scrap purchases for guns, per-gun attachments, armor/health, and throwable refills.
 - [ ] Playtest and tune line of sight, enemy interruptions, throw fuses, rare shop frequency, and carry limits.
@@ -307,6 +308,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
 - [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
+- [x] Add a seeded encounter browser probe for clearing the first room, opening an affordable reward gate, and dodging a fresh ranged shot that would hit a stationary player (`tests/full-floor-browser-harness.html`).
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.
 - [x] Add remappable keyboard controls with WASD and fallback arrow movement, while keeping Escape, Tab, F, and R fixed for pause, loadout, fullscreen, and restart.
@@ -317,4 +319,4 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 ## Current acceptance gate
 
-A player can launch a run, explore generated connected rooms, discover a hidden cache branch, and find an optional scrap-gated cache door, Warden miniboss, and safe FIELD CLINIC on supported floors. Runs use two weighted weapon slots, armor with durability separate from health, dodgeable ranged attacks, throwables, a rare merchant, destructible crates, room-clear rewards, and extraction or death. Both outcomes award persistent coins for capped upgrades to speed, idle time, crate loot, carry capacity, and minimap scouting. Remaining work focuses on balance, repeated-run testing, and other roadmap items above.
+A player can launch a seeded run, explore generated connected rooms, discover a hidden cache branch, and find an optional scrap-gated cache door, Warden miniboss, and safe FIELD CLINIC on supported floors. Runs use weighted weapon slots, armor with durability separate from health, dodgeable ranged attacks, throwables, a rare merchant, destructible crates, room-clear rewards, and extraction or death. Both outcomes award persistent coins for capped upgrades to speed, idle time, crate loot, carry capacity, and minimap scouting. The main open work is full-floor human playtesting, balance across different seeds, and sustained performance profiling; the scripted browser probe covers the first encounter, not a complete run.
