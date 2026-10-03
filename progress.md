@@ -363,9 +363,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Seeded combat probe reliability follow-up
 
 - The combat driver now dodges incoming bullets before fighting enemies encountered while navigating, and the dodge check still proves that a real ranged bullet would hit a stationary player before the sidestep. It also selects the Street Sweeper at close range when that weapon is in the saved loadout.
-- Verification: `npm test` passes 119 tests; the browser harness passes seeds 417 and 9001, clears the first combat room, confirms a 0.16× planning pace and 1× dodge movement, and reports no browser errors. Seed 417 also opens the affordable cache gate.
-- Seed 123456789 remains an unresolved stress probe: it cannot reach its selected rooms and the player dies after 7 kills. A read-only review points to weaknesses in the scripted driver (stationary shooting, poor Brute evasion, and no throwable or pickup use), so this result does not establish a normal-player balance failure. The navigation failures also need route-position diagnostics before attributing them to the game.
-- Remaining: improve the probe's movement/combat policy and route-failure diagnostics, play a full floor manually for balance, and profile sustained full-floor performance.
+- A stalled waypoint now triggers up to two route recalculations, and failed travel events report path length, current room, health, kills, and whether the player died en route.
+- Verification: `npm test` passes 119 tests; seeds 417 and 9001 clear their first combat room and confirm a 0.16× planning pace with 1× dodge movement and no browser errors. Seed 417 also opens the affordable cache gate after the route-replanning change.
+- Seed 123456789 now reaches THE GALLERY instead of stalling on its stale route, but the stationary test driver still fails to clear two Gunners after 1,800 steps (4/5 health, armor depleted, 5 total kills). Its result is still not a human-playtest balance verdict; the driver ignores grenades and pickups and does not strafe while firing.
+- Remaining: improve the probe's combat policy, play a full floor manually for balance, and profile sustained full-floor performance.
 
 ## Timed KITE BURST
 

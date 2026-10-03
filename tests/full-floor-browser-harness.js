@@ -105,20 +105,31 @@ function moveTo(target, tolerance = 16, skipFightRoomIndex = null) {
 
 function movePath(path, finalTolerance = 16, skipFightRoomIndex = null) {
   if(!path.length)return false;
-  const waypoints=[];
-  let direction=null;
-  for(let i=1;i<path.length;i++){
-    const nextDirection={x:path[i].x-path[i-1].x,y:path[i].y-path[i-1].y};
-    if(direction&& (nextDirection.x!==direction.x||nextDirection.y!==direction.y))waypoints.push(path[i-1]);
-    direction=nextDirection;
+  const goal=path.at(-1);
+  for(let attempt=0;attempt<3;attempt++){
+    const waypoints=[];
+    let direction=null;
+    for(let i=1;i<path.length;i++){
+      const nextDirection={x:path[i].x-path[i-1].x,y:path[i].y-path[i-1].y};
+      if(direction&& (nextDirection.x!==direction.x||nextDirection.y!==direction.y))waypoints.push(path[i-1]);
+      direction=nextDirection;
+    }
+    waypoints.push(goal);
+    let reached=true;
+    for (const [index,cell] of waypoints.entries()) {
+      const tolerance=index===waypoints.length-1?finalTolerance:16;
+      if (!moveTo({x: (cell.x + 0.5) * 32, y: (cell.y + 0.5) * 32},tolerance,skipFightRoomIndex)) {
+        const state=serviceDialogs();
+        if(state.mode!=='play'||attempt===2){releaseMovement();return false;}
+        path=navigationPath(goal);
+        if(!path.length){releaseMovement();return false;}
+        reached=false;
+        break;
+      }
+    }
+    if(reached){releaseMovement();return true;}
   }
-  waypoints.push(path.at(-1));
-  for (const [index,cell] of waypoints.entries()) {
-    const tolerance=index===waypoints.length-1?finalTolerance:16;
-    if (!moveTo({x: (cell.x + 0.5) * 32, y: (cell.y + 0.5) * 32},tolerance,skipFightRoomIndex)) return false;
-  }
-  releaseMovement();
-  return true;
+  releaseMovement();return false;
 }
 
 function navigationPath(target){
@@ -397,7 +408,9 @@ async function run() {
       const entered = path.length>0&&movePath(path,16,room.index);
       state = serviceDialogs();
       if ((!entered && state.room !== room.name) || state.mode !== 'play') {
-        report.events.push({event: 'room-skipped', room: room.name, reason: 'could not reach'});
+        report.events.push({event: 'room-skipped', room: room.name,
+          reason: state.mode!=='play'?'player died en route':'could not reach',
+          pathLength:path.length,player:sample(state)});
         if(state.mode!=='play')break;
         continue;
       }
@@ -451,7 +464,9 @@ async function run() {
     }
     report.final = sample(gameState());
     if (report.rooms.length !== 1 || !report.rooms[0].cleared || report.rooms[0].end.kills<=report.rooms[0].start.kills) {
-      report.error = 'The probe did not kill an enemy and clear its first encounter';
+      report.error=report.final.mode==='dead'&&report.rooms.length===0?
+        `The player died before clearing a combat room (${report.final.kills} kills)`:
+        'The probe did not kill an enemy and clear its first encounter';
     }
     const affordableGate=report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
     if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
