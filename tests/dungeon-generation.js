@@ -41,7 +41,7 @@ try {
     const exit = dungeon.rooms[dungeon.rooms.length - 1];
     let combatIndex=0;
     for(const room of dungeon.rooms.slice(1)){
-      if(room.merchant)continue;
+      if(room.role==='merchant')continue;
       const count=roomEnemyCount(room.role,.99,combatIndex);
       if(room.role==='combat'){
         const expected=combatIndex<2?3:4;

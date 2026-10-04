@@ -60,6 +60,6 @@ export function hasUnclearedRouteEnemies(rooms,enemies){
   return enemies.some(enemy=>enemy.alive&&rooms[enemy.roomIndex]?.branch!==true);
 }
 
-export function roomHasEncounter(roomIndex,enemies){
-  return roomIndex>0&&enemies.some(enemy=>enemy.roomIndex===roomIndex);
+export function roomHasEncounter(room){
+  return room.index>0&&room.hadEncounter===true;
 }

@@ -99,12 +99,8 @@ test('optional branch enemies do not block extraction, but main-route enemies do
 });
 
 test('only fought rooms earn the room-clear scrap reward',()=>{
-  const enemies=[
-    {alive:false,roomIndex:2},
-    {alive:true,roomIndex:3},
-  ];
-  assert.equal(roomHasEncounter(0,enemies),false,'the entry room never gets a clear payout');
-  assert.equal(roomHasEncounter(1,[]),false,'an empty clinic or merchant gets no fight reward');
-  assert.equal(roomHasEncounter(2,enemies),true,'a defeated encounter still earns its reward');
-  assert.equal(roomHasEncounter(3,enemies),true,'a living encounter earns its reward when it later clears');
+  assert.equal(roomHasEncounter({index:0,hadEncounter:true}),false,'the entry room never gets a clear payout');
+  assert.equal(roomHasEncounter({index:1,role:'clinic'}),false,'an empty clinic or merchant gets no fight reward');
+  assert.equal(roomHasEncounter({index:2,hadEncounter:true}),true,'a defeated encounter still earns its reward after enemy records are removed');
+  assert.equal(roomHasEncounter({index:3,hadEncounter:true}),true,'room history exists while the encounter is still alive');
 });
