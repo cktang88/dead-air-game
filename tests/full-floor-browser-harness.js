@@ -418,10 +418,27 @@ async function run() {
     report.initialGates = state.lockedDoors;
     const routeEncounters = rooms.filter((room, index) => (index === rooms.length - 1 ||
       index > 0 && room.branch !== true) && (state.roomProgress[room.index]?.livingEnemies ?? 0) > 0)
-      .sort((a, b) => shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: a.cx, y: a.cy}).length -
+      .sort((a, b) => a.index===rooms.length-1?1:b.index===rooms.length-1?-1:
+        shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: a.cx, y: a.cy}).length -
         shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
     report.routeEncounters=routeEncounters.map(({name,index,branch,role})=>({name,index,branch,role}));
     if (!routeEncounters.length) throw new Error('Seeded map did not have a main-route encounter');
+
+    if(fullFloor){
+      for(const room of rooms.filter(candidate=>['clinic','armory','merchant'].includes(candidate.role))){
+        state=serviceDialogs();
+        if(state.mode!=='play'||!state.player)break;
+        if(room.role==='clinic'&&state.player.health>=state.player.maxHealth)continue;
+        const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16,room.index);
+        state=serviceDialogs();
+        report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
+        if(!reached||state.mode!=='play')continue;
+        if(room.role==='merchant'){
+          press(bindings.interact);advance();state=serviceDialogs();
+        }
+      }
+    }
+
     for (const room of routeEncounters) {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
@@ -482,7 +499,7 @@ async function run() {
 
       // Exercise the market modal in a market room; serviceDialogs buys a medkit if useful.
       if (state.merchant) { press('e'); advance(); state = serviceDialogs(); }
-      if(report.rooms.length===1){
+      if(!fullFloor&&report.rooms.length===1){
         for(const gate of gameState().lockedDoors.filter(item=>!item.opened&&gameState().scrap>=item.cost)){
           const gatePath=gateApproachPath(gate);
           const reached=gatePath.length>0&&movePath(gatePath,2);
@@ -497,24 +514,12 @@ async function run() {
     }
 
     if(fullFloor&&gameState().mode==='play'){
-      for(const room of rooms.filter(candidate=>['clinic','armory','merchant'].includes(candidate.role))){
-        state=serviceDialogs();
-        if(state.mode!=='play'||!state.player)break;
-        if(room.role==='clinic'&&state.player.health>=state.player.maxHealth)continue;
-        const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16,room.index);
-        state=serviceDialogs();
-        report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
-        if(!reached||state.mode!=='play')continue;
-        if(room.role==='merchant'){
-          press(bindings.interact);advance();state=serviceDialogs();
-        }
-      }
       state=serviceDialogs();
       if(state.mode==='play'&&state.player){
         const exit=state.pickups.find(pickup=>pickup.type==='exit');
         const path=exit?navigationPath({x:Math.floor(exit.x/32),y:Math.floor(exit.y/32)}):[];
-        const reached=path.length>0&&movePath(path,16);
-        report.extraction={attempted:true,pathLength:path.length,reached,player:sample(gameState())};
+        const movedToExit=path.length>0&&movePath(path,16),final=gameState();
+        report.extraction={attempted:true,pathLength:path.length,reached:movedToExit||final.mode==='won',player:sample(final)};
       }
     }
     report.final = sample(gameState());
