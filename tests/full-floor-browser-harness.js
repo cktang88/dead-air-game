@@ -54,6 +54,14 @@ function serviceDialogs() {
   }
   if (!doc.querySelector('#loadout-confirm').hidden) clickIfVisible('#loadout-accept');
   else if (doc.querySelector('#loadout').classList.contains('show')) doc.querySelector('#close-loadout').click();
+  if (!doc.querySelector('#cache-panel').hidden) {
+    const ammo=doc.querySelector('#cache-options [data-cache="ammo"]:not(:disabled)');
+    const health=doc.querySelector('#cache-options [data-cache="health"]:not(:disabled)');
+    if(ammo&&snapshot.player?.ammo+snapshot.player?.reserve<30)ammo.click();
+    else if(health&&snapshot.player?.health<snapshot.player?.maxHealth)health.click();
+    else if(ammo)ammo.click();
+    else clickIfVisible('#close-cache');
+  }
   if (!doc.querySelector('#merchant-panel').hidden) {
     const medkit = [...doc.querySelectorAll('#merchant-stock [data-merchant]')].find(button =>
       button.parentElement?.textContent.includes('FIELD MEDKIT') && !button.disabled);
@@ -83,13 +91,12 @@ function moveTo(target, tolerance = 16, skipFightRoomIndex = null) {
   for (let step = 0; step < 1200; step++) {
     const state = serviceDialogs();
     if (state.mode !== 'play' || !state.player) return false;
+    if(dodgeIncomingProjectile(state))continue;
     if(state.roomIndex!==skipFightRoomIndex&&state.enemies.some(enemy=>enemy.roomIndex===state.roomIndex)){
       stagnant=0;previous=Infinity;
-      if(dodgeIncomingProjectile(state))continue;
       fightInCurrentRoom(state);
       continue;
     }
-    if(state.roomIndex===skipFightRoomIndex&&dodgeIncomingProjectile(state))continue;
     const dx = target.x - state.player.x, dy = target.y - state.player.y;
     const distance = Math.hypot(dx, dy);
     if (distance < tolerance) { releaseMovement(); return true; }
@@ -246,11 +253,18 @@ function fightInCurrentRoom(state){
   enemies.sort((a,b)=>Math.hypot(a.x-state.player.x,a.y-state.player.y)-Math.hypot(b.x-state.player.x,b.y-state.player.y));
   const target=enemies[0],distance=Math.hypot(target.x-state.player.x,target.y-state.player.y);
   const preferredWeapon=distance<155?'STREET SWEEPER':'MACHINE PISTOL';
-  const preferredSlot=state.loadout.slots.indexOf(preferredWeapon);
-  if(preferredSlot>=0&&state.player.weapon!==preferredWeapon){
-    press(bindings[preferredSlot===0?'weaponOne':preferredSlot===1?'weaponTwo':'weaponThree']);
+  const usableWeapons=state.loadout.ammunition.filter(item=>item.magazine+item.reserve>0);
+  const weapon=usableWeapons.find(item=>item.weapon===preferredWeapon)||usableWeapons[0];
+  const weaponSlot=state.loadout.slots.indexOf(weapon?.weapon);
+  if(weapon&&state.player.weapon!==weapon.weapon){
+    press(bindings[weaponSlot===0?'weaponOne':weaponSlot===1?'weaponTwo':'weaponThree']);
     advance();
     return true;
+  }
+  const charger=enemies.find(enemy=>enemy.charging);
+  if(charger){
+    const dodge=safeDodgeKey(state,charger)||[Math.abs(charger.x-state.player.x)>Math.abs(charger.y-state.player.y)?'ArrowUp':'ArrowRight'];
+    key(dodge);advance(24);releaseMovement();return true;
   }
   if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){
     if(!state.player.reloading)press('Shift');
@@ -365,7 +379,7 @@ async function probeRangedDodge(roomIndex){
 function sample(state) {
   return {room: state.room, health: state.player?.health ?? null, armor: state.player?.armor ?? null,
     scrap: state.scrap, kills: state.kills, ammo: state.player?.ammo ?? null, reserve: state.player?.reserve ?? null,
-    elapsed: state.elapsed, mode: state.mode};
+    weapon:state.player?.weapon, weapons:state.loadout.ammunition, elapsed: state.elapsed, mode: state.mode};
 }
 
 async function waitForGame() {
@@ -381,7 +395,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, fullFloor, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?full-floor-browser-harness&v=retired-enemy-prune-1';
+    frame.src = '../index.html?full-floor-browser-harness&v=retired-enemy-prune-3';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -423,17 +437,20 @@ async function run() {
         shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
     report.routeEncounters=routeEncounters.map(({name,index,branch,role})=>({name,index,branch,role}));
     if (!routeEncounters.length) throw new Error('Seeded map did not have a main-route encounter');
-    const encountersToClear=fullFloor?rooms.filter(room=>(state.roomProgress[room.index]?.livingEnemies??0)>0)
+    const encountersByDistance=rooms.filter(room=>(state.roomProgress[room.index]?.livingEnemies??0)>0)
       .sort((a,b)=>a.index===rooms.length-1?1:b.index===rooms.length-1?-1:
         shortestFloorPath(topology.cells,{x:rooms[0].cx,y:rooms[0].cy},{x:a.cx,y:a.cy}).length-
-        shortestFloorPath(topology.cells,{x:rooms[0].cx,y:rooms[0].cy},{x:b.cx,y:b.cy}).length):routeEncounters;
+        shortestFloorPath(topology.cells,{x:rooms[0].cx,y:rooms[0].cy},{x:b.cx,y:b.cy}).length);
+    const cache=encountersByDistance.find(room=>room.role==='cache');
+    const encountersToClear=fullFloor&&cache
+      ?[...encountersByDistance.slice(0,2),cache,...encountersByDistance.filter(room=>room!==cache).slice(2)]:fullFloor?encountersByDistance:routeEncounters;
     if(fullFloor)report.fullFloorTargets=encountersToClear.map(({name,index,role})=>({name,index,role}));
 
     if(fullFloor){
-      for(const room of rooms.filter(candidate=>['clinic','armory','merchant'].includes(candidate.role))){
+      for(const room of rooms.filter(candidate=>['armory','merchant'].includes(candidate.role))){
         state=serviceDialogs();
         if(state.mode!=='play'||!state.player)break;
-        const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16,room.index);
+        const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16);
         state=serviceDialogs();
         report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
         if(!reached||state.mode!=='play')continue;
@@ -443,6 +460,8 @@ async function run() {
       }
     }
 
+    let clinicVisited=false;
+    const clinicRoom=rooms.find(room=>room.role==='clinic');
     for (const room of encountersToClear) {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
@@ -458,7 +477,7 @@ async function run() {
       const start = {...sample(state), livingEnemies: state.roomProgress[room.index]?.livingEnemies ?? 0};
       const enemyTypes=state.enemies.filter(enemy=>enemy.roomIndex===room.index).map(enemy=>enemy.type);
       const path = roomNavigationPath(room);
-      const entered = path.length>0&&movePath(path,16,room.index);
+      const entered = path.length>0&&movePath(path,16,fullFloor?null:room.index);
       state = serviceDialogs();
       if ((!entered && state.room !== room.name) || state.mode !== 'play') {
         report.events.push({event: 'room-skipped', room: room.name,
@@ -468,7 +487,7 @@ async function run() {
         continue;
       }
       let fightSteps = 0,maxEnemyBullets=0,rangedTelegraphs=0;
-      if(enemyTypes.some(type=>['GUNNER','WARDEN'].includes(type))){
+      if(enemyTypes.some(type=>['GUNNER','WARDEN'].includes(type))&&state.enemies.some(enemy=>enemy.roomIndex===room.index&&['GUNNER','WARDEN'].includes(enemy.type))){
         report.rangedDodge=await probeRangedDodge(room.index);
         if(report.rangedDodge.enemyBulletSeen)maxEnemyBullets=1;
       }
@@ -503,6 +522,16 @@ async function run() {
 
       // Exercise the market modal in a market room; serviceDialogs buys a medkit if useful.
       if (state.merchant) { press('e'); advance(); state = serviceDialogs(); }
+      if (room.role==='cache'&&!state.cacheOpen) { press(bindings.interact); advance(); state=serviceDialogs(); }
+      if(fullFloor&&clinicRoom&&!clinicVisited&&state.player.health<state.player.maxHealth){
+        state=serviceDialogs();
+        const healing=state.pickups.find(pickup=>pickup.type==='heal'&&pickup.roomIndex===clinicRoom.index);
+        const clinicPath=healing?navigationPath({x:Math.floor(healing.x/32),y:Math.floor(healing.y/32)}):roomNavigationPath(clinicRoom);
+        const reached=clinicPath.length>0&&movePath(clinicPath);
+        state=serviceDialogs();
+        report.events.push({event:'clinic-retreat',room:clinicRoom.name,reached,player:sample(state)});
+        clinicVisited=reached;
+      }
       if(!fullFloor&&report.rooms.length===1){
         for(const gate of gameState().lockedDoors.filter(item=>!item.opened&&gameState().scrap>=item.cost)){
           const gatePath=gateApproachPath(gate);
