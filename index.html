@@ -24,7 +24,7 @@
       </section>
       <div id="throwable-readout" aria-live="polite" aria-label="Selected throwable"></div>
       <div id="throwable-hint">Q SELECT &nbsp;·&nbsp; G THROW</div>
-      <div id="tempo" title="Standing still slows time. Moving runs at 1×. Firing does not change the current time speed."><div class="tempo-dot"></div><span id="tempo-label">STILL · SLOW</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span><small id="tempo-hint">MOVE 1× · STAND STILL TO SLOW</small></div>
+      <div id="tempo" title="Standing still slows time. Moving runs at 1×. Hold Shift to sprint. Firing does not change the current time speed."><div class="tempo-dot"></div><span id="tempo-label">STILL · SLOW</span><div class="tempo-meter"><i id="tempo-fill"></i></div><span id="tempo-speed">0.18×</span><small id="tempo-hint">SHIFT TO SPRINT · STOP TO SLOW</small></div>
       <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
       <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
       <div id="toast" role="status"></div>
@@ -47,7 +47,7 @@
             <div id="key-bindings"></div>
             <div id="binding-status" role="status" aria-live="polite">Click a key to change it.</div>
           </details>
-          <div id="key-guide" class="key-guide"><span>W A S D <i>MOVE</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>SHIFT <i>RELOAD</i></span><span>C <i>SHOTGUN SHELL</i></span><span>TAB <i>LOADOUT</i></span></div>
+          <div id="key-guide" class="key-guide"><span>W A S D <i>MOVE</i></span><span>SHIFT <i>SPRINT</i></span><span>MOUSE <i>AIM / FIRE</i></span><span>E <i>STATION / REVIEW GUN</i></span><span>R <i>RELOAD</i></span><span>C <i>SHOTGUN SHELL</i></span><span>TAB <i>LOADOUT</i></span></div>
         </div>
         <section id="meta-panel" hidden role="dialog" aria-modal="true" aria-labelledby="meta-title">
           <button id="close-meta" class="close" aria-label="Close safehouse upgrades">×</button>
@@ -112,7 +112,7 @@
       <footer><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span>ESC PAUSE &nbsp; · &nbsp; F FULLSCREEN</span></footer>
     </main>
     <script type="module">
-      import('./game.js?v=movement-controls-time-scale-1').catch(error=>{
+      import('./game.js?v=movement-controls-sprint-2').catch(error=>{
         console.error(error);
         const button=document.querySelector('#start-button');
         button.disabled=true;

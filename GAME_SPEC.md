@@ -250,6 +250,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - [x] Browser playable with Three.js rendering, Rapier 2D physics, and ROT.js room generation.
 - [x] Stillness/movement time scaling, aim, fire, reload, pause, and restart.
+- [x] Hold Shift while moving to sprint 45% faster; R reloads, and old Shift-reload saves migrate safely.
 - [x] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into combat, loadout, merchant, and weight-checked pickup choices.
 - [x] Resolve swept bullet contacts in travel order; ordinary rounds stop after their first hit, precision rounds use separate enemy/crate budgets, anti-materiel rounds can pass one wall, and cover always stops a round.
 - [x] Apply compatible attachments per weapon; restrict workbench options and retain attachments when switching guns.

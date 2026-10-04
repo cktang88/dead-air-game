@@ -14,7 +14,7 @@ Then open `http://localhost:8000`. The game loads Three.js, Rapier 2D, and ROT.j
 - **Mouse:** aim; hold the left button to fire.
 - **E:** use the entry loadout station or nearby pickup.
 - **Tab:** open the loadout screen anywhere.
-- **1 / 2:** switch primary and secondary; **Shift:** reload; **R:** restart after a run ends.
+- **1 / 2:** switch primary and secondary; **Shift + move:** sprint; **R:** reload (or restart after a run ends).
 - **Q:** cycle smoke, flash, frag, and incendiary; **G:** throw the selected item.
 - **Esc:** pause; **F:** toggle fullscreen.
 

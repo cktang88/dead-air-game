@@ -71,9 +71,14 @@ async function run(){
   }
 
   press(win,movementKey,'keydown');
-  win.advanceTime(500);
+  win.advanceTime(300);
   const moving=stateOf(win);
   if(moving.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moving.timeScale}×`);
+  press(win,'Shift','keydown');
+  win.advanceTime(300);
+  const sprinting=stateOf(win),normalDistance=moving.player.x-initial.player.x,sprintDistance=sprinting.player.x-moving.player.x;
+  if(sprinting.timeScale!=='1.00'||sprintDistance<normalDistance*1.3)throw new Error(`Holding Shift should make movement faster without changing 1× world time: ${JSON.stringify({normalDistance,sprintDistance,timeScale:sprinting.timeScale})}`);
+  press(win,'Shift','keyup');
   win.dispatchEvent(new win.MouseEvent('mousemove',{clientX:win.innerWidth/2+100,clientY:win.innerHeight/2,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
   win.advanceTime(150);
@@ -245,7 +250,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move + fire Δx ${movingAndFiring.player.x-initial.player.x} at ${movingAndFiring.timeScale}× · still firing ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Vital Reserve, Runner, and Lucky Find persist after reload · upgraded run starts at 6/6 health · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · sprint ${normalDistance.toFixed(0)} → ${sprintDistance.toFixed(0)} at 1× · move + fire Δx ${movingAndFiring.player.x-initial.player.x} at ${movingAndFiring.timeScale}× · still firing ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Vital Reserve, Runner, and Lucky Find persist after reload · upgraded run starts at 6/6 health · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{

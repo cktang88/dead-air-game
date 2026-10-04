@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DEFAULT_KEY_BINDINGS,isBindableKey,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,parseKeyBindings,rebindKey,resolveMovementKey,saveKeyBindings,serializeKeyBindings,KEY_BINDINGS_KEY} from './keybindings.js';
 
 test('default bindings cover movement and all key-driven combat actions',()=>{
-  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c'});
+  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'r',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c'});
   assert.equal(normalizeKey('ArrowUp'),'arrowup');
   assert.equal(normalizeKey(' '),'space');
   assert.equal(keyLabel('arrowleft'),'←');
@@ -18,9 +18,11 @@ test('rebinding accepts supported single keys and rejects conflicts and reserved
   assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'reload','Escape').reason,'invalid');
   assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'interact','Tab').reason,'invalid');
   assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'interact','f').reason,'invalid');
-  assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'reload','r').reason,'invalid');
+  assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'reload','r').ok,true);
+  assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'reload','shift').reason,'invalid');
+  assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'interact','r').reason,'invalid');
   assert.equal(rebindKey(DEFAULT_KEY_BINDINGS,'interact','F2').reason,'invalid');
-  assert.equal(isBindableKey('Shift'),true);
+  assert.equal(isBindableKey('Shift'),false);
   assert.equal(isBindableKey('Control'),false);
 });
 
@@ -60,6 +62,14 @@ test('legacy saves keep the new weapon slot binding at its default',()=>{
   assert.equal(migrated.shellCycle,'3');
   assert.notEqual(migrated.weaponThree,'3');
   assert.equal(new Set(Object.values(migrated).filter(value=>typeof value==='string')).size,Object.keys(DEFAULT_KEY_BINDINGS).length);
+});
+
+test('legacy Shift reload binding migrates to R so Shift can sprint',()=>{
+  const legacy={...DEFAULT_KEY_BINDINGS,reload:'shift'};
+  const migrated=parseKeyBindings(JSON.stringify({version:1,bindings:legacy}));
+  assert.equal(migrated.reload,'r');
+  assert.equal(isBindableKey(migrated.reload,'reload'),true);
+  assert.equal(isBindableKey('shift'),false);
 });
 
 test('key bindings persist through the storage boundary and tolerate denied reads',()=>{

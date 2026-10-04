@@ -1,6 +1,6 @@
 export const KEY_BINDINGS_KEY='dead-air.keys.v1';
 export const DEFAULT_KEY_BINDINGS=Object.freeze({
-  moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'shift',
+  moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'r',
   throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c',
 });
 export const KEY_BINDING_ACTIONS=Object.freeze([
@@ -13,7 +13,7 @@ export const KEY_BINDING_ACTIONS=Object.freeze([
   {id:'shellCycle',label:'Shotgun shell'},
 ]);
 const VERSION=1;
-const RESERVED_KEYS=new Set(['escape','tab','f','r']);
+const RESERVED_KEYS=new Set(['escape','tab','f','r','shift']);
 const ARROW_MOVEMENT_ACTIONS=Object.freeze({arrowup:'moveUp',arrowdown:'moveDown',arrowleft:'moveLeft',arrowright:'moveRight'});
 
 export function normalizeKey(key){
@@ -22,9 +22,10 @@ export function normalizeKey(key){
   return normalized===' '?'space':normalized;
 }
 
-export function isBindableKey(key){
+export function isBindableKey(key,action){
   const normalized=normalizeKey(key);
-  return (/^[a-z0-9]$/.test(normalized)||['space','shift','arrowup','arrowdown','arrowleft','arrowright'].includes(normalized))&&!RESERVED_KEYS.has(normalized);
+  const valid=(/^[a-z0-9]$/.test(normalized)||['space','arrowup','arrowdown','arrowleft','arrowright'].includes(normalized));
+  return valid&&(!RESERVED_KEYS.has(normalized)||(normalized==='r'&&action==='reload'));
 }
 
 export function keyLabel(key){
@@ -45,7 +46,7 @@ export function resolveMovementKey(key,bindings){
 
 export function rebindKey(bindings,action,key){
   const normalized=normalizeKey(key);
-  if(!Object.hasOwn(DEFAULT_KEY_BINDINGS,action)||!isBindableKey(normalized))return {ok:false,reason:'invalid',bindings};
+  if(!Object.hasOwn(DEFAULT_KEY_BINDINGS,action)||!isBindableKey(normalized,action))return {ok:false,reason:'invalid',bindings};
   if(Object.entries(bindings).some(([other,value])=>other!==action&&value===normalized))return {ok:false,reason:'in-use',bindings};
   return {ok:true,reason:null,bindings:{...bindings,[action]:normalized}};
 }
@@ -59,8 +60,12 @@ export function parseKeyBindings(serialized){
     const bindings={};
     for(const action of KEY_BINDING_ACTIONS){
       if(!Object.hasOwn(values,action.id))continue;
-      const key=normalizeKey(values[action.id]);
-      if(!isBindableKey(key)||Object.values(bindings).includes(key))return fallback();
+      let key=normalizeKey(values[action.id]);
+      if(key==='shift'){
+        key=DEFAULT_KEY_BINDINGS[action.id];
+        if(Object.values(bindings).includes(key))key='abcdefghijklmnopqrstuvwxyz0123456789'.split('').find(candidate=>!Object.values(bindings).includes(candidate)&&isBindableKey(candidate,action.id));
+      }
+      if(!isBindableKey(key,action.id)||Object.values(bindings).includes(key))return fallback();
       bindings[action.id]=key;
     }
     for(const action of KEY_BINDING_ACTIONS){

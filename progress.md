@@ -5,7 +5,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Current playable build
 
 - Three.js renders the arena; Rapier 2D handles actor, cover, wall, and projectile physics; ROT.js Digger generates connected rooms and halls.
-- Standing still slows the simulation to the idle upgrade rate; movement runs at 1.00×, including while firing. Firing while standing still keeps the idle rate. Menus pause the run.
+- Standing still slows the simulation to the idle upgrade rate; movement runs at 1.00×, including while firing. Hold Shift while moving to sprint 45% faster. Firing while standing still keeps the idle rate. Menus pause the run.
 - Thirteen guns cover 3 assault rifles, 4 SMGs, 2 pistols, 3 sniper/anti-materiel rifles, and 1 shotgun. Two weighted slots keep independent ammunition. Attachments are compatible per gun and affect the active gun only.
 - Player and enemy weapons visibly follow aim. Player reload and enemy reload poses tilt their weapons. Ranged enemies show a committed direction before shooting; their bullets travel on that fixed path and can be dodged.
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
@@ -415,3 +415,10 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Time now depends only on movement input: standing still uses the saved idle multiplier even while shooting, and movement stays at 1× while shooting. Stopping movement applies slow time immediately.
 - Updated the tempo meter copy and browser smoke assertions for both states. The burst check now allows enough real time for all rounds to fire at the idle multiplier.
 - `npm test` passes all 120 tests; syntax checks and `git diff --check` pass. The browser smoke reached the burst check after passing move+fire and still+fire assertions, but a later fresh browser run hit a local module-fetch reset before game startup. The web-game Playwright client loaded the game, fired four rounds, and captured the expected 0.18× still tempo.
+
+## Shift sprint
+
+- Added a 1.45× movement speed while Shift is held with a movement key. Shift remains independent of time scaling, so sprinting still runs at 1×.
+- Changed the default reload key to R, reserved Shift for sprint, and migrate saved Shift reload bindings to R. The control guide and README show the new keys.
+- Verification: `npm test` passes all 121 tests and syntax/diff checks pass. The seeded browser smoke passes with sprint distance 31 → 47 at 1×, moving + firing at 1×, still firing at 0.18×, plus crate damage, reload, burst, and throwable checks.
+- A later fresh-page retry hit the known local module-fetch reset before startup. The successful smoke run exercised the same sprint and key migration code; the latest page change only updates the visible sprint hint.
