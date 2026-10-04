@@ -49,7 +49,7 @@ async function run(){
   doc.querySelector('#start-button').click();
   const initial=stateOf(win);
   if(initial.mode!=='play'||initial.seed!==seed||!initial.player)throw new Error('Seeded run did not start with a player');
-  const expectedFireScale=Math.sqrt(progressionStats(readSavedProgress(win.localStorage)).idleScale).toFixed(2);
+  const idleScale=progressionStats(readSavedProgress(win.localStorage)).idleScale.toFixed(2);
   if(initial.enemyCount!==initial.enemies.length||initial.pickupCount!==initial.pickups.length){
     throw new Error('Gameplay snapshot omitted enemies or pickups from its reported counts');
   }
@@ -74,17 +74,18 @@ async function run(){
   win.advanceTime(500);
   const moving=stateOf(win);
   if(moving.timeScale!=='1.00')throw new Error(`Movement should run at 1×, got ${moving.timeScale}×`);
-  press(win,movementKey,'keyup');
-  const moved=stateOf(win);
-  if(moved.player.x<=initial.player.x+20)throw new Error('Right input did not move the player');
-
   win.dispatchEvent(new win.MouseEvent('mousemove',{clientX:win.innerWidth/2+100,clientY:win.innerHeight/2,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
+  win.advanceTime(150);
+  const movingAndFiring=stateOf(win);
+  if(movingAndFiring.timeScale!=='1.00')throw new Error(`Moving and firing should run at 1×, got ${movingAndFiring.timeScale}×`);
+  press(win,movementKey,'keyup');
   win.advanceTime(250);
   const fired=stateOf(win);
   win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
-  if(fired.player.ammo>=moved.player.ammo)throw new Error('Firing did not consume ammunition');
-  if(!(Number(fired.timeScale)>Number(initial.timeScale)&&Number(fired.timeScale)<1))throw new Error(`Firing should keep a blended tempo, got ${fired.timeScale}×`);
+  if(fired.player.x<=initial.player.x+20)throw new Error('Right input did not move the player');
+  if(fired.player.ammo>=initial.player.ammo)throw new Error('Firing did not consume ammunition');
+  if(fired.timeScale!==idleScale)throw new Error(`Standing still and firing should use the idle rate ${idleScale}×, got ${fired.timeScale}×`);
 
   const crate=fired.crates.map(item=>({...item,distance:Math.hypot(item.x-fired.player.x,item.y-fired.player.y)}))
     .filter(item=>item.distance>35&&item.distance<220).sort((a,b)=>a.distance-b.distance)[0];
@@ -176,12 +177,12 @@ async function run(){
   win.dispatchEvent(new win.MouseEvent('mousedown',{button:0,bubbles:true}));
   win.dispatchEvent(new win.MouseEvent('mouseup',{button:0,bubbles:true}));
   burstState=stateOf(win);
-  if(burstState.player.ammo!==burstAmmo-1||burstState.burstShotsRemaining!==2||burstState.timeScale!==expectedFireScale){
-    throw new Error(`A single KITE BURST click did not start a two-round committed burst at blended tempo: before ${JSON.stringify({burstAmmo,weapon:burstState.player.weapon,ammo:burstState.player.ammo,queued:burstState.burstShotsRemaining,timeScale:burstState.timeScale,mode:burstState.mode,paused:burstState.paused})}`);
+  if(burstState.player.ammo!==burstAmmo-1||burstState.burstShotsRemaining!==2||burstState.timeScale!==idleScale){
+    throw new Error(`A single KITE BURST click did not start a two-round committed burst at the idle time rate: before ${JSON.stringify({burstAmmo,weapon:burstState.player.weapon,ammo:burstState.player.ammo,queued:burstState.burstShotsRemaining,timeScale:burstState.timeScale,mode:burstState.mode,paused:burstState.paused})}`);
   }
   press(win,bindings.reload,'keydown');press(win,bindings.reload,'keyup');
   if(stateOf(win).player.reloading)throw new Error('Reload interrupted a committed KITE BURST sequence');
-  win.advanceTime(500);
+  win.advanceTime(1200);
   burstState=stateOf(win);
   if(burstState.player.ammo!==burstAmmo-3||burstState.burstShotsRemaining!==0){
     throw new Error(`KITE BURST did not emit and spend three spaced rounds after trigger release: ${JSON.stringify(burstState.player)}`);
@@ -244,7 +245,7 @@ async function run(){
   }
 
   report.className='pass';
-  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move Δx ${moved.player.x-initial.player.x} at ${moving.timeScale}× · fire ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Vital Reserve, Runner, and Lucky Find persist after reload · upgraded run starts at 6/6 health · original save restored (${savedCoins} coins)`;
+  report.textContent=`PASS · seed ${seed} · ${initial.enemyCount} enemies / ${initial.pickupCount} pickups · rarity-tagged mods · move + fire Δx ${movingAndFiring.player.x-initial.player.x} at ${movingAndFiring.timeScale}× · still firing ${fired.timeScale}× · crate ${crate.health} → ${crateHealthAfter} · reload ${crateHit.player.ammo} → ${reloaded.player.ammo} · KITE BURST ${burstAmmo} → ${burstState.player.ammo} after one released trigger · frag ${thrown.throwables.counts.frag} → detonated · focus-loss and manual pause · ${loadout.loadout.slots.length}-slot loadout · tiered extended magazine · Vital Reserve, Runner, and Lucky Find persist after reload · upgraded run starts at 6/6 health · original save restored (${savedCoins} coins)`;
 }
 
 frame.addEventListener('load',()=>run().catch(error=>{

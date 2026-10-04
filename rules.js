@@ -172,17 +172,10 @@ export function chooseWeaponReplacementSlot(weapons,candidate,maxSlots,activeSlo
   return preferred.find(slot=>slot<weapons.length&&weaponReplacement(weapons,slot,candidate,guns,capacity,gearWeight).canCarry);
 }
 
-export function timeScale({mode, paused, loadoutOpen, moving, firing, now, lastAction, lastActionKind = 'other', idleScale = 0.18}) {
+export function timeScale({mode, paused, loadoutOpen, moving, idleScale = 0.18}) {
   if (mode !== 'play' || paused || loadoutOpen) return 0;
-  const stillScale = Math.max(0, Math.min(1, idleScale));
-  const firingScale = Math.sqrt(stillScale);
-  if (firing) return firingScale;
   if (moving) return 1;
-  if (now - lastAction < 0.35) {
-    if (lastActionKind === 'move') return 1;
-    if (lastActionKind === 'fire') return firingScale;
-  }
-  return stillScale;
+  return Math.max(0, Math.min(1, idleScale));
 }
 
 export function chooseEncounterTypes(count, seed) {

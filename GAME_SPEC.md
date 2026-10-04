@@ -8,7 +8,7 @@ The game should run in a desktop browser with keyboard and mouse, load directly 
 
 ## Design pillars
 
-1. **Stillness is a tool.** Waiting slows the simulation to the current idle rate (0.18× by default). Firing blends idle and normal speed geometrically (about 0.42× by default), including sustained automatic fire while moving. Movement without firing runs at 1.00×.
+1. **Stillness is a tool.** Standing still slows the simulation to the current idle rate (0.18× by default). Movement runs at 1.00×. Firing does not change the rate, whether the player is standing still or moving.
 2. **Rooms are decisions.** A doorway reveals enough to plan, but every room has different cover, enemy pressure, loot, and routes.
 3. **Weapons have jobs.** Primary and secondary slots support different ranges and tempos. Ammunition, reloads, recoil, damage, spread, and weight make the choice matter.
 4. **Hits feel physical.** Impacts use hit stop, knockback, particles, screen shake, and brief enemy collapse. Clear feedback should make each shot easy to read.
@@ -29,8 +29,8 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 
 ## Time and combat rules
 
-- Idle or careful aiming: 0.18× simulation speed, giving the player time to read threats and plan.
-- Moving without firing: 1.00× simulation speed. Firing: the geometric mean of idle and normal speed, including while moving. Briefly preserve the last action rate after release so tempo does not flicker.
+- Standing still: the current idle multiplier, including while firing.
+- Moving: 1.00× simulation speed, including while firing. Stop moving to slow the simulation immediately.
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.
 - Bullets are physical projectiles with collision checks; walls block shots.
@@ -249,7 +249,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### In the current build
 
 - [x] Browser playable with Three.js rendering, Rapier 2D physics, and ROT.js room generation.
-- [x] Idle/action tempo shift, aim, fire, reload, pause, and restart.
+- [x] Stillness/movement time scaling, aim, fire, reload, pause, and restart.
 - [x] Integrate the 13-gun catalog (3 assault rifles, 4 SMGs, 2 pistols, 3 precision rifles, and 1 shotgun) into combat, loadout, merchant, and weight-checked pickup choices.
 - [x] Resolve swept bullet contacts in travel order; ordinary rounds stop after their first hit, precision rounds use separate enemy/crate budgets, anti-materiel rounds can pass one wall, and cover always stops a round.
 - [x] Apply compatible attachments per weapon; restrict workbench options and retain attachments when switching guns.
@@ -312,7 +312,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### Next: polish and maintainability
 
 - [x] Split seeded map generation from the renderer; `dungeon.js` returns tested room, role, and route data.
-- [x] Add a compact in-browser smoke check for seeded start, movement, blended firing tempo, a released three-round KITE BURST and reload lock, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
+- [x] Add a compact in-browser smoke check for seeded start, movement and firing at both time rates, a released three-round KITE BURST and reload lock, crate damage, reload, an attachment purchase, frag detonation, pause, loadout, and a safehouse upgrade that survives reload (`tests/game-smoke.html`).
 - [x] Add a seeded encounter browser probe for clearing the first room, opening an affordable reward gate, and dodging a fresh ranged shot that would hit a stationary player (`tests/full-floor-browser-harness.html`).
 - [x] Add initial gunfire and crate-break sound effects with a saved master-volume control.
 - [x] Add adjustable camera shake and flash brightness options.

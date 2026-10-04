@@ -5,7 +5,7 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 ## Current playable build
 
 - Three.js renders the arena; Rapier 2D handles actor, cover, wall, and projectile physics; ROT.js Digger generates connected rooms and halls.
-- Waiting slows the simulation; movement alone runs at 1.00× and firing blends idle and normal time, including while moving. Menus pause the run.
+- Standing still slows the simulation to the idle upgrade rate; movement runs at 1.00×, including while firing. Firing while standing still keeps the idle rate. Menus pause the run.
 - Thirteen guns cover 3 assault rifles, 4 SMGs, 2 pistols, 3 sniper/anti-materiel rifles, and 1 shotgun. Two weighted slots keep independent ammunition. Attachments are compatible per gun and affect the active gun only.
 - Player and enemy weapons visibly follow aim. Player reload and enemy reload poses tilt their weapons. Ranged enemies show a committed direction before shooting; their bullets travel on that fixed path and can be dodged.
 - Smoke, flash, frag, and incendiary grenades have physics-driven throws, inventory counts, and distinct area effects. Walls and intact crates block applicable effects.
@@ -409,3 +409,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - Architecture review checked room-role ownership and actor lifecycle. It found no evidence requiring a larger game.js rewrite for this change.
 - Continued the stress driver work: it now checks incoming bullets while moving through halls, dodges brute wind-ups, switches to a carried gun with remaining ammo, defers the clinic trip until health is missing, and uses a cache refill when it reaches a cache. The debug snapshot reports ammo for both weapon slots and each pickup's room.
 - Verification: `npm test` passes all 120 tests; gameplay and harness syntax checks plus `git diff --check` pass. On seed 213838321, the improved full-floor driver clears the Warden but dies while retreating for the clinic at 35 seconds (health 0, armor 0); it does not reach the cache. The focused probe kills all three Extraction guards with health and armor intact, but its isolated dodge check times out and its long optional-gate trip is not reached. Both browser harnesses restore the saved profile and report no browser errors. These bot results still need a more reliable route or a human playthrough before they can support a balance change.
+
+## Movement-driven time scaling
+
+- Time now depends only on movement input: standing still uses the saved idle multiplier even while shooting, and movement stays at 1× while shooting. Stopping movement applies slow time immediately.
+- Updated the tempo meter copy and browser smoke assertions for both states. The burst check now allows enough real time for all rounds to fire at the idle multiplier.
+- `npm test` passes all 120 tests; syntax checks and `git diff --check` pass. The browser smoke reached the burst check after passing move+fire and still+fire assertions, but a later fresh browser run hit a local module-fetch reset before game startup. The web-game Playwright client loaded the game, fired four rounds, and captured the expected 0.18× still tempo.
