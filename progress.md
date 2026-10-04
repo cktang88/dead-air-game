@@ -399,3 +399,11 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 - The seeded browser smoke had assumed every profile fired at exactly 0.42×. It now derives the expected blended tempo from the saved idle-time upgrade, so the check also works with a progressed profile.
 - Verification: `npm test` passes all 119 tests; syntax checks and `git diff --check` pass. The in-app browser smoke passes on seed 213838321, including movement, crate destruction, reload, KITE BURST, throwables, loadout, nested-confirmation Tab/Shift+Tab wrap, and persistent upgrades. Browser tooling reported an unattributed `MutationObserver.observe` error from the harness environment; the smoke itself passed.
 - Made the ranged-combat browser probe derive planning tempo from the saved Stillmind upgrade, and reran seed 417 with the existing 0.16× profile. It cleared FURNACE (3 enemies), opened the cache gate, dodged a fresh shot that would hit a stationary player, kept health/armor unchanged, reported no game errors, and restored local storage.
+
+## Enemy lifetime and full-floor stress check
+
+- Room encounter history now lives on its room, so the runtime can remove a corpse's enemy record after the 3.5-second visual cleanup. This keeps dead actors out of the repeated AI, crowd-separation, and projectile-collision loops without losing room-clear scrap eligibility.
+- Merchant rooms now use their existing `role` as their only room identity; removed the duplicate `room.merchant` flag.
+- Extended the optional full-floor browser stress mode to target every room with enemies before extraction. The earlier mode only cleared required-route fights and could report a win after skipping the optional rooms.
+- Verification: `npm test` passes all 120 tests; browser smoke passes on seed 213838321; extraction-mode browser run wins with 5 health, 2 armor, 5 kills, and no damage from the measured dodge. The expanded all-room stress run on the same seed reached the FIELD CLINIC after clearing two enemies, then died while approaching the WARDEN at 37 seconds (0 health, 2 kills). It reported no browser errors and restored local storage. This is an optional-branch balance stress result, not an extraction-flow failure.
+- Architecture review checked room-role ownership and actor lifecycle. It found no evidence requiring a larger game.js rewrite for this change.

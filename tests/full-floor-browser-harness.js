@@ -381,7 +381,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, fullFloor, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-41';
+    frame.src = '../index.html?full-floor-browser-harness&v=retired-enemy-prune-1';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -423,12 +423,16 @@ async function run() {
         shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
     report.routeEncounters=routeEncounters.map(({name,index,branch,role})=>({name,index,branch,role}));
     if (!routeEncounters.length) throw new Error('Seeded map did not have a main-route encounter');
+    const encountersToClear=fullFloor?rooms.filter(room=>(state.roomProgress[room.index]?.livingEnemies??0)>0)
+      .sort((a,b)=>a.index===rooms.length-1?1:b.index===rooms.length-1?-1:
+        shortestFloorPath(topology.cells,{x:rooms[0].cx,y:rooms[0].cy},{x:a.cx,y:a.cy}).length-
+        shortestFloorPath(topology.cells,{x:rooms[0].cx,y:rooms[0].cy},{x:b.cx,y:b.cy}).length):routeEncounters;
+    if(fullFloor)report.fullFloorTargets=encountersToClear.map(({name,index,role})=>({name,index,role}));
 
     if(fullFloor){
       for(const room of rooms.filter(candidate=>['clinic','armory','merchant'].includes(candidate.role))){
         state=serviceDialogs();
         if(state.mode!=='play'||!state.player)break;
-        if(room.role==='clinic'&&state.player.health>=state.player.maxHealth)continue;
         const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16,room.index);
         state=serviceDialogs();
         report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
@@ -439,7 +443,7 @@ async function run() {
       }
     }
 
-    for (const room of routeEncounters) {
+    for (const room of encountersToClear) {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
       if (gate) {
@@ -524,7 +528,9 @@ async function run() {
     }
     report.final = sample(gameState());
     if(fullFloor&&report.final.mode!=='won'){
-      report.error=`Full-floor attempt ended ${report.final.mode} after ${report.rooms.filter(room=>room.cleared).length}/${routeEncounters.length} main-route encounters (${report.final.kills} kills, ${report.final.health} health)`;
+      report.error=`Full-floor attempt ended ${report.final.mode} after ${report.rooms.filter(room=>room.cleared).length}/${encountersToClear.length} encounters (${report.final.kills} kills, ${report.final.health} health)`;
+    }else if(fullFloor&&report.rooms.filter(room=>room.cleared).length!==encountersToClear.length){
+      report.error=`Full-floor run extracted after clearing ${report.rooms.filter(room=>room.cleared).length}/${encountersToClear.length} encounters`;
     }else if (!fullFloor&&(report.rooms.length !== 1 || !report.rooms[0].cleared || report.rooms[0].end.kills<=report.rooms[0].start.kills)) {
       report.error=report.final.mode==='dead'&&report.rooms.length===0?
         `The player died before clearing a combat room (${report.final.kills} kills)`:
