@@ -25,6 +25,9 @@ Original prompt: Build a playable top-down 2D slow-motion dungeon shooter with g
 
 ## Verification
 
+- Full-floor browser probe now has an opt-in mode that follows rooms with required route enemies and includes Extraction itself, where the seeded run may spawn guards that block the exit. The report lists generated room roles and records nearby bullets/enemy telegraphs when health changes during a dodge. Seed 213838321 confirmed two optional branch encounters and three Extraction guards; the latest browser rerun reached Extraction but its UI state read timed out while the encounter was still running. A successful full-floor clear is still unverified. The older seed 417 probe died while crossing optional encounters, so the automation needs more reliable route planning/combat before it can serve as a full-run balance check.
+- Two browser runs confirmed the dodge can avoid a Warden shot without losing health or armor. One earlier seed 417 run reported damage while a Brute was nearby, but that result did not reproduce; detailed frame diagnostics are retained to identify the source if it recurs.
+
 - Firing uses the geometric mean of idle and normal time whether stationary or moving. At the default 0.18× idle rate, firing is about 0.42×; idle-only movement remains 1×.
 - Added regression cases for held fire with simultaneous movement, a recent movement action, and a metaprogression-adjusted idle rate. All 55 unit tests pass. In the live in-app browser, one shot changed the HUD from 0.18× to 0.42×. Playwright headless remains unavailable here because Chromium cannot register its Mach port in this macOS sandbox.
 - The ammo harness uses the gear carry slot, appears in the workbench preview, and applies its multiplier to both manual and empty-magazine reload paths. Its tests cover all 13 guns and stacking with the stabilizer attachment; `npm test` passes 59 tests. The live browser preview confirmed the 1.0-weight tradeoff and successful equip.

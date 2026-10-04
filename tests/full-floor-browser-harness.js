@@ -10,6 +10,7 @@ import {loadKeyBindings} from '../keybindings.js';
 const result = document.querySelector('#result');
 const frame = document.querySelector('#game');
 const seed = parseRunSeed(new URLSearchParams(location.search).get('seed')) ?? 213838321;
+const fullFloor = new URLSearchParams(location.search).get('fullFloor') === '1';
 const idleScale=progressionStats(readSavedProgress(localStorage)).idleScale;
 const bindings=loadKeyBindings(localStorage);
 let topology;
@@ -56,7 +57,7 @@ function serviceDialogs() {
   if (!doc.querySelector('#merchant-panel').hidden) {
     const medkit = [...doc.querySelectorAll('#merchant-stock [data-merchant]')].find(button =>
       button.parentElement?.textContent.includes('FIELD MEDKIT') && !button.disabled);
-    if (medkit && snapshot.player?.health < 5) medkit.click();
+    if (medkit && snapshot.player?.health < snapshot.player?.maxHealth) medkit.click();
     clickIfVisible('#close-merchant');
   }
   return snapshot;
@@ -330,7 +331,11 @@ async function probeRangedDodge(roomIndex){
         const after=gameState();
         if(after.player.health!==before.player.health||after.player.armor!==before.player.armor){
           result.healthEvents.push({frame:step+1,health:after.player.health,armor:after.player.armor,
-            player:{x:after.player.x,y:after.player.y},bullets:after.bullets.filter(bullet=>bullet.owner==='enemy')});
+            playerBefore:{x:before.player.x,y:before.player.y},player:{x:after.player.x,y:after.player.y},
+            bulletsBefore:before.bullets.filter(bullet=>bullet.owner==='enemy'),
+            bulletsAfter:after.bullets.filter(bullet=>bullet.owner==='enemy'),
+            enemiesBefore:before.enemies.map(enemy=>({id:enemy.id,type:enemy.type,x:enemy.x,y:enemy.y,charging:enemy.charging,telegraphVisible:enemy.telegraphVisible})),
+            enemiesAfter:after.enemies.map(enemy=>({id:enemy.id,type:enemy.type,x:enemy.x,y:enemy.y,charging:enemy.charging,telegraphVisible:enemy.telegraphVisible}))});
         }
         if(after.mode!=='play'||!after.player){result.aborted='player-died-during-dodge';break;}
       }
@@ -374,9 +379,9 @@ async function waitForGame() {
 }
 
 async function run() {
-  const report = {seed, rooms: [], events: [], errors: []};
+  const report = {seed, fullFloor, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?two-room-browser-harness&v=route-audit-40';
+    frame.src = '../index.html?two-room-browser-harness&v=route-audit-41';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -404,15 +409,20 @@ async function run() {
     }
     press('Tab');
     clickIfVisible('#close-loadout');
+    state=serviceDialogs();
 
     const rooms = topology.rooms.map((room, index) => ({...room, index}));
     report.combatCandidates = rooms.filter(room => room.role === 'combat').map(({name,index,branch,cx,cy})=>({name,index,branch,cx,cy}));
+    report.roomCatalog=rooms.map(room=>({name:room.name,index:room.index,role:room.role,branch:room.branch,
+      livingEnemies:state.roomProgress[room.index]?.livingEnemies??null}));
     report.initialGates = state.lockedDoors;
-    const combatRooms = rooms.filter((room, index) => index > 0 && index < rooms.length - 1 && room.role === 'combat')
+    const routeEncounters = rooms.filter((room, index) => (index === rooms.length - 1 ||
+      index > 0 && room.branch !== true) && (state.roomProgress[room.index]?.livingEnemies ?? 0) > 0)
       .sort((a, b) => shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: a.cx, y: a.cy}).length -
         shortestFloorPath(topology.cells, {x: rooms[0].cx, y: rooms[0].cy}, {x: b.cx, y: b.cy}).length);
-    if (!combatRooms.length) throw new Error('Seeded map did not have a combat room');
-    for (const room of combatRooms) {
+    report.routeEncounters=routeEncounters.map(({name,index,branch,role})=>({name,index,branch,role}));
+    if (!routeEncounters.length) throw new Error('Seeded map did not have a main-route encounter');
+    for (const room of routeEncounters) {
       state = serviceDialogs();
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
       if (gate) {
@@ -483,15 +493,39 @@ async function run() {
           report.events.push({event:'reward-gate-attempt',room:gate.room,pathLength:gatePath.length,reached:true,player:sample(gameState())});
         }
       }
-      if(report.rooms.length>=1)break;
+      if(!fullFloor&&report.rooms.length>=1)break;
+    }
+
+    if(fullFloor&&gameState().mode==='play'){
+      for(const room of rooms.filter(candidate=>['clinic','armory','merchant'].includes(candidate.role))){
+        state=serviceDialogs();
+        if(state.mode!=='play'||!state.player)break;
+        if(room.role==='clinic'&&state.player.health>=state.player.maxHealth)continue;
+        const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16,room.index);
+        state=serviceDialogs();
+        report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
+        if(!reached||state.mode!=='play')continue;
+        if(room.role==='merchant'){
+          press(bindings.interact);advance();state=serviceDialogs();
+        }
+      }
+      state=serviceDialogs();
+      if(state.mode==='play'&&state.player){
+        const exit=state.pickups.find(pickup=>pickup.type==='exit');
+        const path=exit?navigationPath({x:Math.floor(exit.x/32),y:Math.floor(exit.y/32)}):[];
+        const reached=path.length>0&&movePath(path,16);
+        report.extraction={attempted:true,pathLength:path.length,reached,player:sample(gameState())};
+      }
     }
     report.final = sample(gameState());
-    if (report.rooms.length !== 1 || !report.rooms[0].cleared || report.rooms[0].end.kills<=report.rooms[0].start.kills) {
+    if(fullFloor&&report.final.mode!=='won'){
+      report.error=`Full-floor attempt ended ${report.final.mode} after ${report.rooms.filter(room=>room.cleared).length}/${routeEncounters.length} main-route encounters (${report.final.kills} kills, ${report.final.health} health)`;
+    }else if (!fullFloor&&(report.rooms.length !== 1 || !report.rooms[0].cleared || report.rooms[0].end.kills<=report.rooms[0].start.kills)) {
       report.error=report.final.mode==='dead'&&report.rooms.length===0?
         `The player died before clearing a combat room (${report.final.kills} kills)`:
         'The probe did not kill an enemy and clear its first encounter';
     }
-    const affordableGate=report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
+    const affordableGate=!fullFloor&&report.initialGates.some(gate=>!gate.opened&&report.rooms[0]?.end.scrap>=gate.cost);
     if(!report.error&&affordableGate&&!report.events.some(event=>event.event==='reward-gate-opened')){
       report.error='The probe could not open an affordable scrap gate';
     }
