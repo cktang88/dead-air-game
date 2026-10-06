@@ -2,7 +2,7 @@ import {createRenderer,hexStr} from './render2d.js';
 import {VIEW_HALF_HEIGHT as CAMERA_HALF_HEIGHT} from './camera2d.js';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playLowAmmo, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playUiClick, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
+import {playFootstep, playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playLowAmmo, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playUiClick, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
 import {armMusicOnGesture, loadMusicSettings, musicSyncGame, setMasterMusicVolume, setMusicTimeScale} from './music.js';
 import {ambienceSync, ambienceChatter} from './ambience.js';
 import {ENEMY_TYPES, GEAR, GUNS, MODS, MOD_BY_ID, modFits, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
@@ -28,6 +28,7 @@ import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPo
 import {paceEnemyCount} from './room-templates.js';
 import {generateDungeon} from './dungeon.js';
 import {createNav, stepEnemyBrain} from './enemy-brain.js';
+import {SHOVE,DRY_DROP_VALUE,isAllDry,shoveOutcome,shoveReady,shoveTargets} from './shove.js';
 import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadius} from './stealth.js';
 import {noiseRayLengths} from './stealth2d.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
@@ -451,6 +452,31 @@ function stepEchoes(dt){
     state.shotExtra={pierce:0,power:1,rageBlast:0};for(const angle of e.angles){fireBullet('player',e.x,e.y,Math.cos(angle),Math.sin(angle),e.gun,e.scale,{noShot:true});const b=state.bullets.at(-1);if(b){b.color=0xff7a8a;b.echo=true;b.power=1.25;}}
     view.fx.ring(e.x,e.y,4,18,'#ff7a8a',.3,2);}
 }
+// SHOVE (shove.js): the melee fallback when both guns are dry, and the way to take a quiet enemy down without a gun.
+function playerShove(){
+  const p=state.player;if(!p||state.mode!=='play'||state.paused||state.loadoutOpen||state.supplyOpen||state.runModal)return;
+  if(!shoveReady(state.realElapsed,state.shoveReadyAt||0))return;
+  state.shoveReadyAt=state.realElapsed+SHOVE.cooldown;
+  const aim=state.aim,hits=shoveTargets(p,aim,state.enemies,{hitRadius:e=>e.def.hitRadius||(e.type==='brute'?13:11)}),ang=Math.atan2(aim.y,aim.x);
+  view.fx.spark(p.x+aim.x*20,p.y+aim.y*20,ang,6,.9,[120,260],'#e8f4ff');view.fx.ring(p.x+aim.x*16,p.y+aim.y*16,6,26,'#e8f4ff',.22,3);
+  state.playerKnock.x+=aim.x*SHOVE.lunge;state.playerKnock.y+=aim.y*SHOVE.lunge;
+  state.beatBank=addBeat(state.beatBank||0,SHOVE.beat);state.beatPulse=Math.max(state.beatPulse||0,.5);markAction('fire');
+  let loud=false;
+  for(const {enemy,dir} of hits){
+    const out=shoveOutcome({type:enemy.type,hp:enemy.hp,aware:!!enemy.aware,asleep:enemy.posture==='sleep'&&!enemy.aware,elite:!!enemy.elite,facing:enemy.face,dir,shieldFacing:enemy.def.shield?enemy.shieldFacing:null});
+    if(out.kind==='ignored'){view.fx.spark(enemy.x,enemy.y,Math.atan2(-dir.y,-dir.x),5,1);continue;}
+    if(out.kind!=='takedown')loud=true;
+    enemy.stun=Math.max(enemy.stun||0,out.stagger);enemy.knock.x=dir.x*out.knock;enemy.knock.y=dir.y*out.knock;
+    if(out.kind==='blocked'){enemy.shieldFlash=.28;playShieldBlock({distance:distance(enemy,p),pan:(enemy.x-p.x)/480});view.fx.spark(enemy.x-dir.x*8,enemy.y-dir.y*8,Math.atan2(-dir.y,-dir.x),6,1);view.fx.floater(enemy.x,enemy.y-26,'BLOCKED','#bfd4e4',13,1);continue;}
+    enemy.hp-=out.damage;view.fx.hitEnemy(enemy,out.damage,dir.x,dir.y,enemy.hp<=0);
+    if(out.label)view.fx.floater(enemy.x,enemy.y-30,out.label,out.kind==='takedown'?'#b49bff':'#ffd27a',out.kind==='takedown'?20:14,1.2);
+    state.shake=Math.max(state.shake,3);state.hitstop=Math.max(state.hitstop,.05);
+    if(enemy.hp<=0)killEnemy(enemy,{vx:dir.x*300,vy:dir.y*300,damage:30,owner:'shove'});else playHit();
+    if(out.kind==='takedown'){state.takedowns=(state.takedowns||0)+1;}
+  }
+  if(loud)emitNoise(p.x,p.y,SHOVE.noise*freqStats(state.freq).noiseMult,'shove');
+  if(!hits.length)playFootstep();
+}
 function startReload(){
   const gun=GUNS[state.weaponIndex],ammo=state.weaponAmmo[state.weaponIndex];
   state.reloadTimer=state.reloadTotal=reloadTime(reloadDuration(gun),ammo);state.weaponBurst=null;
@@ -468,7 +494,7 @@ function playerShoot(){
     else{
       const next=nextLoadedSlot(state.weaponSlots,state.activeSlot,state.weaponAmmo,state.reserveAmmo);
       if(next>=0){switchWeapon(next);state.fireCooldown=Math.max(state.fireCooldown,state.realElapsed+.12);playUiClick();pushFeed(`SWAPPED TO ${GUNS[state.weaponIndex].name} · OUT OF AMMO`,'warn');}
-      else if(state.dryTimer<=0){state.dryTimer=.35;emit('empty',p.x,p.y,{gun:GUNS[state.weaponIndex].id,dry:true});playEmptyClick();if(notifyReady('dry',2.5))toast('NO AMMO · CLEAR ROOMS FOR AMMO DROPS',1400);}
+      else if(state.dryTimer<=0){state.dryTimer=.35;emit('empty',p.x,p.y,{gun:GUNS[state.weaponIndex].id,dry:true});playEmptyClick();if(notifyReady('dry',2.5))toast(`NO AMMO · SHOVE [${keyLabel(binding('shove'))}] · THE NEXT KILL DROPS AMMO`,2200);}
     }
     return;
   }
@@ -517,7 +543,7 @@ function killEnemy(enemy,bullet){
   view.fx.kill(enemy,bullet.vx,bullet.vy);
   state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(6+Math.floor(random()*8));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
   if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
-  rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));
+  if(isAllDry(state.weaponSlots,state.weaponAmmo,state.reserveAmmo)){dropPickup('ammo',enemy.x,enemy.y,DRY_DROP_VALUE);pushFeed('OUT OF AMMO · AMMO DROPPED','loot');}else rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));
   playKill();onEnemyKilled(enemy,bullet);hud();checkRoomClear();
 }
 function hitPlayer(damage,x,y,srcAng=null,srcName=null){const before=state.health+state.armor,wasPlay=state.mode==='play'&&state.invuln<=0;hitPlayerBase(damage,x,y,srcAng,srcName);if(wasPlay&&state.health+state.armor<before)onPlayerDamaged();}
@@ -1207,6 +1233,7 @@ function setupControls(){
     if(key===binding('interact')){input.interact=true;markAction();}
     if(key===binding('throwableCycle')&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}
     if(key===binding('shellCycle'))cycleShotgunShell();
+    if(key===binding('shove'))playerShove();
     if(key===binding('throwableUse')&&state.mode==='play'&&!state.supplyOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
     if(key==='r'&&(state.mode==='dead'||state.mode==='won')){newRun();return;}
     if(key==='escape'&&(e.repeat||performance.now()-dialogClosedAt<350))return;
@@ -1220,7 +1247,7 @@ function setupControls(){
   addEventListener('keyup',e=>input.keys.delete(resolveMovementKey(normalizeKey(e.key),controls.bindings)));
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;if(state.mode==='play')state.paused=true;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
-  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.supplyOpen&&!state.runModal)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
+  addEventListener('mousedown',e=>{if(e.button===2)playerShove();if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.paused&&!state.loadoutOpen&&!state.supplyOpen&&!state.runModal)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});addEventListener('contextmenu',e=>e.preventDefault());
   $('start-button').addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun();view.canvas.focus();});
   $('daily-button')?.addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun({daily:true});view.canvas.focus();});
   wireMacroUi();$('close-loadout').addEventListener('click',()=>toggleLoadout(false));
@@ -1235,7 +1262,7 @@ function setupControls(){
 }
 async function boot(){
   await RAPIER.init();
-  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta};
+  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={playerShove,state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').innerHTML='<span>ENTER THE SECTOR</span><span class="arrow">↗</span>';
   let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;musicSyncGame(state,dt);ambienceSync(state,dt);if(state.mode==='play')update(dt);render(dt);}requestAnimationFrame(loop);
 }
