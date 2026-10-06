@@ -8,6 +8,8 @@ import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobSh
 import {WorldLayer} from './world2d.js';
 import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
+import {drawBoss, drawBossTelegraph} from './boss2d.js';
+import {drawMetaWorld} from './meta-overlay2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -464,6 +466,7 @@ export function createRenderer(container, state) {
 
   // ------------------------------------------------------------------ actors
   function drawEnemy(e, now) {
+    if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
     const v = e.vis ??= {}, kind = e.elite ? 'elite' : e.type, spr = actorSprite(kind), look = ACTOR_LOOK[kind];
     const dead = !e.alive;
     const scale = e.elite ? 0.9 : 1;
@@ -594,6 +597,7 @@ export function createRenderer(container, state) {
   function drawTelegraphs(b) {
     for (const e of state.enemies) {
       if (!e.alive) continue;
+      if (e.type === 'boss') { drawBossTelegraph(ctx, e, performance.now() / 1000); continue; }
       if (e.type === 'sniper' && e.aimTimer > 0) { drawSniperLaser(e); continue; }
       if (!inView(e, b, 320)) continue;
       if (e.meleeWindup > 0) {
@@ -860,6 +864,7 @@ export function createRenderer(container, state) {
     ctx.lineJoin = 'round';
 
     drawPickupGlows(bp);
+    drawMetaWorld(ctx, state, performance.now() / 1000, TILE);
     drawTelegraphs(bp);
     drawBullets(bp);
     fx.drawAdditive(ctx, bp);

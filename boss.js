@@ -73,16 +73,21 @@ function beginTelegraph(boss, kind, ctx) {
   boss.mode = 'telegraph'; boss.pattern = kind; boss.t = spec.telegraph; boss.total = spec.telegraph;
   boss.locked = false; boss.fired = false; boss.emit = 0;
   boss.angle = angleTo(ctx.boss, ctx.player);
+  boss.gapSign = ctx.rng() < .5 ? -1 : 1;
 }
 
-function ringShots(boss, ctx) {
-  const count = boss.phase === 3 ? 20 : 16, step = Math.PI * 2 / count, speed = boss.phase === 3 ? 135 : 120;
-  // The gap sits a couple of slots off the player so they must shuffle to use it, not just stand there.
-  const gapIndex = Math.round(angleTo(ctx.boss, ctx.player) / step) + (ctx.rng() < .5 ? 2 : -2), gapWidth = boss.phase === 3 ? 2 : 3;
-  const shots = [];
+export function ringLayout(boss) {
+  const count = boss.phase === 3 ? 20 : 16, step = Math.PI * 2 / count, width = boss.phase === 3 ? 2 : 3;
+  // The gap sits a couple of slots off the locked aim so the player must shuffle to use it, not just stand there.
+  const index = Math.round(boss.angle / step) + (boss.gapSign || 1) * 2;
+  return {count, step, width, index, speed: boss.phase === 3 ? 135 : 120};
+}
+
+function ringShots(boss) {
+  const {count, step, width, index, speed} = ringLayout(boss), shots = [];
   for (let i = 0; i < count; i++) {
-    const offset = ((i - gapIndex) % count + count) % count;
-    if (offset < gapWidth) continue;
+    const offset = ((i - index) % count + count) % count;
+    if (offset < width) continue;
     shots.push({angle: i * step, speed, damage: 1});
   }
   return shots;
@@ -130,7 +135,7 @@ export function stepBoss(boss, dt, ctx) {
       const spec = PATTERN_SPECS[boss.pattern];
       if (!boss.locked) boss.angle = angleTo(ctx.boss, ctx.player);
       if (boss.t <= .3) boss.locked = true; // aim freezes for the last beat so the dodge is fair
-      boss.telegraph = {kind: boss.pattern, progress: Math.min(1, 1 - boss.t / boss.total), angle: boss.angle};
+      boss.telegraph = {kind: boss.pattern, progress: Math.min(1, 1 - boss.t / boss.total), angle: boss.angle, locked: boss.locked, ring: boss.pattern === 'ring' ? ringLayout(boss) : null};
       if (boss.t <= 0) fire(boss, spec, ctx, out);
       break;
     }
@@ -173,7 +178,7 @@ function fire(boss, spec, ctx, out) {
   boss.telegraph = null;
   const kind = boss.pattern;
   if (kind === 'fan') { out.actions.push({type: 'bullets', shots: fanShots(boss)}); boss.mode = 'recover'; boss.t = spec.recover; }
-  else if (kind === 'ring') { out.actions.push({type: 'bullets', shots: ringShots(boss, ctx)}); boss.mode = 'recover'; boss.t = spec.recover; }
+  else if (kind === 'ring') { out.actions.push({type: 'bullets', shots: ringShots(boss)}); boss.mode = 'recover'; boss.t = spec.recover; }
   else if (kind === 'summon') {
     const room = Math.max(0, BOSS.maxAdds - (ctx.adds || 0)), count = Math.min(room, boss.phase === 3 ? 3 : 2);
     if (count > 0) out.actions.push({type: 'summon', count});

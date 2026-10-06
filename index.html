@@ -26,6 +26,8 @@
         <small id="tempo-hint">MOVE TO RUN TIME · WORLD CRAWLS</small>
       </div>
       <div id="room-banner" aria-live="polite"></div>
+      <div id="boss-bar" hidden role="status" aria-live="polite"></div>
+      <div id="build-strip" aria-label="Active frequencies"></div>
       <div id="feed" aria-live="polite"></div>
       <section id="hud" aria-live="polite">
         <div class="hud-row">
@@ -69,8 +71,10 @@
           <p class="tagline">The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
           <div id="run-result" hidden></div>
           <button id="start-button" disabled>LOADING THE SECTOR…</button>
+          <button id="kit-chip" class="kit-chip" type="button" aria-label="Choose starting kit"></button>
           <div class="title-actions">
-            <button id="meta-button" class="meta-button" type="button">SAFEHOUSE UPGRADES <span class="coin-chip"><span id="meta-balance">…</span> COINS</span></button>
+            <button id="meta-button" class="meta-button" type="button">SAFEHOUSE · ARMORY <span class="coin-chip"><span id="meta-balance">…</span> COINS</span></button>
+            <button id="daily-button" class="meta-button" type="button">DAILY RUN <small class="coin-chip">NEW TODAY</small></button>
             <button id="settings-button" class="meta-button" type="button" aria-expanded="false" aria-controls="settings-panel">SETTINGS</button>
           </div>
           <label class="seed-control" for="seed-input"><span>RUN SEED</span><input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
@@ -100,7 +104,7 @@
           <button id="close-meta" class="close" aria-label="Close safehouse upgrades">×</button>
           <div class="eyebrow">BETWEEN RUNS · PERMANENT</div>
           <h2 id="meta-title">BUILD YOUR <em>EDGE.</em></h2>
-          <p>Coins stay with you when a run ends. Upgrades apply to the next run.</p>
+          <p>Coins you bank stay with you. Unlock new guns, kits and frequencies; finish goals for rewards.</p>
           <div id="meta-coins" class="meta-coins"></div>
           <div id="meta-list"></div>
           <button id="reset-save" class="reset-save" type="button">RESET SAVE…</button>
@@ -159,7 +163,7 @@
           <div class="pickup-footer"><kbd>1</kbd> PRIMARY &nbsp; <kbd>2</kbd> SECONDARY &nbsp; <kbd>3</kbd> TERTIARY IF UNLOCKED &nbsp; <kbd>ESC</kbd> LEAVE IT</div>
         </div>
       </section>
-      
+      <section id="run-modal" class="merchant-panel" hidden aria-hidden="true" role="dialog" aria-modal="true"></section>
     </main>
     <script type="module">
       import('./game.js?v=2026-10-06').catch(error=>{

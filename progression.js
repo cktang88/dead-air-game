@@ -3,6 +3,8 @@ import {emptyStats} from './goals.js';
 import {KITS, UNLOCK_BY_ID, isUnlocked, kitUnlocked} from './unlocks.js';
 import {freqStats} from './frequencies.js';
 import {COIN_RATES} from './run-loop.js';
+import {TAPE_BY_ID} from './story.js';
+import {INTERFERENCE_BY_ID} from './interference.js';
 
 // v1: coins + 7 flat upgrades. v2 adds unlocks, starting kit, run stats, goals and the daily record.
 export const SAVE_VERSION = 2;
@@ -28,7 +30,7 @@ export function emptyProgress() {
   return {
     version:SAVE_VERSION,coins:0,
     upgrades:Object.fromEntries(UPGRADE_IDS.map(id=>[id,0])),
-    unlocked:[],kit:'standard',stats:emptyStats(),goals:{},
+    unlocked:[],kit:'standard',stats:emptyStats(),goals:{},tapes:[],interference:[],
     daily:{date:'',bestFloor:0,bestKills:0},
   };
 }
@@ -53,6 +55,8 @@ export function migrateProgress(data) {
     const stats=data.stats&&typeof data.stats==='object'?data.stats:{};
     next.stats=Object.fromEntries(Object.keys(emptyStats()).map(key=>[key,Math.max(0,Math.floor(num(stats[key])))]));
     if(data.goals&&typeof data.goals==='object')for(const [id,done] of Object.entries(data.goals))if(done===true)next.goals[id]=true;
+    if(Array.isArray(data.tapes))next.tapes=[...new Set(data.tapes.filter(id=>TAPE_BY_ID.has(id)))];
+    if(Array.isArray(data.interference))next.interference=[...new Set(data.interference.filter(id=>INTERFERENCE_BY_ID.has(id)))];
     const daily=data.daily&&typeof data.daily==='object'?data.daily:{};
     next.daily={date:typeof daily.date==='string'?daily.date.slice(0,10):'',bestFloor:Math.max(0,Math.floor(num(daily.bestFloor))),bestKills:Math.max(0,Math.floor(num(daily.bestKills)))};
   }
