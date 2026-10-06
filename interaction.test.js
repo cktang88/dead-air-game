@@ -71,3 +71,20 @@ test('hint storage tolerates failures', () => {
   saveSeen(st, new Set(['a'])); assert.deepEqual([...loadSeen(st)], ['a']);
   saveSeen({setItem() { throw new Error('x'); }}, new Set(['a']));
 });
+
+test('claimed cache is shown as CLAIMED and cannot be activated', () => {
+  const pickups = [{kind: 'cache', x: 110, y: 100, roomIndex: 2, available: true, claimed: true}];
+  const ts = collectInteractables(base({pickups}));
+  assert.equal(ts.some(x => x.kind === 'cache'), false);
+  assert.equal(ts.find(x => x.kind === 'claimed').subject, 'CACHE · CLAIMED');
+  assert.notEqual(activeInteraction(ts)?.kind, 'claimed');
+});
+test('supply locker prompt reads BUY AMMO with a scrap cost, and disables when full or broke', () => {
+  const pickups = [{kind: 'locker', x: 110, y: 100, available: true}];
+  let t = collectInteractables(base({pickups, scrap: 50, ammo: {reserve: 0, maxReserve: 30}})).find(x => x.kind === 'locker');
+  assert.equal(t.enabled, true); assert.equal(promptParts(t).head, 'BUY AMMO'); assert.equal(promptParts(t).cost, '21 SCRAP');
+  t = collectInteractables(base({pickups, scrap: 5, ammo: {reserve: 0, maxReserve: 30}})).find(x => x.kind === 'locker');
+  assert.equal(t.enabled, false); assert.match(t.reason, /NEED 21 SCRAP/);
+  t = collectInteractables(base({pickups, scrap: 50, ammo: {reserve: 30, maxReserve: 30}})).find(x => x.kind === 'locker');
+  assert.equal(t.enabled, false); assert.equal(t.reason, 'AMMO FULL'); assert.equal(promptParts(t).cost, '');
+});

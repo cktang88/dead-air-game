@@ -181,7 +181,7 @@ export function setPauseScreen(visible, info = {}) {
 export function runEndHtml({ won, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance }) {
   const cell = (label, value, cls = '') => `<div class="end-stat ${cls}"><small>${label}</small><b>${esc(value)}</b></div>`;
   return `<div class="end-banner ${won ? 'won' : 'dead'}"><small>${won ? 'SECTOR EXTRACTED' : 'SIGNAL LOST'}</small><strong>${won ? 'EXTRACTION COMPLETE' : 'RUN OVER'}</strong></div>
-<div class="end-grid">${cell('ROOMS CLEARED', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`)}${cell('KILLS', kills)}${cell('TIME', formatClock(seconds))}${cell('SCRAP', scrap)}${cell('COINS EARNED', `+${payout}`, 'coins')}${cell('SEED', seed)}</div>
+<div class="end-grid">${cell('ROOMS CLEARED', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`)}${cell('KILLS', kills)}${cell('RUN TIME', formatClock(seconds))}${cell('SCRAP', scrap)}${cell('COINS EARNED', `+${payout}`, 'coins')}${cell('SEED', seed)}</div>
 <div class="end-foot">SAFEHOUSE BALANCE · ${balance} COINS</div>`;
 }
 

@@ -16,8 +16,9 @@
       <header id="topbar">
         <div class="brand"><span class="brand-mark">✳</span> DEAD AIR <small>SEED <span id="seed-display">—</span></small></div>
         <div id="room-name">FLOOR 01 · ENTRY</div>
-        <div id="run-clock">00:00</div>
+        <div id="run-clock" title="Real run time. The world clock runs slower while you stand still.">RUN 00:00</div>
       </header>
+      <div id="objective" data-tone="seek" role="status" aria-live="polite">CLEAR THE ROUTE</div>
       <div id="tempo" data-state="still" title="Standing still slows time. Moving runs at 1×. Hold Shift to sprint. Firing does not change the current time speed.">
         <div class="tempo-top"><span class="tempo-dot"></span><span class="tempo-cap">TEMPO</span><span id="tempo-label">STILL</span><span id="tempo-speed">0.18×</span></div>
         <div class="tempo-meter"><i id="tempo-fill"></i><span class="tempo-ticks"></span></div>
@@ -143,7 +144,7 @@
           <h2 id="cache-title">FIELD <em>CACHE.</em></h2>
           <p class="merchant-copy">Choose what helps this run most. Prototype gear costs one health.</p>
           <div id="cache-options" class="merchant-stock" aria-live="polite"></div>
-          <div class="merchant-footer"><kbd>E</kbd> TO OPEN &nbsp;·&nbsp; <kbd>ESC</kbd> TO LEAVE</div>
+          <div class="merchant-footer">CHOOSE ONE · <kbd>ESC</kbd> CLOSE &nbsp;·&nbsp; CACHE STAYS SEALED UNTIL YOU TAKE A REWARD</div>
         </div>
       </section>
       <section id="weapon-pickup" class="weapon-pickup" hidden aria-hidden="true" aria-labelledby="weapon-pickup-name" role="dialog" aria-modal="true">

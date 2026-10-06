@@ -2,14 +2,15 @@
 // Both the in-world prompt renderer (affordances2d.js) and game.js interact() read this list so the
 // prompt shown on screen and the thing that happens when E is pressed can never disagree.
 import {roomHasLivingEnemies} from './room-roles.js';
+import {refillCost} from './economy.js';
 
 export const TILE_PX = 32;
 /** Distances (px) at which each interactable becomes usable. Mirrors the legacy interact() thresholds. */
-export const RANGE = Object.freeze({gate: 38, cache: 36, market: 90, gun: 36, station: 110, exit: 70});
+export const RANGE = Object.freeze({gate: 38, cache: 36, market: 90, gun: 36, station: 110, exit: 70, locker: 44});
 /** Within this distance an out-of-range interactable shows a small name tag so you know what it is. */
 export const LABEL_RANGE = 300;
 /** Lower number wins when several targets are in range at once (same order interact() always used). */
-export const PRIORITY = Object.freeze({gate: 0, cache: 1, market: 2, gun: 3, station: 4, exit: 5, pickup: 6});
+export const PRIORITY = Object.freeze({gate: 0, cache: 1, market: 2, gun: 3, locker: 3.5, station: 4, exit: 5, pickup: 6});
 const prio = k => PRIORITY[k] ?? 9;
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -24,10 +25,12 @@ function livingOnRoute(rooms, enemies) { return enemies.filter(e => e.alive && r
 
 const GUN_ICON = {'PISTOL': 'gun-pistol', 'SMG': 'gun-smg', 'SHOTGUN': 'gun-shotgun', 'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel'};
 export const gunIconId = gun => GUN_ICON[gun?.category] || 'gun-rifle';
-export const pickupIconId = pk => ({scrap: 'pickup-scrap', heal: 'pickup-heal', mod: 'pickup-mod', ammo: 'pickup-ammo'}[pk.kind] || 'pickup-crate');
+export const pickupIconId = pk => ({scrap: 'pickup-scrap', heal: 'pickup-heal', mod: 'pickup-mod', ammo: 'pickup-ammo', armor: 'pickup-armor'}[pk.kind] || 'pickup-crate');
 export function pickupName(pk) {
   if (pk.kind === 'scrap') return `${pk.value || 12} SCRAP`;
   if (pk.kind === 'heal') return 'MEDKIT';
+  if (pk.kind === 'ammo') return 'AMMO';
+  if (pk.kind === 'armor') return 'ARMOR PLATE';
   if (pk.kind === 'mod') return `${(pk.rarity || 'common').toUpperCase()} MOD`;
   return String(pk.kind || 'ITEM').toUpperCase();
 }
@@ -52,7 +55,13 @@ export function collectInteractables(s) {
   for (const pk of s.pickups || []) {
     if (!pk.available) continue;
     const at = {x: pk.x, y: pk.y};
-    if (pk.kind === 'cache') {
+    if (pk.kind === 'cache' && pk.claimed) {
+      add({id: `claimed:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'claimed', ref: pk, ...at, range: 0, keyed: false, icon: 'station-cache-open', verb: '', subject: 'CACHE · CLAIMED', enabled: false, reason: '', color: '#8d8a96'});
+    } else if (pk.kind === 'locker') {
+      const a = s.ammo || {reserve: 0, maxReserve: 0}, missing = Math.max(0, a.maxReserve - a.reserve), cost = refillCost(missing), ok = missing > 0 && scrap >= cost;
+      add({id: `locker:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'locker', ref: pk, ...at, range: RANGE.locker, keyed: true, icon: 'pickup-ammo', verb: 'BUY', subject: 'AMMO', cost: missing > 0 ? cost : undefined,
+        enabled: ok, reason: missing <= 0 ? 'AMMO FULL' : ok ? `+${missing} ROUNDS · SUPPLY LOCKER` : needScrapText(cost, scrap), color: '#8fe0ff'});
+    } else if (pk.kind === 'cache') {
       const n = livingIn(pk.roomIndex, enemies), ok = n === 0;
       add({id: `cache:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'cache', ref: pk, ...at, range: RANGE.cache, keyed: true, icon: 'station-cache',
         verb: 'OPEN', subject: 'CACHE', enabled: ok, reason: ok ? '' : `CLEAR ROOM FIRST (${hostilesText(n)})`, color: '#f4c66d'});
@@ -62,8 +71,8 @@ export function collectInteractables(s) {
         verb: 'TAKE', subject: gun?.name || 'WEAPON', enabled: true, reason: '', color: pk.color || '#74c9ed'});
     } else if (pk.kind === 'exit') {
       const n = livingOnRoute(rooms, enemies), ok = n === 0;
-      add({id: 'exit', kind: 'exit', ref: pk, ...at, range: RANGE.exit, keyed: false, icon: 'exit-extraction', verb: 'EXTRACT', subject: '',
-        enabled: ok, reason: ok ? 'WALK IN TO LEAVE' : `LOCKED · ${hostilesText(n)} LEFT ON THE ROUTE`, color: ok ? '#6dffb0' : '#ff5969', hostiles: n});
+      add({id: 'exit', kind: 'exit', ref: pk, ...at, range: RANGE.exit, keyed: ok, icon: 'exit-extraction', verb: 'EXTRACT', subject: '',
+        enabled: ok, reason: ok ? 'PRESS E OR WALK IN' : `LOCKED · ${hostilesText(n)} LEFT ON THE ROUTE`, color: ok ? '#6dffb0' : '#ff5969', hostiles: n});
     } else {
       add({id: `${pk.kind}:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'pickup', pickupKind: pk.kind, ref: pk, ...at, range: 0, keyed: false,
         icon: pickupIconId(pk), verb: 'AUTO', subject: pickupName(pk), enabled: true, reason: '', color: pk.color || '#f4c66d', rarity: pk.rarity || null});
