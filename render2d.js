@@ -12,7 +12,7 @@ import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
-import {createStealthLayer} from './stealth2d.js';
+import {createStealthLayer, sightDistance} from './stealth2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -751,6 +751,18 @@ export function createRenderer(container, state) {
     ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.2, y + r * 0.2); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.2, y - r * 0.2); ctx.closePath(); ctx.fill();
   }
 
+  // Slow-time readability: actors get a rim light that strengthens as time thins, so they never melt into the floor.
+  // The ctx is already translated to the actor's centre.
+  function actorRim(r, color, base) {
+    const k = clamp(base + 0.5 * vis.slow, 0, 1);
+    ctx.save(); ctx.strokeStyle = color; ctx.lineCap = 'round';
+    ctx.globalAlpha = k * 0.35; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(0, 0, r + 1.2, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = k; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r + 0.6, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+  function actorGlow(r, color, base) {
+    const a = base + 0.3 * vis.slow, R = r * 2.5; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.drawImage(glowSprite(color), -R, -R, R * 2, R * 2); ctx.restore();
+  }
   function drawEnemy(e, now) {
     if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
     const v = e.vis ??= {}, kind = kindOf(e), spr = actorSprite(kind), look = ACTOR_LOOK[kind];
@@ -772,9 +784,11 @@ export function createRenderer(container, state) {
     const hop = alertAge < 0.2 ? 0.12 * Math.sin(alertAge / 0.2 * Math.PI) : 0;
     const wind = 1 + (windup ? 0.1 * outCubic(windP) : 0) + kick * 0.05 + punch * 0.13 + hop - brace * 0.04;
     ctx.scale(scale * wind * bob * breath, scale * wind * bob * breath);
+    actorGlow(look.r, look.color, 0.2);
     ctx.save(); ctx.rotate(mvAng); ctx.scale(1 + 0.08 * amp + lunge * 0.14, 1 - 0.05 * amp - lunge * 0.1); ctx.rotate(-mvAng);
     ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
     ctx.restore();
+    actorRim(look.r, tint(look.color, 0.2), 0.42);
     ctx.save(); ctx.rotate(ang);
     if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -979,9 +993,11 @@ export function createRenderer(container, state) {
     // body: breathes at rest, bobs and stretches along travel while walking, stretches more when sprinting
     const bob = 1 + 0.032 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.018 * Math.sin(vis.time * 2.4) * (1 - amp), punch = 1 + vis.flashHit * 0.07;
     ctx.save(); ctx.scale(bob * breath * punch, bob * breath * punch);
+    actorGlow(10.5, '#d8fff0', 0.16);
     ctx.rotate(vis.mvAng); ctx.scale(1 + 0.07 * amp + 0.06 * sprint, 1 - 0.05 * amp - 0.04 * sprint); ctx.rotate(-vis.mvAng);
     ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
     ctx.restore();
+    ctx.save(); ctx.scale(bob * breath * punch, bob * breath * punch); actorRim(10.5, '#eafff4', 0.55); ctx.restore();
     // torso / head layer follows the lagged body angle and leans into a sprint
     ctx.save(); ctx.rotate(bAng); ctx.translate(sprint * 1.6, 0);
     ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -1086,12 +1102,12 @@ export function createRenderer(container, state) {
 
   function drawBullets(b) {
     ctx.lineCap = 'round';
-    const slowK = 1 + vis.slow * 1.1; // trails stretch while time is thin so a dodge reads
+    const slowK = 1 + vis.slow * 2.4; // trails stretch while time is thin so the trajectory reads (a dodgeable puzzle)
     for (const bl of state.bullets) {
       if (!inView(bl, b, 60)) continue;
       const sp = Math.hypot(bl.vx, bl.vy) || 1, dx = bl.vx / sp, dy = bl.vy / sp;
       if (bl.owner === 'player') {
-        const color = bl.color !== undefined ? hexStr(bl.color) : '#ffd17c', born = Math.hypot(bl.x - (bl.ox ?? bl.x), bl.y - (bl.oy ?? bl.y));
+        const color = bl.color !== undefined ? mix(hexStr(bl.color), '#ffcf5c', 0.55) : '#ffd17c', born = Math.hypot(bl.x - (bl.ox ?? bl.x), bl.y - (bl.oy ?? bl.y));
         const len = Math.min(clamp(sp * 0.04, 12, 40) * slowK, 6 + born * 1.1);
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 3; i++) {
@@ -1106,7 +1122,14 @@ export function createRenderer(container, state) {
       } else {
         // Enemy rounds: big hot orbs with a pulsing halo and a fading comet tail. Round + red/white, the opposite of the
         // thin gold streaks the player fires, so they stay readable at 0.18x.
-        const sn = bl.style === 'sniper', R = sn ? 4.6 : 3.7, tail = (sn ? 38 : 22) * slowK, pulse = 0.5 + 0.5 * Math.sin(vis.time * 16 + bl.x * 0.05);
+        const sn = bl.style === 'sniper';
+        if (vis.slow > 0.25 && !bl.missed) { // predicted path: a faint dashed line to where this round will end (walls and crates stop it)
+          const reach = sightDistance(state, bl.x, bl.y, Math.atan2(dy, dx), 320, 8), pa = clamp((vis.slow - 0.25) / 0.5, 0, 1) * 0.5;
+          ctx.save(); ctx.strokeStyle = sn ? '#ffb070' : '#ff7a86'; ctx.globalAlpha = pa; ctx.lineWidth = 1.3; ctx.setLineDash([2, 6]); ctx.lineDashOffset = -vis.time * 14;
+          ctx.beginPath(); ctx.moveTo(bl.x + dx * 6, bl.y + dy * 6); ctx.lineTo(bl.x + dx * reach, bl.y + dy * reach); ctx.stroke();
+          ctx.setLineDash([]); ctx.globalAlpha = pa * 1.4; ctx.beginPath(); ctx.arc(bl.x + dx * reach, bl.y + dy * reach, 2.2, 0, TAU); ctx.stroke(); ctx.restore();
+        }
+        const R = sn ? 4.6 : 3.7, tail = (sn ? 38 : 22) * slowK, pulse = 0.5 + 0.5 * Math.sin(vis.time * 16 + bl.x * 0.05);
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 4; i++) {
           const f0 = i / 4, f1 = (i + 1) / 4;
@@ -1228,6 +1251,14 @@ export function createRenderer(container, state) {
     drawProps(bp);
     drawPillars(bp);
     drawCrates(bp);
+    { // selective colour: lift + drain the environment now; actors, pickups and bullets are drawn after at full colour
+      const rr = [], k = viewCam.scale * dpr, ox = (w / 2 - viewCam.x * viewCam.scale) * dpr, oy = (h / 2 - viewCam.y * viewCam.scale) * dpr;
+      for (const [ri, r] of state.rooms.entries()) {
+        const acc = r.theme?.accent; if (!acc || !(r.visited || ri === state.currentRoom) || r.x2 * TILE + TILE < b.x0 || r.x1 * TILE > b.x1 || r.y2 * TILE + TILE < b.y0 || r.y1 * TILE > b.y1) continue;
+        rr.push({x: r.x1 * TILE * k + ox, y: r.y1 * TILE * k + oy, w: (r.x2 - r.x1 + 1) * TILE * k, h: (r.y2 - r.y1 + 1) * TILE * k, color: acc});
+      }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); timeFx.drawEnv(ctx, canvas.width, canvas.height, rr); ctx.restore();
+    }
     drawPickups(bp);
     // corpses first, then the living
     for (const e of state.enemies) if (!e.alive && inView(e, bp, 40)) drawEnemy(e, now);
