@@ -35,7 +35,8 @@ import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraSh
 import {particleBurstBudget} from './particles.js';
 import {resolveProjectileImpacts} from './projectile-impacts.js';
 import {lootTier,lootTierForRoll} from './loot.js';
-import {showBanner,gunIcon,strokeIcon,statBarsHtml,tierColor,categoryColor,tempoView,hudOccludes,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone,syncPips,tickNumber,flashEl,syncKeycaps,hintHtml,costHtml,animateCounts} from './hud-ui.js';
+import {TIME_RULE,addBeat,drainBeat,rateLabel,shotBeat,sprintNoiseStep,timeBand}from './time-rule.js';
+import {showBanner,gunIcon,strokeIcon,statBarsHtml,tierColor,categoryColor,hudOccludes,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone,syncPips,tickNumber,flashEl,syncKeycaps,hintHtml,costHtml,animateCounts} from './hud-ui.js';
 import {mergeBest,readBest,writeBest} from './best-run.js';
 export {pushFeed};
 import {cacheRewardAvailable} from './cache-rewards.js';
@@ -458,10 +459,13 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   state.bullets.push(bullet);
 }
 function playerMoveRatio(){const ratio=Math.hypot(state.playerVel.x,state.playerVel.y)/(runStats().moveSpeed||112);return ratio>.2?clamp(ratio,0,1):0;}
+// Each shot lets a beat of world time through (time-rule.js shotBeat). The bank is drained as a burst of 1x flow in update().
+function addShotBeat(gun,stats){const pellets=gun.id==='shotgun'?(shellForRun().pellets||1):(gun.count||1),beat=shotBeat({damage:stats.damage,fireInterval:stats.fireRate,pellets});state.beatBank=addBeat(state.beatBank||0,beat);state.beatPulse=1;state.shotsFired=(state.shotsFired||0)+1;state.beatLast=beat;}
 function firePlayerRound(gun,stats){
   const p=state.player;
   if(!p)return;
   playGunshot(gun,{suppressed:attachmentsFor(gun).has('suppressor')});
+  addShotBeat(gun,stats);
   state.noises.push({x:p.x,y:p.y,radius:state.heldSilent?0:(attachmentsFor(gun).has('suppressor')?190:380)*freqStats(state.freq).noiseMult});
   const fq=freqStats(state.freq);{let mult=runStats().damageMult*(1+fq.missingHpDamage*Math.max(0,state.maxHealth-state.health))*(state.health<=1&&fq.lastStand?1+fq.lastStand:1);if(fq.heldBreath>0&&state.stillFor>=.6){mult*=1+fq.heldBreath;state.stillFor=0;view.fx.floater(p.x,p.y-20,fq.heldBreathSilent?'HELD BREATH · SILENT':'HELD BREATH','#ffd27a',13,1);state.heldSilent=fq.heldBreathSilent;}else state.heldSilent=false;state.shotDamageMult=mult;}
   const feel=gunFeel(gun),first=registerShot(state.bloom,feel);
@@ -481,6 +485,7 @@ function firePlayerRound(gun,stats){
 function startReload(){
   const gun=GUNS[state.weaponIndex],ammo=state.weaponAmmo[state.weaponIndex];
   state.reloadTimer=state.reloadTotal=reloadTime(reloadDuration(gun),ammo);state.weaponBurst=null;
+  state.beatBank=addBeat(state.beatBank||0,TIME_RULE.beat.reload);state.beatPulse=Math.max(state.beatPulse||0,.6);
   playReload();emit('reloadStart',state.player.x,state.player.y,{gun:gun.id,duration:state.reloadTotal,empty:ammo<=0});
   const bloom=freqStats(state.freq).smokeReload;if(bloom>0){const item={...throwableById('smoke'),radius:bloom,duration:3};state.effects.push({id:'smoke',item,x:state.player.x,y:state.player.y,remaining:3,elapsed:0,nextTick:0});view.fx.explode('smoke',state.player.x,state.player.y,bloom);}
 }
@@ -493,13 +498,13 @@ function playerShoot(){
     if(state.reserveAmmo[state.weaponIndex]>0){startReload();if(notifyReady('reload',1.5))toast('RELOADING',750);}
     else{
       const next=nextLoadedSlot(state.weaponSlots,state.activeSlot,state.weaponAmmo,state.reserveAmmo);
-      if(next>=0){switchWeapon(next);state.fireCooldown=Math.max(state.fireCooldown,state.time+.12);playUiClick();pushFeed(`SWAPPED TO ${GUNS[state.weaponIndex].name} · OUT OF AMMO`,'warn');}
+      if(next>=0){switchWeapon(next);state.fireCooldown=Math.max(state.fireCooldown,state.realElapsed+.12);playUiClick();pushFeed(`SWAPPED TO ${GUNS[state.weaponIndex].name} · OUT OF AMMO`,'warn');}
       else if(state.dryTimer<=0){state.dryTimer=.35;emit('empty',p.x,p.y,{gun:GUNS[state.weaponIndex].id,dry:true});playEmptyClick();if(notifyReady('dry',2.5))toast('NO AMMO · FIND A SUPPLY LOCKER',1400);}
     }
     return;
   }
-  const weaponIndex=state.weaponIndex,gun=GUNS[weaponIndex],stats=weaponStats(gun,attachmentsFor(gun)),now=state.time;if(now<state.fireCooldown)return;
-  state.pressUntil=-1;state.fireCooldown=nextFireTime(now,state.fireCooldown,stats.fireRate/(1+(state.loopStacks||0)*freqStats(state.freq).loopPerStack),state.lastStep||1/60);state.weaponAmmo[weaponIndex]--;firePlayerRound(gun,stats);
+  const weaponIndex=state.weaponIndex,gun=GUNS[weaponIndex],stats=weaponStats(gun,attachmentsFor(gun)),now=state.realElapsed;if(now<state.fireCooldown)return;
+  state.pressUntil=-1;state.fireCooldown=nextFireTime(now,state.fireCooldown,stats.fireRate/(1+(state.loopStacks||0)*freqStats(state.freq).loopPerStack),state.frameDt||1/60);state.weaponAmmo[weaponIndex]--;firePlayerRound(gun,stats);
   if(state.weaponAmmo[weaponIndex]<=0)emit('empty',p.x,p.y,{gun:gun.id,dry:false});
   if(gun.burst)state.weaponBurst=beginWeaponBurst({weaponIndex,shots:gun.burst.shots,interval:gun.burst.interval,firstShotAt:now,remainingAmmo:state.weaponAmmo[weaponIndex]});
   hud();markAction(hasMovementInput()?'move':'fire');
@@ -524,7 +529,7 @@ function updateObjective(){
 function updateWeaponBurst(){
   if(!state.weaponBurst)return;
   const weaponIndex=state.weaponIndex,ammo=state.weaponAmmo[weaponIndex];
-  const result=advanceWeaponBurst(state.weaponBurst,{weaponIndex,now:state.time,ammo});
+  const result=advanceWeaponBurst(state.weaponBurst,{weaponIndex,now:state.realElapsed,ammo});
   state.weaponBurst=result.burst;
   if(!result.shots)return;
   const gun=GUNS[weaponIndex],stats=weaponStats(gun,attachmentsFor(gun));
@@ -636,7 +641,7 @@ function setBossBar(init,e){
 }
 function trackRunClock(dt){
   state.timeCredit=Math.max(0,state.timeCredit-dt);state.freezeT=Math.max(0,(state.freezeT||0)-dt);if(state.loopStacks>0){state.loopT-=dt;if(state.loopT<=0)state.loopStacks=0;}
-  const moving=hasMovementInput();state.stillFor=moving?0:state.stillFor+dt;
+  const moving=playerSpeedRatio()>TIME_RULE.deadSpeed;state.stillFor=moving?0:state.stillFor+dt;
   if(moving){state.slowKills=0;state.tripleFlag=false;}
   const p=state.player;if(p){if(state.lastPos)state.roomMove+=Math.hypot(p.x-state.lastPos.x,p.y-state.lastPos.y);state.lastPos={x:p.x,y:p.y};}
 }
@@ -663,7 +668,7 @@ function onEnemyKilled(enemy,bullet){
   if(unaware&&f.unawareScrap){state.scrap+=scrapGain(f.unawareScrap);view.fx.floater(enemy.x,enemy.y-16,`+${f.unawareScrap} QUIET KILL`,'#b49bff',12,1);}
   if(unaware&&f.unawareHeal&&state.health<=state.maxHealth/2&&state.health<state.maxHealth){state.health++;view.fx.floater(enemy.x,enemy.y-28,'DEAD DROP +1','#74dfab',13,1.1);}
   if(f.pulse)stunBurst(enemy.x,enemy.y,f.pulse,1);
-  if(state.timeScaleTarget<.5&&enemy.type!=='boss'){state.slowKills++;if(state.slowKills>=3&&!state.tripleFlag){state.tripleFlag=true;state.slowTriples++;toast('THREE IN ONE BREATH',1600);pushFeed('THREE IN ONE BREATH','good');}}
+  if(state.timeScaleTarget<.2&&enemy.type!=='boss'){state.slowKills++;if(state.slowKills>=3&&!state.tripleFlag){state.tripleFlag=true;state.slowTriples++;toast('THREE IN ONE BREATH',1600);pushFeed('THREE IN ONE BREATH','good');}}
   if(enemy.type==='boss')onBossKilled(enemy);
 }
 function onPlayerDamaged(){
@@ -912,33 +917,36 @@ function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projec
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);view.fx.hitEnemy(enemy,effect.item.damage,0,-1,enemy.hp<=0);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){state.effects.splice(i,1);}}}
 function updateThrowableHud(){const sel=selectedThrowable();$('throwable-readout').innerHTML=THROWABLES.map(item=>{const n=state.throwables[item.id]||0;return `<div class="chip-throw ${item.id===sel.id?'sel':''} ${n?'':'none'}" title="${item.name}">${strokeIcon(item.id,'ico')}<b>${n}</b></div>`;}).join('')+`<span class="throw-name">${sel.name.toUpperCase()}</span>`;$('throwable-hint').innerHTML=`${keycap(keyLabel(binding('throwableCycle')))} SELECT ${keycap(keyLabel(binding('throwableUse')))} THROW`;}
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(!state.loadoutOpen)closeLoadoutPreview();if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else view.canvas.focus();}
-function getTimeScale(){const base=timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup||!!state.runModal,loadoutOpen:state.loadoutOpen,moving:hasMovementInput(),idleScale:runStats().idleScale});if(base>0&&state.freezeT>0)return .06;if(base>=1&&(state.timeCredit>0||(state.health<=1&&freqStats(state.freq).lastStand>0)))return .5;const ih=interferenceStats(state.progress);if(ih.lowHealthIdle&&state.health<=2&&base>0&&base<ih.lowHealthIdle)return ih.lowHealthIdle;return base;}
+function playerSpeedRatio(){const v=state.playerVel;if(!v)return 0;const walk=runStats().moveSpeed||112;return Math.hypot(v.x,v.y)/walk;}
+// THE TIME RULE (time-rule.js): world rate follows the player's actual speed. Perks/interference only ever pull the rate DOWN (or lift the still floor).
+function getTimeScale(){const base=timeScale({mode:state.mode,paused:state.paused||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup||!!state.runModal,loadoutOpen:state.loadoutOpen,speedRatio:playerSpeedRatio(),idleScale:runStats().idleScale});if(base>0&&state.freezeT>0)return Math.min(base,TIME_RULE.stillFloor);if(base>.5&&(state.timeCredit>0||(state.health<=1&&freqStats(state.freq).lastStand>0)))return .5;const ih=interferenceStats(state.progress);if(ih.lowHealthIdle&&state.health<=2&&base>0&&base<ih.lowHealthIdle&&playerSpeedRatio()<=TIME_RULE.deadSpeed)return ih.lowHealthIdle;return base;}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
-  const {x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);if(vx!==0||vy!==0)markAction('move');
+  const rd0=state.frameDt||dt,{x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);if(vx!==0||vy!==0)markAction('move');
   const sprinting=input.keys.has('shift')&&(vx!==0||vy!==0);
   {// Movement: velocity eases toward the wish direction (snappy accel, short weighty coast), loadout weight trims speed/accel,
     // dynamics run on the real frame clock so slow-mo never makes the player float. Knockback (hits, recoil) rides on top.
     const gear=GEAR.find(item=>item.id===state.gear),mob=loadoutMobility(weaponLoadoutWeight(state.weaponSlots,GUNS)+(gear?.weight||0),state.carryCapacity);
     const topSpeed=runStats().moveSpeed*mob.speedMul*(sprinting?SPRINT_MULTIPLIER:1),rdt=state.stepHitstop?0:state.frameDt;
     const here=p.body.translation();
-    if(state.lastPhysicsStep>0)state.playerVel=clipBlockedVelocity(state.playerVel,{x:here.x-p.x,y:here.y-p.y},{x:state.cmdVel.x*state.lastPhysicsStep,y:state.cmdVel.y*state.lastPhysicsStep},state.lastPhysicsStep);
+    if(state.lastMoveDt>0)state.playerVel=clipBlockedVelocity(state.playerVel,{x:here.x-p.x,y:here.y-p.y},{x:state.cmdVel.x*state.lastMoveDt,y:state.cmdVel.y*state.lastMoveDt},state.lastMoveDt);
     state.playerVel=stepVelocity(state.playerVel,{x:vx,y:vy},{topSpeed,accelMul:mob.accelMul,frictionMul:mob.frictionMul,sprint:sprinting},rdt);
     if(vx===0&&vy===0&&Math.hypot(state.playerVel.x,state.playerVel.y)<2)state.playerVel={x:0,y:0};
     state.playerKnock.x=approach(state.playerKnock.x,0,KNOCK_DECAY,rdt);state.playerKnock.y=approach(state.playerKnock.y,0,KNOCK_DECAY,rdt);
-    const expectLen=Math.hypot(state.cmdVel.x,state.cmdVel.y)*state.lastPhysicsStep,movedLen=Math.hypot(here.x-p.x,here.y-p.y),blockedRatio=expectLen>.4?movedLen/expectLen:1;
+    const expectLen=Math.hypot(state.cmdVel.x,state.cmdVel.y)*state.lastMoveDt,movedLen=Math.hypot(here.x-p.x,here.y-p.y),blockedRatio=expectLen>.4?movedLen/expectLen:1;
     state.cornerStuck=blockedRatio<.35&&(vx!==0||vy!==0)?state.cornerStuck+1:0;if(state.cornerStuck>8){state.cornerSign=-(state.cornerSign||1);state.cornerStuck=0;}
     const nudge=cornerNudge({x:vx,y:vy},blockedRatio,topSpeed,state.cornerSign||1);
-    state.cmdVel={x:state.playerVel.x+state.playerKnock.x+nudge.x,y:state.playerVel.y+state.playerKnock.y+nudge.y};p.body.setLinvel(state.cmdVel,true);
+    state.cmdVel={x:state.playerVel.x+state.playerKnock.x+nudge.x,y:state.playerVel.y+state.playerKnock.y+nudge.y};
+    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult});}
     state.sprintBlend=approach(state.sprintBlend,sprinting?1:0,12,rdt);state.recoil=stepRecoil(state.recoil,rdt);state.dryTimer=Math.max(0,state.dryTimer-rdt);
-    stepBloom(state.bloom,dt,gunFeel(GUNS[state.weaponIndex]));
+    stepBloom(state.bloom,rd0,gunFeel(GUNS[state.weaponIndex]));
     p.x=here.x;p.y=here.y;
   }
   const aimPoint=view.screenToWorld(input.mouseX,input.mouseY);
   {const dx=aimPoint.x-p.x,dy=aimPoint.y-p.y,d=Math.hypot(dx,dy)||1;if(d>2){state.aim.x=dx/d;state.aim.y=dy/d;}}
-  state.invuln=Math.max(0,state.invuln-dt);
-  if(state.reloadTimer>0){state.reloadTimer-=dt;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;playReloadEnd();hud();emit('reloadEnd',p.x,p.y,{gun:gun.id,cancelled:false});}}
-  if(input.firing&&!state.wasFiring)state.pressUntil=state.time+PRESS_BUFFER;state.wasFiring=input.firing;if(input.firing||state.time<state.pressUntil)playerShoot();updateWeaponBurst();if(input.interact){input.interact=false;interact();}
+  state.invuln=Math.max(0,state.invuln-rd0);
+  if(state.reloadTimer>0){state.reloadTimer-=rd0;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;playReloadEnd();hud();emit('reloadEnd',p.x,p.y,{gun:gun.id,cancelled:false});}}
+  if(input.firing&&!state.wasFiring)state.pressUntil=state.realElapsed+PRESS_BUFFER;state.wasFiring=input.firing;if(input.firing||state.realElapsed<state.pressUntil)playerShoot();updateWeaponBurst();if(input.interact){input.interact=false;interact();}
   for(const pickup of state.pickups){if(pickup.declined&&distance(p,pickup)>48)pickup.declined=false;if(state.pendingGunPickup)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
   {const blocked=state.loadoutOpen||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup||!!state.runModal,targets=blocked?[]:interactTargets();state.interact={targets,active:activeInteraction(targets),ambient:ambientPrompt(targets),key:keyLabel(binding('interact'))};}
   updateTutorHint(p);
@@ -952,7 +960,7 @@ function updateTutorHint(p){
   if(tutor.current||clock-tutor.shownAt<2.5)return;
   const gi=state.weaponIndex,gun=GUNS[gi],others=state.weaponSlots.filter(i=>i!==gi);
   const centreBusy=!!document.querySelector('#room-banner.show,#toast.show');if(moving)tutor.moved=true;
-  const ctx={moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup||state.paused||state.mode!=='play',seen:tutor.seen,runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
+  const ctx={shots:state.shotsFired||0,moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.merchantOpen||state.cacheOpen||!!state.pendingGunPickup||state.paused||state.mode!=='play',seen:tutor.seen,runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
   const keys={reload:keyLabel(binding('reload')),throwableCycle:keyLabel(binding('throwableCycle')),throwableUse:keyLabel(binding('throwableUse')),loadout:'TAB',moveKeys:['moveUp','moveLeft','moveDown','moveRight'].map(a=>keyLabel(binding(a)))};
   const hint=pickHint(ctx,keys);if(!hint)return;
   tutor.current=hint;tutor.shownAt=clock;tutor.seen.add(hint.id);try{saveSeen(localStorage,tutor.seen);}catch{}
@@ -1008,8 +1016,8 @@ function updateEnemies(dt){
   }
   state.noises.length=0;
 }
-function updateBullets(dt){
-  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};b.ox=undefined;b.life-=dt;if(b.life<=0){removeBullet(i);continue;}if(!state.stepHitstop){if(b.homing)steerBullet(b,dt);const k=b.owner==='enemy'?bubbleFactor(b):1;b.x+=b.vx*dt*k;b.y+=b.vy*dt*k;}
+function updateBullets(worldDt,realDt){
+  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],dt=b.owner==='player'?realDt:worldDt,previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};b.ox=undefined;b.life-=dt;if(b.life<=0){removeBullet(i);continue;}if(!state.stepHitstop){if(b.homing)steerBullet(b,dt);const k=b.owner==='enemy'?bubbleFactor(b):1;b.x+=b.vx*dt*k;b.y+=b.vy*dt*k;}
     const impacts=[];
     if(b.owner==='player')for(const enemy of state.enemies){if(!enemy.alive||b.hitEnemies.has(enemy))continue;const t=segmentCircleHitTime(previous,b,enemy,enemy.def.hitRadius||(enemy.type==='brute'?13:11));if(t!==null){const blocked=enemy.def.shield&&shieldBlocks({facing:enemy.shieldFacing,halfArc:enemy.def.shieldHalfArc,bulletVx:b.vx,bulletVy:b.vy,stun:enemy.stun});impacts.push({t,kind:blocked?'shield':'enemy',target:enemy});}}
     for(const crate of state.crates){if(b.hitCrates.has(crate))continue;const t=segmentCircleHitTime(previous,b,crate,17);if(t!==null)impacts.push({t,kind:'crate',target:crate});}
@@ -1047,15 +1055,22 @@ function syncPauseScreen(){const show=state.mode==='play'&&state.paused;setPause
 function update(dt){
   syncPauseScreen();state.flashTimer=Math.max(0,state.flashTimer-dt);$('flash-overlay').style.opacity=String(flashOverlayOpacity(state.flashTimer,visualSettings.flash));
   if(state.mode!=='play'||state.paused||state.loadoutOpen||state.merchantOpen||state.cacheOpen||state.pendingGunPickup||state.runModal)return;
-  trackRunClock(dt);state.timeScaleTarget=getTimeScale();const scale=state.timeScaleSmoothed=easeTimeScale(state.timeScaleSmoothed,state.timeScaleTarget,dt);setTimeScaleAudio(scale);setMusicTimeScale(scale);if(scale>0&&state.mode==='play'&&(scale<.6)!==!!state.audioSlow){state.audioSlow=scale<.6;(state.audioSlow?playSlowmoEnter:playSlowmoExit)();}const step=dt*scale;state.frameDt=dt;state.lastStep=step;
-  state.stepHitstop=state.hitstop>0;state.lastPhysicsStep=0;if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0){physics.timestep=Math.min(step,1/30);physics.step();state.lastPhysicsStep=physics.timestep;}}else{physics.timestep=Math.min(step,1/30);physics.step();state.lastPhysicsStep=physics.timestep;}
-  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateBullets(step);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
-  const moving=hasMovementInput(),firing=input.firing||!!state.weaponBurst;
-  const sprinting=moving&&input.keys.has('shift'),tv=tempoView({moving,firing,sprinting,scale}),tempoEl=$('tempo');
-  if(tempoEl.dataset.state!==tv.state){tempoEl.dataset.state=tv.state;state.tempoChangedAt=state.elapsedReal=performance.now();tempoEl.classList.remove('idle');}else if(tempoEl.dataset.state&&performance.now()-(state.tempoChangedAt||0)>3500)tempoEl.classList.add('idle');tempoEl.classList.toggle('firing',firing);tempoEl.style.setProperty('--fill',tv.fraction.toFixed(3));
-  $('tempo-label').textContent=tv.label;$('tempo-speed').textContent=tv.speed;$('tempo-fill').style.width=`${tv.percent}%`;$('tempo-hint').textContent=tv.hint;
+  trackRunClock(dt);state.timeScaleTarget=getTimeScale();const scale=state.timeScaleSmoothed=easeTimeScale(state.timeScaleSmoothed,state.timeScaleTarget,dt);setTimeScaleAudio(scale);setMusicTimeScale(scale);if(scale>0&&state.mode==='play'&&(scale<.6)!==!!state.audioSlow){state.audioSlow=scale<.6;(state.audioSlow?playSlowmoEnter:playSlowmoExit)();}state.frameDt=dt;
+  // Beat: shots owe the world a burst of 1x flow on top of the speed-driven rate.
+  const bd=drainBeat(state.beatBank||0,dt,scale);state.beatBank=bd.bank;state.beatPulse=Math.max(0,(state.beatPulse||0)-dt*6);
+  const step=dt*scale+bd.extra;state.lastStep=step;state.worldRate=dt>0?step/dt:scale;
+  state.stepHitstop=state.hitstop>0;state.lastPhysicsStep=0;state.lastMoveDt=0;
+  const stepPhysics=()=>{const ts=Math.max(1e-4,Math.min(step,1/30));physics.timestep=ts;
+    // The player is outside time: command the body at velocity*(real dt / physics step) so it covers cmdVel*dt on the real clock.
+    if(state.player&&state.cmdVel){const k=Math.min(60,dt/ts);state.player.body.setLinvel({x:state.cmdVel.x*k,y:state.cmdVel.y*k},true);}
+    physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
+  if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
+  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
+  updateRateChip(scale);
   drawMinimap();syncHudFrame();
 }
+// Minimal HUD readout of the world rate; the grade + edge meter (timefx.js) is the primary display.
+function updateRateChip(scale){const el=$('tempo');if(!el)return;const band=timeBand(playerSpeedRatio());if(el.dataset.state!==band)el.dataset.state=band;const label=rateLabel(state.worldRate??scale);if(state.rateText!==label){state.rateText=label;$('tempo-speed').textContent=label;$('tempo-label').textContent=band.toUpperCase();}}
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);mm.key='';mm.lookup=null;}
 function drawLootScannerPings(ctx,sx,sy,player){
   const scanRange=GEAR.find(item=>item.id===state.gear)?.pickupScanRange||0;
@@ -1109,7 +1124,7 @@ function render(dt=1/60){
   const p=state.player,gun=GUNS[state.weaponIndex];
   const events=state.events.splice(0);
   view.consume(events);
-  view.render({dt,timeScale:state.timeScaleSmoothed,idleScale:runStats().idleScale,shake:scaledCameraShake(state.shake,visualSettings.shake),mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:!hasUnclearedRouteEnemies(state.rooms,state.enemies),bloom:state.bloom?.value||0,gun});
+  view.render({dt,timeScale:state.timeScaleSmoothed,worldRate:state.worldRate??state.timeScaleSmoothed,beatPulse:state.beatPulse||0,band:timeBand(playerSpeedRatio()),idleScale:runStats().idleScale,shake:scaledCameraShake(state.shake,visualSettings.shake),mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:!hasUnclearedRouteEnemies(state.rooms,state.enemies),bloom:state.bloom?.value||0,gun});
   void p;
 }
 function renderGameToText(){

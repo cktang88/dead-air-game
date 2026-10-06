@@ -78,16 +78,14 @@ export function statBarsHtml(gun, versus, guns, { compact = false } = {}) {
   }).join('')}</div>`;
 }
 
+import { timeBand, rateLabel } from './time-rule.js';
+
 // ---------------------------------------------------------------- tempo
-export function tempoView({ moving = false, firing = false, sprinting = false, scale = 0.18 } = {}) {
-  const state = moving ? (sprinting ? 'sprint' : 'move') : 'still';
-  const label = { still: 'STILL', move: 'MOVE', sprint: 'SPRINT' }[state];
-  const hint = firing ? 'FIRING · TIME HOLDS ITS SPEED'
-    : state === 'still' ? 'MOVE TO RUN TIME · WORLD CRAWLS'
-    : state === 'move' ? 'STOP TO SLOW THE WORLD · SHIFT TO SPRINT'
-    : 'SPRINTING · TIME AT 1×';
+export function tempoView({ speedRatio = 0, scale = 0.08 } = {}) {
+  const state = timeBand(speedRatio);
+  const label = { still: 'STILL', walk: 'WALK', sprint: 'SPRINT' }[state];
   const clamped = Math.max(0, Math.min(1, scale));
-  return { state, label, hint, firing, speed: `${scale.toFixed(2)}×`, fraction: clamped, percent: Math.round(clamped * 100) };
+  return { state, label, speed: rateLabel(scale), fraction: clamped, percent: Math.round(clamped * 100) };
 }
 
 // ---------------------------------------------------------------- feed tone

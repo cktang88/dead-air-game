@@ -16,16 +16,11 @@
       <header id="topbar">
         <div class="brand"><span class="brand-mark" data-icon="status-slowmo"></span><span class="brand-word">DEAD AIR</span><small>SEED <span id="seed-display">—</span></small></div>
         <div id="room-name">FLOOR 01 · ENTRY</div>
-        <div id="run-clock" title="Real run time. The world clock runs slower while you stand still.">RUN 00:00</div>
+        <div id="run-clock" title="Real run time. The world clock runs slower while you stand still or walk.">RUN 00:00</div>
       </header>
       <div id="top-center">
-        <div id="tempo" data-state="still" title="Standing still slows time. Moving runs at 1×. Hold Shift to sprint. Firing does not change the current time speed.">
-          <div class="tempo-top"><span class="tempo-dot"></span><span class="tempo-cap">TEMPO</span><span id="tempo-label">STILL</span><span id="tempo-speed">0.18×</span></div>
-          <div class="tempo-meter"><i id="tempo-fill"></i><span class="tempo-ticks"></span></div>
-          <div class="tempo-extra"><div class="tempo-extra-in">
-            <div class="tempo-states"><b data-s="still">STILL</b><b data-s="move">MOVE</b><b data-s="sprint">SPRINT</b></div>
-            <small id="tempo-hint">MOVE TO RUN TIME · WORLD CRAWLS</small>
-          </div></div>
+        <div id="tempo" data-state="still" title="World time follows your speed: STILL 0.08×, WALK 0.35×, SPRINT 1×. Each shot lets a beat of time through. Sprinting is loud.">
+          <span id="tempo-label">STILL</span><span id="tempo-speed">0.08×</span>
         </div>
         <div id="objective" data-tone="seek" role="status" aria-live="polite">CLEAR THE ROUTE</div>
       </div>
@@ -96,8 +91,8 @@
         </div>
         <aside id="how-to" class="side-card">
           <div class="eyebrow">THE RULE</div>
-          <div class="rule-strip"><div class="rule still"><b>STILL</b><span>0.18×</span></div><div class="rule move"><b>MOVE</b><span>1×</span></div><div class="rule sprint"><b>SPRINT</b><span>1× · FAST</span></div></div>
-          <p class="tempo-explainer">The speed number is world time. Stand still to slow it down; move to run at 1×. Firing keeps the current speed.</p>
+          <div class="rule-strip"><div class="rule still"><b>STILL</b><span>0.08×</span></div><div class="rule move"><b>WALK</b><span>0.35×</span></div><div class="rule sprint"><b>SPRINT</b><span>1× · LOUD</span></div></div>
+          <p class="tempo-explainer">World time follows how fast YOU move: stand still and it nearly stops, walk and it crawls, sprint and it runs at full speed. Every shot lets a beat of time through, so spraying is costly. Sprinting is loud.</p>
           <div class="eyebrow">CONTROLS</div>
           <div id="key-guide" class="key-guide"></div>
         </aside>
