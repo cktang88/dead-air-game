@@ -1026,11 +1026,8 @@ function update(dt){
     physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
   if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
   state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
-  updateRateChip(scale);
   drawMinimap();syncHudFrame();
 }
-// Minimal HUD readout of the world rate; the grade + edge meter (timefx.js) is the primary display.
-function updateRateChip(scale){const el=$('tempo');if(!el)return;const band=timeBand(playerSpeedRatio());if(el.dataset.state!==band)el.dataset.state=band;const label=rateLabel(state.worldRate??scale);if(state.rateText!==label){state.rateText=label;$('tempo-speed').textContent=label;$('tempo-label').textContent=band.toUpperCase();}}
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);mm.key='';mm.lookup=null;}
 // The minimap's room layer only changes when a room becomes visited or scanner-visible, so it is drawn once into an
 // offscreen canvas and re-rendered when that visibility key changes. Enemy room lookups use a tile -> room table.

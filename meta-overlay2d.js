@@ -1,6 +1,7 @@
 // World-space glyphs for the roguelike layer: door reward markers (Hades-style) and the FREQUENCY pickup.
 // Hooked once from render2d.js after the lighting pass, so these read clearly in the dark.
 import {REWARDS} from './door-rewards.js';
+import {hudSafeRects, clearShift} from './hud-safe.js';
 
 const TAU = Math.PI * 2;
 const INK = '#120d1a';
@@ -42,7 +43,20 @@ function plate(ctx, x, y, info, t, label) {
 // markers: state.doorMarkers ([{x,y (tiles),reward,info}]); pickups of kind 'freq' glow in the world.
 export function drawMetaWorld(ctx, state, now, tile = 32) {
   const t = now;
-  for (const m of state.doorMarkers || []) plate(ctx, m.x * tile, m.y * tile - 6, m.info || REWARDS[m.reward], t, true);
+  const tf = ctx.getTransform?.(), canvas = ctx.canvas, cssW = canvas?.clientWidth || 0, cssH = canvas?.clientHeight || 0;
+  const k = tf && cssW ? canvas.width / cssW : 1, rects = tf && cssW ? hudSafeRects() : [];
+  for (const m of state.doorMarkers || []) {
+    const info = m.info || REWARDS[m.reward];
+    let x = m.x * tile, y = m.y * tile - 6;
+    if (rects.length) {
+      // keep the plate and its label out from under the DOM HUD: find the smallest world-space nudge that clears it
+      const sc = tf.a / k, sx = (tf.a * x + tf.c * y + tf.e) / k, sy = (tf.b * x + tf.d * y + tf.f) / k;
+      const halfW = Math.max(16, (info.label || '').length * 3.4) * sc + 6;
+      const sh = clearShift({x0: sx - halfW, x1: sx + halfW, y0: sy - 18 * sc, y1: sy + 30 * sc}, rects, cssW, cssH);
+      if (sh && sc > 0) { x += sh.dx / sc; y += sh.dy / sc; }
+    }
+    plate(ctx, x, y, info, t, true);
+  }
   for (const pk of state.pickups) {
     if (pk.kind !== 'freq' || !pk.available) continue;
     const info = REWARDS.freq, bob = Math.sin(t * 3 + pk.x) * 2.4;

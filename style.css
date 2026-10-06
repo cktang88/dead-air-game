@@ -194,17 +194,6 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 
 /* ============================================================ TEMPO (signature) + objective */
 #top-center { position: absolute; z-index: 3; top: 42px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: var(--s-2); pointer-events: none; }
-#tempo {
-  --c: var(--slow);
-  display: flex; align-items: baseline; gap: var(--s-2); padding: 3px var(--s-3); opacity: .72;
-  background: color-mix(in srgb, var(--panel) 70%, transparent); border: 1px solid var(--border); border-bottom: 2px solid var(--c); border-radius: var(--r-md);
-  font: 600 var(--fs-micro) var(--font-body); letter-spacing: .12em; color: var(--text-mid);
-  transition: --c var(--dur-slow) var(--ease-out), opacity var(--dur-slow);
-}
-#tempo[data-state=walk] { --c: var(--health); }
-#tempo[data-state=sprint] { --c: var(--sprint); opacity: .9; }
-#tempo-label { font: 800 12px/1 var(--font-display); letter-spacing: .1em; color: var(--c); }
-#tempo-speed { font: 500 13px/1 var(--font-mono); color: var(--text-hi); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 
 #objective { --t: var(--scrap); position: relative; max-width: 70vw; padding: 6px var(--s-4) 6px var(--s-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--e-1); backdrop-filter: blur(10px);
@@ -617,7 +606,6 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
   #overlay { grid-template-columns: 1fr; padding: var(--s-6); overflow: auto; align-content: start; }
   #how-to { display: none; } #settings-panel, #meta-panel { grid-column: 1; grid-row: auto; }
   .loadout-columns { grid-template-columns: 1fr; overflow: auto; } .loadout-columns > div { overflow: visible; }
-  #tempo { max-width: calc(100vw - 20px); }
   #hud { left: var(--s-2); bottom: var(--s-2); transform: scale(.82); transform-origin: bottom left; }
   #hud-right { right: var(--s-2); bottom: var(--s-2); transform: scale(.82); transform-origin: bottom right; }
   #topbar { padding: 0 var(--s-3); } .brand small { display: none; }
@@ -656,6 +644,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #overlay:has(#run-result:not([hidden])) .title-card > .eyebrow { margin-bottom: var(--s-3); }
 
 /* one centre-screen string at a time: banner > toast > hint > objective */
+#game-shell:has(#boss-bar:not([hidden])) #objective { opacity: 0 !important; }
 #game-shell:has(#room-banner.show) :is(#objective, #tutor-hint) { opacity: 0 !important; }
 #game-shell:has(#toast.show) :is(#tutor-hint) { opacity: 0 !important; }
 #objective { transition: opacity var(--dur); }
