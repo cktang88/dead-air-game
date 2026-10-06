@@ -1092,17 +1092,17 @@ export function createRenderer(container, state) {
       const sp = Math.hypot(bl.vx, bl.vy) || 1, dx = bl.vx / sp, dy = bl.vy / sp;
       if (bl.owner === 'player') {
         const color = bl.color !== undefined ? hexStr(bl.color) : '#ffd17c', born = Math.hypot(bl.x - (bl.ox ?? bl.x), bl.y - (bl.oy ?? bl.y));
-        const len = Math.min(clamp(sp * 0.04, 12, 40) * slowK, 6 + born * 1.1);
+        const pw = bl.power || 1, len = Math.min(clamp(sp * 0.04, 12, 40) * slowK * (0.85 + pw * 0.15), 6 + born * 1.1); // pw: RED LINE / charged shots draw bigger and brighter
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 3; i++) {
           const f0 = i / 3, f1 = (i + 1) / 3;
-          ctx.strokeStyle = color; ctx.globalAlpha = (1 - f0) * 0.55; ctx.lineWidth = 3.4 * (1 - f0 * 0.6);
+          ctx.strokeStyle = color; ctx.globalAlpha = (1 - f0) * 0.55; ctx.lineWidth = 3.4 * pw * (1 - f0 * 0.6);
           ctx.beginPath(); ctx.moveTo(bl.x - dx * len * f0, bl.y - dy * len * f0); ctx.lineTo(bl.x - dx * len * f1, bl.y - dy * len * f1); ctx.stroke();
         }
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = tint(color, 0.8); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bl.x - dx * len * 0.55, bl.y - dy * len * 0.55); ctx.lineTo(bl.x, bl.y); ctx.stroke();
         ctx.strokeStyle = '#fffdf2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bl.x - dx * len * 0.22, bl.y - dy * len * 0.22); ctx.lineTo(bl.x, bl.y); ctx.stroke();
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.65; ctx.drawImage(glowSprite(color), bl.x - 7, bl.y - 7, 14, 14); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, 0.65 * pw); ctx.drawImage(glowSprite(color), bl.x - 7 * pw, bl.y - 7 * pw, 14 * pw, 14 * pw); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       } else {
         // Enemy rounds: big hot orbs with a pulsing halo and a fading comet tail. Round + red/white, the opposite of the
         // thin gold streaks the player fires, so they stay readable at 0.18x.

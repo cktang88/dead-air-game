@@ -15,6 +15,7 @@ export class Fx {
     this.rings = [];
     this.lights = [];
     this.floaters = [];
+    this.bolts = [];
     this.decals = [];
     this.hitMark = 0; this.hitKill = false;
     this.hurt = 0;
@@ -24,7 +25,7 @@ export class Fx {
     this.cap = 650;
   }
 
-  clear() { this.parts.length = this.flashes.length = this.rings.length = this.lights.length = this.floaters.length = this.decals.length = 0; this.hitMark = 0; this.hurt = 0; this.camPunch = 0; }
+  clear() { this.parts.length = this.flashes.length = this.rings.length = this.lights.length = this.floaters.length = this.bolts.length = this.decals.length = 0; this.hitMark = 0; this.hurt = 0; this.camPunch = 0; }
 
   add(p) {
     if (this.parts.length >= this.cap) this.parts.shift();
@@ -209,6 +210,13 @@ export class Fx {
     if (Math.random() < 0.35) this.add({kind: 'spark', x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, vx: rand(-20, 20), vy: rand(-80, -30), drag: 1.5, life: rand(0.5, 0.9), size: 1.3, color: '#ffc070'});
     if (Math.random() < 0.18) this.smoke(x + Math.cos(a) * d, y + Math.sin(a) * d, 7, 1, '#3c3238', 6, [0.8, 1.3], 0.35);
   }
+  // A jagged lightning bolt from (x1,y1) to (x2,y2) (ARC LIGHT, SIGNAL BOOST). Ages in real time so it stays readable in slow time.
+  bolt(x1, y1, x2, y2, color = '#9ad8ff', life = 0.3, width = 2.4) {
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, n = Math.max(3, Math.round(len / 14)), pts = [];
+    for (let i = 0; i <= n; i++) { const t = i / n, j = i === 0 || i === n ? 0 : rand(-1, 1) * Math.min(9, len * 0.12); pts.push({x: x1 + dx * t + nx * j, y: y1 + dy * t + ny * j}); }
+    this.bolts.push({pts, color, life, age: 0, width});
+    this.lights.push({x: x2, y: y2, r: 54, age: 0, life: 0.18, strength: 0.5, color});
+  }
   ring(x, y, r0, r1, color, life = 0.3, width = 2) { this.rings.push({x, y, r0, r1, age: 0, life, color, width}); }
 
   // ---- updates
@@ -246,6 +254,7 @@ export class Fx {
   }
   tick(dt) {
     for (let i = this.floaters.length - 1; i >= 0; i--) { const f = this.floaters[i]; f.age += dt; f.y += f.vy * dt; f.vy *= Math.exp(-2.4 * dt); if (f.age >= f.life) this.floaters.splice(i, 1); }
+    for (let i = this.bolts.length - 1; i >= 0; i--) { const b = this.bolts[i]; b.age += dt; if (b.age >= b.life) this.bolts.splice(i, 1); }
     this.hitMark = Math.max(0, this.hitMark - dt);
     this.hurt = Math.max(0, this.hurt - dt);
     this.killPop = Math.max(0, this.killPop - dt);
@@ -340,6 +349,14 @@ export class Fx {
       const k = r.age / r.life, e = 1 - (1 - k) * (1 - k), rad = r.r0 + (r.r1 - r.r0) * e;
       ctx.globalAlpha = (1 - k) * 0.85; ctx.strokeStyle = r.color; ctx.lineWidth = r.width * (1 - k * 0.6);
       ctx.beginPath(); ctx.arc(r.x, r.y, rad, 0, TAU); ctx.stroke();
+    }
+    for (const bo of this.bolts) {
+      const k = bo.age / bo.life, flick = k < 0.5 ? 1 : 0.55 + 0.45 * Math.sin(bo.age * 90);
+      ctx.lineJoin = 'round';
+      for (const [w, col, a] of [[bo.width * 3.2, bo.color, 0.28], [bo.width * 1.5, bo.color, 0.7], [bo.width * 0.6, '#ffffff', 1]]) {
+        ctx.globalAlpha = (1 - k) * a * flick; ctx.strokeStyle = col; ctx.lineWidth = w;
+        ctx.beginPath(); bo.pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }

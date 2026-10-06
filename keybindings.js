@@ -1,7 +1,7 @@
 export const KEY_BINDINGS_KEY='dead-air.keys.v1';
 export const DEFAULT_KEY_BINDINGS=Object.freeze({
   moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'r',
-  throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c',
+  throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c',shove:'v',
 });
 export const KEY_BINDING_ACTIONS=Object.freeze([
   {id:'moveUp',label:'Move up'}, {id:'moveDown',label:'Move down'},
@@ -10,7 +10,7 @@ export const KEY_BINDING_ACTIONS=Object.freeze([
   {id:'throwableCycle',label:'Cycle throwable'}, {id:'throwableUse',label:'Throw throwable'},
   {id:'weaponOne',label:'Primary weapon'}, {id:'weaponTwo',label:'Secondary weapon'},
   {id:'weaponThree',label:'Tertiary weapon'},
-  {id:'shellCycle',label:'Shotgun shell'},
+  {id:'shellCycle',label:'Shotgun shell'}, {id:'shove',label:'Shove (melee)'},
 ]);
 const VERSION=1;
 const RESERVED_KEYS=new Set(['escape','tab','f','r','shift']);

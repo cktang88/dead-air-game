@@ -3,8 +3,8 @@
 // World time follows the player's ACTUAL speed (not key-down): ~0.08x still, ~0.35x walking, 1.0x full sprint.
 // The player stands outside time: movement, aim, fire rate, reload, i-frames and recoil run on the real clock.
 // Everything else (enemies, bullets they fire, telegraphs, boss, thrown items, effects) runs on world time.
-// Player-fired bullets run on the real clock too (they are the player's hands), so a lone shot while still is
-// cheap and lands; its price is the beat below.
+// Player-fired bullets ride WORLD time with a floor (PLAYER_BULLET_CLOCK below): you watch your shot travel and it
+// arrives as the shot's beat advances time, SUPERHOT-style. See GAME_SPEC.md "Player bullet clock" for the decision.
 
 export const TIME_RULE = {
   stillScale: 0.08,      // world rate with the player stationary (STILL MIND lowers it, never below stillFloor)
@@ -78,4 +78,13 @@ export function sprintNoiseStep(timer, dt, speedRatio, rule = TIME_RULE) {
 export function rateLabel(rate) {
   const r = Number.isFinite(rate) ? Math.max(0, rate) : 0;
   return `${r.toFixed(2)}×`;
+}
+
+// Which clock player bullets fly on. 'world' = world time, but never slower than `minRate` x real time so a shot fired
+// while the world is near-frozen still visibly travels (and the 0.12 s shot beat makes it arrive). 'real' = the old rule
+// (bullets ignore time dilation and land instantly). Mutable on purpose: the debug page and the A/B harness flip it.
+export const PLAYER_BULLET_CLOCK = {mode: 'world', minRate: 0.45};
+export function playerBulletDt(worldDt, realDt, clock = PLAYER_BULLET_CLOCK) {
+  if (clock.mode === 'real') return realDt;
+  return Math.max(worldDt, realDt * clock.minRate);
 }
