@@ -1,10 +1,12 @@
 // DEAD AIR Canvas 2D renderer. Reads the plain game `state` each frame and draws the whole scene:
 // baked world chunks, props, actors, projectiles, effects, lighting and the slow-time grade.
 import {ENEMY_TYPES, GUNS, TILE} from './catalog.js';
-import {createCamera, followStep, lookAheadOffset, resizeCamera, screenToWorld as camScreenToWorld, slowAmount, viewBounds} from './camera2d.js';
+import {createCamera, followStep, lookAheadOffset, resizeCamera, screenToWorld as camScreenToWorld, viewBounds} from './camera2d.js';
 import {Fx} from './fx2d.js';
 import {Lighting} from './lighting2d.js';
-import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
+import {createTimeFx} from './timefx.js';
+import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inOutCubic, lerp, moveAmount, newSpring, outBack, outBounce, outCubic, outQuad, reloadPose, springDamping, stepSpring, swapPose, walkPhase, walkPose} from './anim.js';
+import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
@@ -25,8 +27,6 @@ function lgrad(ctx, x0, y0, x1, y1, c0, c1) {
 export {hexStr};
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
-import {clamp} from './util.js';
-const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
 
 const ENEMY_GUNS = {
@@ -85,8 +85,11 @@ export function createRenderer(container, state) {
   const fx = new Fx();
   const world = new WorldLayer();
   const lighting = new Lighting();
+  const timeFx = createTimeFx();
   const trail = new Trail();
-  const vis = {slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
+  const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24};
+  const GHOST_TIME = 0.24;
+  const vis = {ghosts: Array.from({length: 24}, () => ({on: false, pk: null, t: 0, x0: 0, y0: 0, side: 1})), fl: {x: 0, y: 0, vx: 0, vy: 0}, camX: newSpring(0), camY: newSpring(0), zoom: newSpring(0), zbase: 1, bodyAng: 0, mvAng: 0, pPhase: 0, pMv: 0, swapT: 1, lastGun: -1, prevGun: 0, fresh: true, motion: 1, flashK: 1, tick: 0, wbT: 2, hurtSat: 0, killFlash: 0, seated: false, seatFx: false, angInit: false, slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
   const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0};
   let levelReady = false;
   let vignette = null, vignetteKey = '';
@@ -104,7 +107,7 @@ export function createRenderer(container, state) {
     const w = window.innerWidth, h = window.innerHeight;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     canvas.style.width = '100%'; canvas.style.height = '100%';
-    resizeCamera(cam, w, h);
+    resizeCamera(cam, w, h); cam.base = cam.scale;
     setSpriteScale(cam.scale * dpr);
     world.setScale(cam.scale * dpr);
     vignetteKey = '';
@@ -118,7 +121,7 @@ export function createRenderer(container, state) {
     trail.pts.length = 0;
     cam.snap = true;
     levelReady = true;
-    vis.px = null;
+    vis.px = null; vis.fresh = true; vis.lastGun = -1; vis.swapT = 1; vis.angInit = false; vis.fl.x = vis.fl.y = vis.fl.vx = vis.fl.vy = 0; for (const g of vis.ghosts) g.on = false;
     const p = state.player;
     if (p) {
       cam.x = p.x; cam.y = p.y;
@@ -145,38 +148,135 @@ export function createRenderer(container, state) {
         const p = state.player;
         if (p) fx.casing(p.x + ev.dx * 8, p.y + ev.dy * 8, a);
         vis.kick = Math.max(vis.kick, Math.min(1.3, 0.5 + (ev.kick || 0.5)));
+        vis.tick = 1; // the world "ticks" forward on every shot: a brief cool pulse in the grade
       } else if (ev.type === 'impact' && (ev.surface === 'wall' || ev.surface === 'cover')) {
         fx.wallImpact(ev.x, ev.y, ev.vx ?? 1, ev.vy ?? 0, ev.owner);
+      } else if (ev.type === 'reloadStart') {
+        const p = state.player;
+        if (p) { const a = Math.atan2(state.aim.y, state.aim.x); fx.mag(p.x + Math.cos(a) * 10, p.y + Math.sin(a) * 10, a, Math.abs(a) > Math.PI / 2 ? 1 : -1); }
+        vis.seated = false;
+      } else if (ev.type === 'reloadEnd') {
+        vis.seated = true;
       } else if (ev.type === 'playerHurt') {
         fx.playerHit(ev.x, ev.y, ev.armorOnly);
         vis.flashHit = 1;
+        const p = state.player;
+        if (p) {
+          // flinch away from the shooter and shove the camera the same way; the grade desaturates briefly
+          const away = ev.sx !== undefined ? Math.atan2(p.y - ev.sy, p.x - ev.sx) : Math.random() * TAU, m = vis.motion;
+          vis.fl.vx += Math.cos(away) * 90 * (ev.armorOnly ? 0.6 : 1); vis.fl.vy += Math.sin(away) * 90 * (ev.armorOnly ? 0.6 : 1);
+          vis.camX.x += Math.cos(away) * 6 * m; vis.camY.x += Math.sin(away) * 6 * m;
+          vis.zoom.x += 0.025;
+        }
+        vis.hurtSat = 1;
       }
     }
   }
 
   // ------------------------------------------------------------------ per-simulation-step update
+  const STRIDE = {player: 40, chaser: 30, gunner: 36, brute: 34, guard: 34, sniper: 36, riot: 34, elite: 38};
+  const AUTO_PICK = new Set(['scrap', 'heal', 'ammo', 'armor', 'mod']);
+  const kindOf = (e) => (e.elite ? 'elite' : e.type);
+
+  function springXY(o, k, c, dt) {
+    const h = Math.min(dt, 1 / 40);
+    o.vx += (-k * o.x - c * o.vx) * h; o.vy += (-k * o.y - c * o.vy) * h;
+    o.x += o.vx * h; o.y += o.vy * h;
+  }
+
+  function updateEnemy(e, step) {
+    const v = e.vis ??= {}, kind = kindOf(e);
+    if (e.type === 'boss') { v.flash = v.flash || 0; return; } // the Conductor animates itself (boss2d.js)
+    v.ang ??= 0; v.prevX ??= e.x; v.prevY ??= e.y; v.dustT ??= 0;
+    v.fpx ??= 0; v.fpy ??= 0; v.fvx ??= 0; v.fvy ??= 0;
+    const mvx = (e.x - v.prevX) / Math.max(step, 1e-4), mvy = (e.y - v.prevY) / Math.max(step, 1e-4);
+    v.prevX = e.x; v.prevY = e.y;
+    v.speed = Math.min(160, Math.hypot(mvx, mvy));
+    v.kick = Math.max(0, (v.kick || 0) - step * 9);
+    v.punch = Math.max(0, (v.punch || 0) - step * 7);
+    // flinch spring (hit impulses are added to fvx/fvy by Fx.hitEnemy)
+    { const h = Math.min(step, 1 / 40); v.fvx += (-300 * v.fpx - 17 * v.fvx) * h; v.fvy += (-300 * v.fpy - 17 * v.fvy) * h; v.fpx += v.fvx * h; v.fpy += v.fvy * h; }
+    if (e.alive) {
+      const p = state.player;
+      v.aimMax = e.aimTimer > 0 ? Math.max(v.aimMax || 0, e.aimTimer) : 0;
+      if (e.aware && !v.wasAware) v.alertT = 0.9;
+      v.wasAware = !!e.aware; v.alertT = Math.max(0, (v.alertT || 0) - step);
+      const target = (e.meleeWindup > 0 || e.aimTimer > 0) ? Math.atan2(e.aim.y, e.aim.x) : e.face ? Math.atan2(e.face.y, e.face.x) : p ? Math.atan2(p.y - e.y, p.x - e.x) : v.ang;
+      if (v.first === undefined) { v.ang = target; v.mvAng = target; v.phase = (e.id || 0) % 1; v.first = true; }
+      v.ang = dampAngle(v.ang, target, 16, step);
+      if (v.speed > 8) v.mvAng = dampAngle(v.mvAng, Math.atan2(mvy, mvx), 14, step);
+      v.mv = damp(v.mv || 0, moveAmount(v.speed, 60), 10, step);
+      v.phase = walkPhase(v.phase, v.speed, STRIDE[kind] || 34, step);
+      // wind-up / strike bookkeeping
+      const wind = e.meleeWindup > 0;
+      if (wind && !v.wasWind) { v.windT = 0; fx.dust(e.x - Math.cos(v.ang) * 6, e.y - Math.sin(v.ang) * 6, 0, 0); fx.dust(e.x + Math.sin(v.ang) * 7, e.y - Math.cos(v.ang) * 7, 0, 0); }
+      if (wind) v.windT = (v.windT || 0) + step;
+      if (!wind && v.wasWind) {
+        v.lunge = 1;
+        const a = Math.atan2(e.aim.y, e.aim.x);
+        for (let i = 0; i < 5; i++) { const o = (i - 2) * 0.28; fx.dust(e.x + Math.cos(a + o) * 14, e.y + Math.sin(a + o) * 14, Math.cos(a + o) * 160, Math.sin(a + o) * 160); }
+        fx.ring(e.x + Math.cos(a) * 12, e.y + Math.sin(a) * 12, 4, 26, '#ffc08a', 0.22, 2.4);
+      }
+      v.wasWind = wind;
+      v.lunge = Math.max(0, (v.lunge || 0) - step * 5.5);
+      v.raise = damp(v.raise || 0, e.aimTimer > 0 ? 1 : 0, e.aimTimer > 0 ? 12 : 5, step);
+      v.rel = damp(v.rel || 0, e.reloadTimer > 0 ? 1 : 0, 9, step);
+      // riot braces when it holds still and aware, and kicks its shield back on a block
+      const braceT = e.type === 'riot' && e.aware && v.speed < 22 && !(e.stun > 0.35) ? 1 : 0;
+      v.brace = damp(v.brace || 0, braceT, 9, step);
+      if (v.brace > 0.6 && !v.braced) { v.braced = true; const sa = e.shieldAng || 0; for (let i = 0; i < 3; i++) fx.dust(e.x + Math.cos(sa) * 12 + (i - 1) * 4, e.y + Math.sin(sa) * 12 + (i - 1) * 4, Math.cos(sa) * 60, Math.sin(sa) * 60); }
+      else if (v.brace < 0.2) v.braced = false;
+      v.dustT -= step;
+      if (v.speed > 22 && v.dustT <= 0) { v.dustT = 0.16; fx.dust(e.x - Math.cos(v.ang) * e.radius * 0.5, e.y - Math.sin(v.ang) * e.radius * 0.5, mvx, mvy); }
+    } else if (v.deathT !== undefined) {
+      v.deathT += step;
+      const heavy = kind === 'brute' || kind === 'elite';
+      if (v.deathFx === 0 && v.deathT > (heavy ? 0.3 : kind === 'riot' ? 0.1 : 0.2)) {
+        v.deathFx = 1;
+        if (heavy) {
+          fx.ring(e.x, e.y, 4, e.radius * (kind === 'elite' ? 6 : 3.6), '#c9bfb2', 0.38, 3.4);
+          for (let i = 0; i < (kind === 'elite' ? 10 : 6); i++) { const a = i * TAU / 6 + Math.random(); fx.dust(e.x + Math.cos(a) * 8, e.y + Math.sin(a) * 8, Math.cos(a) * 140, Math.sin(a) * 140); }
+          if (kind === 'elite') fx.camPunch = Math.min(0.08, fx.camPunch + 0.03);
+        } else if (kind === 'riot') {
+          fx.spark(e.x + Math.cos(e.shieldAng || 0) * 14, e.y + Math.sin(e.shieldAng || 0) * 14, e.shieldAng || 0, 7, 1.2, [120, 300], '#cfe6ff');
+        } else fx.dust(e.x, e.y, 0, 0);
+      }
+    }
+  }
+
+  function updatePickups(step) {
+    const p = state.player, t = vis.time;
+    for (const pk of state.pickups) {
+      let v = pk.vis;
+      if (!v) { v = pk.vis = {born: vis.fresh ? -99 : t, wasAvail: pk.available, wasClaimed: !!pk.claimed, ox: 0, oy: 0, openAt: -99, claimAt: -99}; }
+      // magnet: nearby loot leans toward the player before it is collected
+      let tx = 0, ty = 0;
+      if (p && pk.available && AUTO_PICK.has(pk.kind)) {
+        const dx = p.x - pk.x, dy = p.y - pk.y, d = Math.hypot(dx, dy);
+        if (d < 54 && d > 0.5) { const k = (1 - d / 54) ** 2 * 9; tx = dx / d * k; ty = dy / d * k; }
+      }
+      v.ox = damp(v.ox, tx, 14, step); v.oy = damp(v.oy, ty, 14, step);
+      if (v.wasAvail && !pk.available && pk.kind !== 'exit') {
+        if (pk.kind === 'locker') v.openAt = t;
+        else if (p) {
+          for (const g of vis.ghosts) if (!g.on) { g.on = true; g.pk = pk; g.t = 0; g.x0 = pk.x + v.ox; g.y0 = pk.y + v.oy - 2; g.side = Math.random() < 0.5 ? -1 : 1; break; }
+        }
+      }
+      if (!v.wasClaimed && pk.claimed) { v.claimAt = t; fx.star(pk.x, pk.y - 8, '#ffe28a', 5, 0.55); fx.star(pk.x - 6, pk.y - 4, '#fff', 3, 0.4); }
+      v.wasAvail = pk.available; v.wasClaimed = !!pk.claimed;
+    }
+    vis.fresh = false;
+    for (const g of vis.ghosts) {
+      if (!g.on) continue;
+      g.t += step;
+      if (g.t >= GHOST_TIME) { g.on = false; if (p) { fx.ring(p.x, p.y, 3, 17, g.pk.color || '#f4c66d', 0.2, 2); fx.star(p.x, p.y - 4, g.pk.color || '#fff', 3.4, 0.3); } g.pk = null; }
+    }
+  }
+
   function update(step) {
     vis.time += step;
     fx.update(step);
-    for (const e of state.enemies) {
-      const v = e.vis ??= {};
-      v.ang ??= 0; v.prevX ??= e.x; v.prevY ??= e.y; v.dustT ??= 0;
-      const mvx = (e.x - v.prevX) / Math.max(step, 1e-4), mvy = (e.y - v.prevY) / Math.max(step, 1e-4);
-      v.prevX = e.x; v.prevY = e.y;
-      v.speed = Math.min(160, Math.hypot(mvx, mvy));
-      v.kick = Math.max(0, (v.kick || 0) - step * 9);
-      if (e.alive) {
-        const p = state.player;
-        v.aimMax = e.aimTimer > 0 ? Math.max(v.aimMax || 0, e.aimTimer) : 0;
-        if (e.aware && !v.wasAware) v.alertT = 0.9;
-        v.wasAware = !!e.aware; v.alertT = Math.max(0, (v.alertT || 0) - step);
-        const target = (e.meleeWindup > 0 || e.aimTimer > 0) ? Math.atan2(e.aim.y, e.aim.x) : e.face ? Math.atan2(e.face.y, e.face.x) : p ? Math.atan2(p.y - e.y, p.x - e.x) : v.ang;
-        if (v.first === undefined) { v.ang = target; v.first = true; }
-        v.ang += angDiff(v.ang, target) * (1 - Math.exp(-16 * step));
-        v.dustT -= step;
-        if (v.speed > 22 && v.dustT <= 0) { v.dustT = 0.16; fx.dust(e.x - Math.cos(v.ang) * e.radius * 0.5, e.y - Math.sin(v.ang) * e.radius * 0.5, mvx, mvy); }
-      } else if (v.deathT !== undefined) v.deathT += step;
-    }
+    for (const e of state.enemies) updateEnemy(e, step);
     const p = state.player;
     if (p) {
       if (vis.px !== null) {
@@ -184,10 +284,27 @@ export function createRenderer(container, state) {
         vis.pSpeed = sp; vis.mvx = mvx; vis.mvy = mvy;
         vis.dustT = (vis.dustT || 0) - step;
         if (sp > 30 && vis.dustT <= 0) { vis.dustT = sp > 100 ? 0.07 : 0.12; fx.dust(p.x - state.aim.x * 3, p.y - state.aim.y * 3, mvx, mvy); }
+        if (sp > 8) vis.mvAng = dampAngle(vis.mvAng, Math.atan2(mvy, mvx), 16, step);
+        vis.pMv = damp(vis.pMv, moveAmount(sp, 100), 12, step);
+        vis.pPhase = walkPhase(vis.pPhase, sp, STRIDE.player * (1 + 0.15 * (state.sprintBlend || 0)), step);
       }
       vis.px = p.x; vis.py = p.y;
-      vis.kick = Math.max(0, vis.kick - step * 10);
+      vis.kick = Math.max(0, vis.kick - step * 8);
+      // torso lags the aim a little so the gun leads and the body follows
+      const aimAng = Math.atan2(state.aim.y, state.aim.x);
+      if (!vis.angInit) { vis.angInit = true; vis.bodyAng = aimAng; vis.mvAng = aimAng; }
+      vis.bodyAng = dampAngle(vis.bodyAng, aimAng, 12, step);
+      const lag = angDiff(vis.bodyAng, aimAng); if (Math.abs(lag) > 0.8) vis.bodyAng = aimAng - Math.sign(lag) * 0.8;
+      springXY(vis.fl, 300, 18, step);
+      // weapon swap: holster the old gun, draw the new one
+      if (state.weaponIndex !== vis.lastGun) { if (vis.lastGun >= 0) { vis.prevGun = vis.lastGun; vis.swapT = 0; } vis.lastGun = state.weaponIndex; }
+      vis.swapT = Math.min(1, vis.swapT + step / 0.34);
+      // mag-seat click
+      const rf = state.reloadTotal > 0 && state.reloadTimer > 0 ? 1 - state.reloadTimer / state.reloadTotal : 0;
+      if (rf > 0.78 && !vis.seatFx) { vis.seatFx = true; const gun = GUNS[state.weaponIndex], m = gunMuzzle(gun) * 0.5; fx.star(p.x + Math.cos(aimAng) * m, p.y + Math.sin(aimAng) * m, '#fff6d0', 3.6, 0.22); }
+      if (rf === 0) vis.seatFx = false;
     }
+    vis.tick = Math.max(0, vis.tick - step * 9);
     for (const effect of state.effects) {
       if (effect.id === 'incendiary' && effect.remaining > 0) {
         const n = step * 90; let count = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
@@ -195,8 +312,36 @@ export function createRenderer(container, state) {
       }
     }
     for (const g of state.thrown) {
-      g.vis ??= {t: 0}; g.vis.t -= step;
-      if (g.vis.t <= 0 && g.id !== 'flash') { g.vis.t = 0.045; fx.smoke(g.x, g.y, 3.2, 1, '#aaa4ac', 5, [0.35, 0.6], 0.3); }
+      const gv = g.vis ??= {t: 0, age: 0, rot: 0, px: g.x, py: g.y};
+      gv.age += step; gv.t -= step;
+      const gs = Math.hypot(g.x - gv.px, g.y - gv.py) / Math.max(step, 1e-4); gv.px = g.x; gv.py = g.y;
+      gv.rot += step * (6 + 16 * clamp(gs / 140)) ;
+      if (gv.t <= 0 && g.id !== 'flash') { gv.t = 0.045; fx.smoke(g.x, g.y, 3.2, 1, '#aaa4ac', 5, [0.35, 0.6], 0.3); }
+    }
+    updatePickups(step);
+    for (const c of state.crates) {
+      const w = c.wob; if (!w) continue;
+      const h = Math.min(step, 1 / 40);
+      w.vx += (-320 * w.x - 15 * w.vx) * h; w.vy += (-320 * w.y - 15 * w.vy) * h; w.vr += (-280 * w.r - 11 * w.vr) * h;
+      w.x += w.vx * h; w.y += w.vy * h; w.r += w.vr * h;
+    }
+    for (const gate of state.lockedDoors) {
+      const a = gate.vis ??= {open: 0, fx: false};
+      if (gate.opened) {
+        a.open = Math.min(1, a.open + step / 1.0);
+        if (!a.fx) {
+          a.fx = true;
+          const cx = (gate.cells.reduce((s, c) => s + c.x, 0) / gate.cells.length + 0.5) * TILE, cy = (gate.cells.reduce((s, c) => s + c.y, 0) / gate.cells.length + 0.5) * TILE;
+          fx.spark(cx, cy, 0, 12, Math.PI, [80, 280], '#9fffcf'); fx.ring(cx, cy, 4, 30, '#6dffb0', 0.4, 2.4);
+          for (let i = 0; i < 6; i++) fx.dust(cx + (Math.random() - 0.5) * gate.cells.length * TILE * 0.8, cy + (Math.random() - 0.5) * 10, 0, 0);
+        }
+      }
+    }
+    // idle life on props: the workbench throws a stray weld spark now and then
+    const wb = state.workbench;
+    if (wb && p && Math.abs(wb.x - p.x) < 380 && Math.abs(wb.y - p.y) < 260) {
+      vis.wbT -= step;
+      if (vis.wbT <= 0) { vis.wbT = 1.8 + Math.random() * 3; fx.spark(wb.x + 8, wb.y + 4, -Math.PI / 2, 4, 0.9, [40, 120], '#ffd9a0'); fx.star(wb.x + 8, wb.y + 2, '#fff2c0', 3, 0.25); }
     }
   }
 
@@ -211,16 +356,44 @@ export function createRenderer(container, state) {
     return max;
   }
 
+  // height of a thrown grenade above the floor: a decaying chain of bounces, with a squash at each contact
+  const _gz = {z: 0, sq: 0};
+  function grenadeAir(g) {
+    const age = g.vis ? g.vis.age : 0, period = 0.3, n = Math.floor(age / period), u = (age - n * period) / period;
+    const amp = 9 * Math.pow(0.5, n);
+    _gz.z = amp < 0.6 ? 0 : amp * 4 * u * (1 - u);
+    _gz.sq = amp < 0.6 ? 0 : (u < 0.1 ? 1 - u / 0.1 : u > 0.9 ? (u - 0.9) / 0.1 : 0);
+    return _gz;
+  }
+  // pickup spawn pop: scale overshoots and the item drops and bounces on the floor
+  const _pp = {s: 1, y: 0, lift: 0};
+  function pickupPop(v) {
+    const age = vis.time - v.born;
+    if (age >= 0.6 || age < 0) { _pp.s = 1; _pp.y = 0; _pp.lift = 0; return _pp; }
+    _pp.s = outBack(clamp(age / 0.26), 2.6);
+    const drop = 1 - outBounce(clamp(age / 0.55));
+    _pp.y = -drop * 15; _pp.lift = drop;
+    return _pp;
+  }
+
   function drawShadows(b) {
-    for (const crate of state.crates) { if (inView(crate, b, 30)) drawBoxShadow(ctx, crate.x - 12.5, crate.y - 12.5, 25, 25, 13); }
+    for (const crate of state.crates) { if (inView(crate, b, 30)) { const w = crate.wob; drawBoxShadow(ctx, crate.x - 12.5 + (w ? w.x * 0.5 : 0), crate.y - 12.5 + (w ? w.y * 0.5 : 0), 25, 25, 13); } }
     for (const c of state.cover) if (c.kind === 'pillar' && inView(c, b, 30)) drawBlobShadow(ctx, c.x, c.y, 11, 6, 0.9);
-    for (const pk of state.pickups) if (pk.available && pk.kind !== 'exit' && inView(pk, b, 20)) { const bob = Math.sin(vis.time * 3 + hashPos(pk.x, pk.y) * 9); drawBlobShadow(ctx, pk.x, pk.y, 6.5 - bob * 0.6, 3, 0.7); }
-    for (const e of state.enemies) { if (!inView(e, b, 40)) continue; const dying = !e.alive; const look = ACTOR_LOOK[e.elite ? 'elite' : e.type]; if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y, look.r * 0.95, 1.5, dying ? 0.6 : 1); }
+    for (const pk of state.pickups) {
+      if (!pk.available || pk.kind === 'exit' || !inView(pk, b, 20)) continue;
+      const bob = Math.sin(vis.time * 3 + hashPos(pk.x, pk.y) * 9), pop = pk.vis ? pickupPop(pk.vis) : _pp;
+      drawBlobShadow(ctx, pk.x + (pk.vis ? pk.vis.ox : 0), pk.y + (pk.vis ? pk.vis.oy : 0), (6.5 - bob * 0.6) * Math.max(0.2, pop.s) * (1 - pop.lift * 0.25), 3, 0.7 * (1 - pop.lift * 0.5));
+    }
+    for (const e of state.enemies) {
+      if (!inView(e, b, 40)) continue;
+      const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
+      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y, look.r * 0.95, 1.5, dying ? 0.6 : 1);
+    }
     const p = state.player;
     if (p) drawBlobShadow(ctx, p.x, p.y, 10, 1.5);
     if (state.workbench) drawBoxShadow(ctx, state.workbench.x - 22, state.workbench.y - 14, 44, 28, 10);
     for (const room of state.rooms) if (room.role === 'merchant') { const x = (room.cx + 0.5) * TILE, y = (room.cy + 0.5) * TILE; if (inView({x, y}, b, 70)) { drawBlobShadow(ctx, x, y - 4, 12, 4); drawBoxShadow(ctx, x - 30, y + 14, 60, 18, 10); } }
-    for (const t of state.thrown) drawBlobShadow(ctx, t.x, t.y, 4, 5, 0.8);
+    for (const t of state.thrown) { const a = grenadeAir(t); drawBlobShadow(ctx, t.x, t.y, Math.max(2, 4 - a.z * 0.12), 5, 0.8 * (1 - a.z * 0.04)); }
   }
 
   const inView = (o, b, pad = 0) => o.x > b.x0 - pad && o.x < b.x1 + pad && o.y > b.y0 - pad && o.y < b.y1 + pad;
@@ -228,19 +401,20 @@ export function createRenderer(container, state) {
   function drawCrates(b) {
     for (const crate of state.crates) {
       if (!inView(crate, b, 30)) continue;
-      const stage = crate.damageStage || 0, variant = Math.floor(hashPos(crate.x, crate.y) * 3), img = crateSprite(stage, variant), half = img.width / (2 * Math.max(1, Math.round(1)));
-      void half;
-      const side = 25 + 6.4, h = side / 2;
-      ctx.drawImage(img, crate.x - h, crate.y - h, side, side);
+      const stage = crate.damageStage || 0, variant = Math.floor(hashPos(crate.x, crate.y) * 3), img = crateSprite(stage, variant);
+      const side = 25 + 6.4, h = side / 2, w = crate.wob;
+      ctx.save(); ctx.translate(crate.x + (w ? w.x : 0), crate.y + (w ? w.y : 0)); if (w) ctx.rotate(w.r * 0.12);
+      ctx.drawImage(img, -h, -h, side, side);
       if (crate.chips) {
         for (const c of crate.chips) {
-          ctx.save(); ctx.translate(crate.x + c.x, crate.y + c.y); ctx.rotate(c.a);
+          ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a);
           ctx.fillStyle = 'rgba(28,16,10,0.85)'; ctx.fillRect(-c.r, -c.r * 0.7, c.r * 2, c.r * 1.4);
           ctx.fillStyle = 'rgba(214,190,160,0.7)'; ctx.fillRect(-c.r, -c.r * 0.7, c.r * 2, 0.6);
           ctx.restore();
         }
       }
-      if (crate.flash > 0) { ctx.globalAlpha = crate.flash * 0.55; ctx.fillStyle = '#fff4e0'; ctx.fillRect(crate.x - 12.5, crate.y - 12.5, 25, 25); ctx.globalAlpha = 1; }
+      if (crate.flash > 0) { ctx.globalAlpha = crate.flash * 0.55; ctx.fillStyle = '#fff4e0'; ctx.fillRect(-12.5, -12.5, 25, 25); ctx.globalAlpha = 1; }
+      ctx.restore();
       if (crate.healthBarTimer > 0) bar(crate.x, crate.y - 21, 24, 3.4, crate.hp / crate.maxHp, stage === 2 ? '#ff5266' : stage === 1 ? '#f2a45f' : '#83ddae');
     }
   }
@@ -262,10 +436,10 @@ export function createRenderer(container, state) {
 
   function drawProps(b) {
     const t = vis.time;
-    // workbench
+    // workbench: screen flickers and scrolls, the hologram turns, a scan line sweeps
     const wb = state.workbench;
     if (wb && inView(wb, b, 60)) {
-      const x = wb.x, y = wb.y, pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+      const x = wb.x, y = wb.y, pulse = 0.5 + 0.5 * Math.sin(t * 2.4), glitch = hashPos(Math.floor(t * 9), 5) > 0.92;
       ctx.save(); ctx.translate(x, y);
       ctx.strokeStyle = rgba('#ff4d6d', 0.25 + pulse * 0.2); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 30, 0, TAU); ctx.stroke();
       ctx.setLineDash([4, 6]); ctx.strokeStyle = rgba('#ff4d6d', 0.3); ctx.lineWidth = 1; ctx.lineDashOffset = -t * 6; ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
@@ -278,16 +452,18 @@ export function createRenderer(container, state) {
       ctx.fillStyle = '#b9b3c4'; ctx.fillRect(-14, 3, 14, 2.4); ctx.fillRect(-14, 5.6, 9, 1.8);
       ctx.fillStyle = '#d65a3e'; ctx.fillRect(-1, 3, 5, 2.4);
       ctx.fillStyle = '#c9a24e'; ctx.fillRect(7, -6, 8, 3); ctx.fillStyle = '#4a4455'; ctx.fillRect(7, 0, 8, 5); ctx.strokeStyle = INK; ctx.strokeRect(7, 0, 8, 5);
-      // screen
+      // screen: flicker, scrolling readout bars and a scan line
       ctx.fillStyle = INK; ctx.fillRect(-12, -13, 22, 6);
-      ctx.fillStyle = rgba('#ff5a78', 0.7 + pulse * 0.3); ctx.fillRect(-11, -12.2, 20, 4.4);
-      ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillRect(-9, -11.4, 9, 1);
+      ctx.fillStyle = rgba('#ff5a78', glitch ? 0.35 : 0.7 + pulse * 0.3 - (hashPos(Math.floor(t * 24), 2) > 0.85 ? 0.12 : 0)); ctx.fillRect(-11, -12.2, 20, 4.4);
+      ctx.fillStyle = 'rgba(255,230,235,0.55)';
+      for (let i = 0; i < 3; i++) { const w = 3 + hashPos(Math.floor(t * 3) + i * 7, i + 1) * 12; ctx.fillRect(-9.5, -11.6 + i * 1.3, w, 0.8); }
+      const sy = -12.2 + ((t * 7) % 4.4); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-11, sy, 20, 0.7);
       // vise
       ctx.fillStyle = '#7a7585'; ctx.fillRect(15, -11, 6, 7); ctx.strokeStyle = INK; ctx.strokeRect(15, -11, 6, 7);
       ctx.restore();
-      // holo gun hovering over the bench
+      // holo gun hovering over the bench, turning about its long axis
       ctx.save(); ctx.translate(x, y - 25 + Math.sin(t * 2) * 1.5); ctx.rotate(-0.15);
-      ctx.globalAlpha = 0.7 + pulse * 0.2; ctx.scale(0.7, 0.7);
+      ctx.globalAlpha = (0.7 + pulse * 0.2) * (glitch ? 0.5 : 1); ctx.scale(0.7, 0.7 * (0.35 + 0.65 * Math.abs(Math.cos(t * 0.9))));
       drawGun(ctx, GUNS[state.weaponIndex], {reach: -12});
       ctx.restore(); ctx.globalAlpha = 1;
     }
@@ -296,7 +472,7 @@ export function createRenderer(container, state) {
       if (room.role !== 'merchant') continue;
       const x = (room.cx + 0.5) * TILE, y = (room.cy + 0.5) * TILE;
       if (!inView({x, y}, b, 80)) continue;
-      const pulse = 0.5 + 0.5 * Math.sin(t * 2);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 2), breath = 1 + 0.028 * Math.sin(t * 1.8), blink = (t + x * 0.01) % 3.6 < 0.12;
       ctx.save(); ctx.translate(x, y);
       ctx.setLineDash([5, 7]); ctx.lineDashOffset = t * 7; ctx.strokeStyle = rgba('#ffc46b', 0.3 + pulse * 0.2); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 44, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       // counter in front of the vendor
@@ -305,23 +481,31 @@ export function createRenderer(container, state) {
       ctx.fillStyle = wood; ctx.fillRect(-30, 14, 60, 18); ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.strokeRect(-30, 14, 60, 18);
       ctx.strokeStyle = 'rgba(255,230,190,0.4)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-29, 15); ctx.lineTo(29, 15); ctx.stroke();
       ctx.fillStyle = '#e8bb62'; for (const gx of [-22, -8, 6, 20]) { ctx.fillRect(gx, 17.5, 6, 6); } ctx.fillStyle = '#6fd6b2'; ctx.fillRect(-20, 25, 4, 4); ctx.fillStyle = '#d85a6a'; ctx.fillRect(8, 25, 4, 4); ctx.fillStyle = '#74c9ed'; ctx.fillRect(21, 25, 4, 4);
-      // vendor: cloak, hood, lantern
+      // vendor: cloak, hood (breathing), blinking eyes
+      ctx.save(); ctx.translate(0, -1); ctx.scale(breath, 1 / breath); ctx.translate(0, 1);
       ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, -1, 12.5, 11.5, 0, 0, TAU); ctx.fill();
       const cloak = lgrad(ctx, -10, -10, 10, 10, '#b7794f', '#6d4430');
       ctx.fillStyle = cloak; ctx.beginPath(); ctx.ellipse(0, -1, 11, 10, 0, 0, TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(255,230,190,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, -1, 9, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
       ctx.fillStyle = '#3b2a22'; ctx.beginPath(); ctx.arc(0, 2, 6.2, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.arc(-2, 5.3, 0.9, 0, TAU); ctx.arc(2, 5.3, 0.9, 0, TAU); ctx.fill();
-      // sign
-      ctx.fillStyle = '#17110e'; ctx.fillRect(-28, -38, 56, 13); ctx.strokeStyle = rgba('#ffc46b', 0.9); ctx.lineWidth = 1.1; ctx.strokeRect(-28, -38, 56, 13);
-      ctx.fillStyle = rgba('#ffd27a', 0.85 + pulse * 0.15); ctx.font = `700 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MARKET', 0, -31.5);
+      ctx.fillStyle = '#ffd27a'; if (blink) { ctx.fillRect(-3, 5.1, 2, 0.6); ctx.fillRect(1, 5.1, 2, 0.6); } else { ctx.beginPath(); ctx.arc(-2, 5.3, 0.9, 0, TAU); ctx.arc(2, 5.3, 0.9, 0, TAU); ctx.fill(); }
+      ctx.restore();
+      // sign (neon flickers now and then) with a hanging lantern that sways
+      const dim = hashPos(Math.floor(t * 8) + Math.floor(x), 9) > 0.9;
+      ctx.fillStyle = '#17110e'; ctx.fillRect(-28, -38, 56, 13); ctx.strokeStyle = rgba('#ffc46b', dim ? 0.4 : 0.9); ctx.lineWidth = 1.1; ctx.strokeRect(-28, -38, 56, 13);
+      ctx.fillStyle = rgba('#ffd27a', dim ? 0.3 : 0.85 + pulse * 0.15); ctx.font = `700 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MARKET', 0, -31.5);
+      const sw = 0.24 * Math.sin(t * 1.7 + x) + 0.06 * Math.sin(t * 3.3), lx = 33 + Math.sin(sw) * 13, ly = -38 + Math.cos(sw) * 13;
+      ctx.strokeStyle = '#6b5a4a'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(33, -38); ctx.lineTo(lx, ly); ctx.stroke();
+      ctx.fillStyle = INK; ctx.fillRect(lx - 3.2, ly - 0.5, 6.4, 7.4); ctx.fillStyle = '#ffd27a'; ctx.fillRect(lx - 2.2, ly + 0.6, 4.4, 5.2);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(lx - 1.6, ly + 1, 1.2, 4);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 + 0.12 * Math.sin(t * 11 + x); ctx.drawImage(glowSprite('#ffb85a'), lx - 16, ly - 12, 32, 32); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
   }
 
   function drawGates(b) {
     for (const gate of state.lockedDoors) {
-      const open = gate.opened ? Math.min(1, (gate.openAnim = (gate.openAnim ?? 0) + (1 / 60) / 0.7)) : 0;
+      const av = gate.vis, open = gate.opened && av ? inOutCubic(clamp((av.open - 0.18) / 0.82)) : 0, pre = gate.opened && av ? clamp(av.open / 0.18) : 0;
       if (open >= 1) continue;
       const cx = (gate.cells.reduce((s, c) => s + c.x, 0) / gate.cells.length + 0.5) * TILE, cy = (gate.cells.reduce((s, c) => s + c.y, 0) / gate.cells.length + 0.5) * TILE;
       if (!inView({x: cx, y: cy}, b, 60)) continue;
@@ -329,9 +513,9 @@ export function createRenderer(container, state) {
       const afford = (state.scrap || 0) >= gate.cost, col = gate.opened ? '#6dffb0' : afford ? '#ffb04a' : '#ff6a78';
       ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
       ctx.globalAlpha = 1 - open * open;
-      const half = span / 2, slide = open * half * 0.95;
+      const half = span / 2, slide = open * half * 0.95, rattle = open > 0 && open < 1 ? Math.sin(vis.time * 70) * 0.7 * Math.sin(open * Math.PI) : 0;
       for (const side of [-1, 1]) {
-        ctx.save(); ctx.translate(side * slide, 0);
+        ctx.save(); ctx.translate(side * slide, rattle * side);
         const x0 = side < 0 ? -half : 0, w = half;
         ctx.fillStyle = 'rgba(8,6,12,0.7)'; ctx.fillRect(x0 - 1, -8, w + 2, 17);
         ctx.fillStyle = '#2b2430'; ctx.fillRect(x0, -6, w, 12);
@@ -342,12 +526,15 @@ export function createRenderer(container, state) {
         ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.strokeRect(x0, -6, w, 12);
         ctx.restore();
       }
-      if (!gate.opened) {
-        // lock plate with padlock
+      if (!gate.opened || pre < 1) {
+        // lock plate with padlock: when the gate opens it flashes green, jolts and pops away before the panels part
+        ctx.save();
+        if (gate.opened) { const k = outBack(pre, 3); ctx.scale(1 + 0.3 * hump(pre), 1 + 0.3 * hump(pre)); ctx.translate(0, -k * 6); ctx.globalAlpha = (1 - open * open) * (1 - pre * pre); }
         ctx.fillStyle = INK; rrectPath(ctx, -12, -11, 24, 22, 4); ctx.fill();
         ctx.fillStyle = rgba(col, 0.9 + pulse * 0.1); rrectPath(ctx, -10.5, -9.5, 21, 19, 3); ctx.fill();
         ctx.rotate(vertical ? -Math.PI / 2 : 0);
-        drawIcon(ctx, 'lock-locked', 0, 0, 15, INK);
+        drawIcon(ctx, gate.opened && pre > 0.3 ? 'lock-unlocked' : 'lock-locked', 0, 0, 15, INK);
+        ctx.restore();
       }
       ctx.restore();
       if (gate.opened) continue;
@@ -361,14 +548,8 @@ export function createRenderer(container, state) {
     }
   }
 
-  function drawPickups(b) {
-    const t = vis.time;
-    for (const pk of state.pickups) {
-      if (!pk.available || !inView(pk, b, 40)) continue;
-      const ph = hashPos(pk.x, pk.y) * 9, bob = Math.sin(t * 3 + ph) * 1.6, color = pk.color || '#f4c66d';
-      if (pk.kind === 'exit') { drawExit(pk); continue; }
-      ctx.save(); ctx.translate(pk.x, pk.y - 2 + bob);
-      const spin = Math.sin(t * 1.4 + ph) * 0.25;
+  function drawPickupShape(pk, t, ph, color) {
+    const spin = Math.sin(t * 1.4 + ph) * 0.25;
       if (pk.kind === 'scrap') {
         ctx.rotate(spin + t * 0.6);
         ctx.fillStyle = INK; hexPath(ctx, 7.4); ctx.fill();
@@ -413,7 +594,7 @@ export function createRenderer(container, state) {
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
         ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-8.4, -6.4, 16.8, 12.8);
         ctx.fillStyle = '#17120d'; ctx.fillRect(-6.4, -4.4, 12.8, 8.8);
-        ctx.fillStyle = '#6c5636'; ctx.fillRect(-8.6, -11, 17.2, 4);
+        { const lid = clamp(outBack(clamp((vis.time - (pk.vis ? pk.vis.claimAt : -99)) / 0.45), 2.6), 0, 1.2); ctx.fillStyle = '#6c5636'; ctx.fillRect(-8.6, -7.6 - 3.4 * lid, 17.2, 15.2 - 11.2 * Math.min(1, lid)); ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.strokeRect(-8.6, -7.6 - 3.4 * lid, 17.2, 15.2 - 11.2 * Math.min(1, lid)); }
         ctx.globalAlpha = 1;
       } else if (pk.kind === 'cache') {
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
@@ -422,8 +603,68 @@ export function createRenderer(container, state) {
         ctx.strokeStyle = '#4a3218'; ctx.lineWidth = 1.2; ctx.strokeRect(-6.4, -4.4, 12.8, 8.8);
         ctx.fillStyle = INK; ctx.fillRect(-2.2, -2, 4.4, 4.4); ctx.fillStyle = '#ffe28a'; ctx.fillRect(-1.2, -1, 2.4, 2.4);
       }
+  }
+
+  // supply locker after use: both doors have swung open (door width squashes about the hinge), dark inside
+  function drawLockerOpen(pk, v) {
+    const k = outBack(clamp((vis.time - v.openAt) / 0.4), 2.4), o = clamp(k, 0, 1.15), sx = 1 - 0.78 * Math.min(1, o);
+    ctx.save(); ctx.translate(pk.x, pk.y - 1); ctx.globalAlpha = 0.85;
+    ctx.fillStyle = INK; ctx.fillRect(-9.6, -13, 19.2, 25);
+    ctx.fillStyle = '#0f1216'; ctx.fillRect(-8.4, -11.8, 16.8, 22.6);
+    ctx.fillStyle = '#242a31'; ctx.fillRect(-7, -9, 14, 1.2); ctx.fillRect(-7, -1, 14, 1.2);
+    for (const side of [-1, 1]) {
+      ctx.save(); ctx.translate(side * 8.4, 0); ctx.scale(sx, 1);
+      const g = ctx.createLinearGradient(0, 0, side * 8, 0); g.addColorStop(0, '#5b6a74'); g.addColorStop(1, '#2f3942');
+      ctx.fillStyle = g; ctx.fillRect(side < 0 ? 0 : -8.4, -11.8, 8.4, 22.6); ctx.strokeStyle = INK; ctx.lineWidth = 1 / Math.max(0.3, sx); ctx.strokeRect(side < 0 ? 0 : -8.4, -11.8, 8.4, 22.6);
       ctx.restore();
     }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function drawPickups(b) {
+    const t = vis.time;
+    for (const pk of state.pickups) {
+      if (!inView(pk, b, 40)) continue;
+      const v = pk.vis ??= {born: -99, wasAvail: pk.available, wasClaimed: !!pk.claimed, ox: 0, oy: 0, openAt: -99, claimAt: -99};
+      if (!pk.available) { if (pk.kind === 'locker') drawLockerOpen(pk, v); continue; }
+      const ph = hashPos(pk.x, pk.y) * 9, bob = Math.sin(t * 3 + ph) * 1.6, color = pk.color || '#f4c66d';
+      if (pk.kind === 'exit') { drawExit(pk); continue; }
+      const pop = pickupPop(v);
+      ctx.save(); ctx.translate(pk.x + v.ox, pk.y - 2 + bob * (1 - pop.lift) + pop.y + v.oy);
+      if (pop.s !== 1) ctx.scale(pop.s, pop.s * (1 + pop.lift * 0.15));
+      drawPickupShape(pk, t, ph, color);
+      // glint: a four-point sparkle sweeps the item every few seconds
+      const gp = (t * 0.33 + ph * 0.37) % 1;
+      if (gp < 0.1 && pk.kind !== 'cache' && !pk.claimed) {
+        const r = Math.sin(gp / 0.1 * Math.PI) * 4.2;
+        ctx.fillStyle = '#fffbe8'; ctx.beginPath(); ctx.moveTo(-3, -5 - r); ctx.lineTo(-2.2, -5 - 0.9); ctx.lineTo(-3 + r, -5); ctx.lineTo(-2.2, -5 + 0.9); ctx.lineTo(-3, -5 + r); ctx.lineTo(-3.8, -5 + 0.9); ctx.lineTo(-3 - r, -5); ctx.lineTo(-3.8, -5 - 0.9); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+    // collected items fly to the player along a curve, shrinking and spinning, with a glowing trail
+    const p = state.player;
+    if (!p) return;
+    for (const g of vis.ghosts) {
+      if (!g.on) continue;
+      const u = clamp(g.t / GHOST_TIME), pk = g.pk, col = pk.color || '#f4c66d';
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 4; i >= 1; i--) {
+        const uu = u - i * 0.07; if (uu <= 0) continue;
+        ghostPos(g, uu, p); ctx.globalAlpha = 0.45 * (1 - i / 5); const r = 6 * (1 - i * 0.12);
+        ctx.drawImage(glowSprite(col), _gp.x - r, _gp.y - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      ghostPos(g, u, p);
+      ctx.save(); ctx.translate(_gp.x, _gp.y); const sc = 1 - 0.5 * inCubic(u); ctx.scale(sc, sc); ctx.rotate(u * 5 * g.side);
+      ctx.globalAlpha = 1 - 0.35 * u * u;
+      drawPickupShape(pk, 0, 0, col);
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
+  const _gp = {x: 0, y: 0};
+  function ghostPos(g, u, p) {
+    const e = inCubic(u) * 0.7 + u * 0.3, tx = p.x, ty = p.y - 2, dx = tx - g.x0, dy = ty - g.y0, L = Math.hypot(dx, dy) || 1, arc = Math.sin(u * Math.PI) * 9 * g.side;
+    _gp.x = g.x0 + dx * e - dy / L * arc; _gp.y = g.y0 + dy * e + dx / L * arc;
   }
 
   function drawPickupGlows(b) {
@@ -443,6 +684,16 @@ export function createRenderer(container, state) {
     ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(1.5, 2, 24, 0, TAU); ctx.fill();
     const g = radialPlate || (radialPlate = ctx.createRadialGradient(0, 0, 3, 0, 0, 23)); if (!radialPlate._s) { radialPlate._s = 1; g.addColorStop(0, '#2b2733'); g.addColorStop(1, '#3d3847'); }
     ctx.fillStyle = g; ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 0, 23, 0, TAU); ctx.fill(); ctx.stroke();
+    { // rotating radar sweep and outgoing pulse rings
+      const sw = t * (ready ? 2.0 : 1.1);
+      ctx.save(); ctx.beginPath(); ctx.arc(0, 0, 22, 0, TAU); ctx.clip();
+      ctx.fillStyle = col;
+      for (let i = 0; i < 5; i++) { ctx.globalAlpha = (ready ? 0.3 : 0.2) * (1 - i / 5); ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 23, sw - (i + 1) * 0.14, sw - i * 0.14); ctx.closePath(); ctx.fill(); }
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(sw) * 23, Math.sin(sw) * 23); ctx.stroke();
+      ctx.restore();
+      for (let k = 0; k < 2; k++) { const u = (t * 0.6 + k * 0.5) % 1; ctx.globalAlpha = (1 - u) * (ready ? 0.45 : 0.22); ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 0, 24 + u * 30, 0, TAU); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
     ctx.save(); ctx.rotate(t * 0.25); ctx.strokeStyle = 'rgba(255,205,60,0.7)'; ctx.lineWidth = 3.4; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, 19.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
     ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(0, 0, 14, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
     for (let i = 0; i < 4; i++) {
@@ -465,73 +716,112 @@ export function createRenderer(container, state) {
   }
 
   // ------------------------------------------------------------------ actors
+  const DEATH = {
+    chaser: {dur: 0.55, whirl: 2.4, tumble: true, hop: 0.2},
+    gunner: {dur: 0.6, whirl: 1.0, hop: 0.16, drop: 'gun'},
+    guard: {dur: 0.6, whirl: 1.0, hop: 0.16, drop: 'gun'},
+    sniper: {dur: 0.75, whirl: 1.5, hop: 0.12, drop: 'gun'},
+    brute: {dur: 0.85, whirl: 0.35, hop: 0, buckle: true},
+    riot: {dur: 0.7, whirl: 0.5, hop: 0.08, drop: 'shield'},
+    elite: {dur: 1.1, whirl: 0.3, hop: 0, buckle: true},
+  };
+
+  // Two feet stepping under the body, aligned with the direction of travel. They only poke out past the rim while walking.
+  function drawFeet(ang, r, phase, amp, color) {
+    if (amp < 0.05) return;
+    walkPose(phase, _wp);
+    const lat = r * 0.58, reach = r * 0.86 * amp, fr = Math.max(2.1, r * 0.25);
+    ctx.save(); ctx.rotate(ang);
+    for (let i = 0; i < 2; i++) {
+      const side = i === 0 ? -1 : 1, f = i === 0 ? _wp.a : _wp.b, lift = i === 0 ? _wp.liftA : _wp.liftB, sc = 1 + 0.2 * lift * amp;
+      const fx0 = f * reach, fy0 = side * lat;
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(fx0, fy0, (fr + 0.9) * 1.25 * sc, (fr + 0.9) * sc, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.ellipse(fx0, fy0, fr * 1.25 * sc, fr * sc, 0, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawStar(x, y, r, color) {
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.2, y - r * 0.2); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.2, y + r * 0.2);
+    ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.2, y + r * 0.2); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.2, y - r * 0.2); ctx.closePath(); ctx.fill();
+  }
+
   function drawEnemy(e, now) {
     if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
-    const v = e.vis ??= {}, kind = e.elite ? 'elite' : e.type, spr = actorSprite(kind), look = ACTOR_LOOK[kind];
-    const dead = !e.alive;
-    const scale = e.elite ? 0.9 : 1;
-    let ang = v.ang || 0;
-    ctx.save(); ctx.translate(e.x, e.y);
-    if (dead) {
-      const t = clamp((v.deathT ?? 1) / 0.45, 0, 1);
-      ang = ang + (v.spin || 0) * (1 - Math.pow(1 - t, 3)) * 0.3;
-      const k = 0.94 - 0.06 * t;
-      ctx.rotate(ang); ctx.scale(k * scale, (1 - 0.12 * t) * k * scale);
-      if (t < 1) {
-        ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-        ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-        ctx.globalAlpha = t; const c = corpseSprite(kind); ctx.drawImage(c.img, -c.half, -c.half, c.half * 2, c.half * 2); ctx.globalAlpha = 1;
-        if (v.flash > 0) { ctx.globalAlpha = v.flash; ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.drawImage(spr.whiteDetail, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
-      } else { const c = corpseSprite(kind); ctx.drawImage(c.img, -c.half, -c.half, c.half * 2, c.half * 2); }
-      ctx.restore();
-      return;
-    }
-    // body kept unrotated (lit from the top-left), details rotate with facing
-    const moving = clamp((v.speed || 0) / 70, 0, 1), windup = e.meleeWindup > 0, kick = v.kick || 0;
-    const squash = 1 + (windup ? 0.1 : 0) + kick * 0.05;
-    const knockX = Math.cos(v.hitAngle || 0) * (v.flash || 0) * 1.4, knockY = Math.sin(v.hitAngle || 0) * (v.flash || 0) * 1.4;
-    ctx.translate(knockX, knockY);
-    ctx.scale(scale * squash, scale * squash);
+    const v = e.vis ??= {}, kind = kindOf(e), spr = actorSprite(kind), look = ACTOR_LOOK[kind];
+    if (!e.alive) { drawCorpse(e, v, kind, spr, look); return; }
+    const scale = e.elite ? 0.9 : 1, ang = v.ang || 0, mvAng = v.mvAng ?? ang;
+    const windup = e.meleeWindup > 0, windP = windup ? clamp(1 - e.meleeWindup / 0.48, 0, 1) : 0;
+    const aimP = e.aimTimer > 0 ? clamp(1 - e.aimTimer / (v.aimMax || 0.5), 0, 1) : 0;
+    const amp = v.mv || 0, kick = v.kick || 0, punch = v.punch || 0, lunge = v.lunge || 0, brace = v.brace || 0;
+    const alertAge = v.alertT > 0 ? 0.9 - v.alertT : 9;
+    ctx.save(); ctx.translate(e.x + (v.fpx || 0), e.y + (v.fpy || 0));
+    // body language: rear back on the wind-up, lunge on the strike, lean back while aiming, kick on a shot
+    if (windP > 0) { const rb = outCubic(windP) * 4.5; ctx.translate(-Math.cos(ang) * rb, -Math.sin(ang) * rb); }
+    if (lunge > 0) { const l = outQuad(lunge) * 7; ctx.translate(Math.cos(ang) * l, Math.sin(ang) * l); }
+    if (aimP > 0 && !e.elite) { ctx.translate(-Math.cos(ang) * aimP * 1.2, -Math.sin(ang) * aimP * 1.2); }
+    walkPose(v.phase || 0, _wp);
+    drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
+    // squash and stretch: along travel while running, bigger on the wind-up, a punch when hit, a hop when alerted
+    const bob = 1 + 0.035 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.017 * Math.sin(vis.time * 2.3 + (e.id || 0) * 31) * (1 - amp);
+    const hop = alertAge < 0.2 ? 0.12 * Math.sin(alertAge / 0.2 * Math.PI) : 0;
+    const wind = 1 + (windup ? 0.1 * outCubic(windP) : 0) + kick * 0.05 + punch * 0.13 + hop - brace * 0.04;
+    ctx.scale(scale * wind * bob * breath, scale * wind * bob * breath);
+    ctx.save(); ctx.rotate(mvAng); ctx.scale(1 + 0.08 * amp + lunge * 0.14, 1 - 0.05 * amp - lunge * 0.1); ctx.rotate(-mvAng);
     ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+    ctx.restore();
     ctx.save(); ctx.rotate(ang);
-    // weapons / fists under the detail layer so hands read as held
     if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
     } else if (e.type === 'riot') {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-      drawHand(ctx, 9, -7.5, shade(look.color, 0.7), 3); drawHand(ctx, 9, 7.5, shade(look.color, 0.7), 3);
+      const hc = shade(look.color, 0.7), push = brace * 2.5 - Math.min(3, (e.shieldFlash || 0) * 8);
+      drawHand(ctx, 9 + push * 0.4, -7.5, hc, 3); drawHand(ctx, 9 + push * 0.4, 7.5, hc, 3);
     } else {
       const gun = ENEMY_GUNS[e.type];
       if (gun && !e.elite) {
-        const reloading = e.reloadTimer > 0, aiming = e.aimTimer > 0;
-        ctx.save(); ctx.translate(look.r * 0.2, e.type === 'guard' ? 3.5 : 0); ctx.rotate(reloading ? 1.15 : 0); ctx.translate(-(kick * 3), 0);
-        const m = drawGun(ctx, gun, {reach: 3, enemy: true});
-        drawHand(ctx, m.rear, 0, shade(look.color, 0.7), 2.3); drawHand(ctx, m.front, 0.6, shade(look.color, 0.7), 2.3);
+        // low-ready carry that snaps up as the aim tell fills; a reload tips the gun and the off hand dips
+        const raise = v.raise || 0, rel = v.rel || 0, yOff = e.type === 'guard' ? 3.5 : 0;
+        const tremble = aimP > 0.3 ? Math.sin(vis.time * 46 + (e.id || 0) * 9) * 0.012 * aimP : 0;
+        const gunRot = (1 - raise) * 0.42 * (e.side || 1) + rel * 1.15 + tremble - kick * 0.06;
+        ctx.save(); ctx.translate(look.r * 0.2 - (1 - raise) * 1.4 - kick * 3, yOff + Math.sin((v.phase || 0) * TAU) * 0.6 * amp); ctx.rotate(gunRot);
+        const m = drawGun(ctx, gun, {reach: 3, enemy: true, slide: kick, noMag: rel > 0.3 && rel < 0.95});
+        const hc = shade(look.color, 0.7);
+        drawHand(ctx, m.rear, 0, hc, 2.3); drawHand(ctx, m.front - rel * 5, 0.6 + rel * 3.5, hc, 2.3);
+        if (rel > 0.5 && e.reloadTimer > 0.2) drawMagSprite(ctx, m.front - rel * 5 - 2, 0.6 + rel * 3.5, 0.3, 4.2, 2.4);
         ctx.restore();
         ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-        if (aiming) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#ff4a5e'; ctx.beginPath(); ctx.arc(3 + gun.visual.length * 0.82 + 2, e.type === 'guard' ? 3.5 : 0, 1.8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
+        if (aimP > 0 && e.type === 'sniper') {
+          // scope glint: the lens flares and sparkles harder as the lock builds
+          const lens = 3 + gun.visual.length * 0.7 * 0.62 + 3, flick = 0.65 + 0.35 * Math.sin(vis.time * 34), g = (0.15 + aimP * aimP * 1.3) * flick + (e.locked ? 0.5 : 0);
+          ctx.globalCompositeOperation = 'lighter'; drawStar(lens, yOff, 2 + g * 6, '#fff0f0'); ctx.globalAlpha = 0.6; ctx.drawImage(glowSprite('#ff6a7a'), lens - 8, yOff - 8, 16, 16); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        } else if (aimP > 0.55) {
+          const mz = 3 + gun.visual.length * 0.82 + 2; ctx.globalCompositeOperation = 'lighter'; drawStar(mz, yOff, 1.5 + (aimP - 0.55) * 5, '#ffb0a0'); ctx.globalCompositeOperation = 'source-over';
+        }
+        if (aimP > 0) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#ff4a5e'; ctx.beginPath(); ctx.arc(3 + gun.visual.length * 0.82 + 2, yOff, 1.8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
       } else {
-        // brute / warden: heavy fists, raised during the wind-up
-        const total = 0.48, p = windup ? 1 - e.meleeWindup / total : 0, swing = windup ? Math.sin(p * Math.PI * 0.5) : (Math.sin(vis.time * 5 + (e.id || 0) * 40) * 0.4 * moving);
-        const fr = e.elite ? 6.6 : 5, reach = windup ? 15 + p * 11 : 12 + swing * 2;
-        const yy = windup ? 5 - p * 3 : 9.5;
-        const fist = windup && p > 0.4 ? mix(shade(look.color, 0.8), '#ff7a3a', p) : shade(look.color, 0.75);
+        // brute / warden: fists pumping while walking, hauled back on the wind-up, thrown forward on the strike
+        const rb = outCubic(windP), fr = e.elite ? 6.6 : 5, fs = e.elite ? 1.35 : 1;
+        const pump = Math.sin((v.phase || 0) * TAU) * 3 * amp;
+        const rl = windup ? 12 - 7 * rb : 12 + lunge * 14, rr = windup ? 12 - 7 * rb : 12 + lunge * 14;
+        const yy = windup ? 9.5 - 3.5 * rb : 9.5 - lunge * 2.5;
+        const hot = windup && windP > 0.4 ? mix(shade(look.color, 0.8), '#ff7a3a', windP) : shade(look.color, 0.75);
         ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-        const fs = e.elite ? 1.35 : 1;
-        drawHand(ctx, reach * fs, -yy * fs + (windup ? -2 : 0), fist, fr); drawHand(ctx, reach * fs, yy * fs + (windup ? 2 : 0), fist, fr);
+        drawHand(ctx, (rl + pump) * fs, -yy * fs - (windup ? 2 * rb : 0), hot, fr + (windup ? rb * 0.8 : 0));
+        drawHand(ctx, (rr - pump) * fs, yy * fs + (windup ? 2 * rb : 0), hot, fr + (windup ? rb * 0.8 : 0));
       }
     }
     ctx.restore();
-    if (e.type === 'riot') drawRiotShield(e, v);
+    if (e.type === 'riot') drawRiotShield(e, v, e.shieldAng || 0, false, 1);
     if (v.flash > 0) {
-      ctx.globalAlpha = Math.min(1, v.flash * 1.2);
+      ctx.globalAlpha = Math.min(1, v.flash * 1.6);
       ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
       ctx.save(); ctx.rotate(ang); ctx.drawImage(spr.whiteDetail, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.restore();
       ctx.globalAlpha = 1;
     }
     if (windup) {
-      const p = 1 - e.meleeWindup / 0.48;
-      ctx.globalAlpha = p * 0.5; ctx.fillStyle = '#ff7a3a'; ctx.beginPath(); ctx.arc(0, 0, look.r + 2, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.globalAlpha = windP * 0.5; ctx.fillStyle = '#ff7a3a'; ctx.beginPath(); ctx.arc(0, 0, look.r + 2 + Math.sin(vis.time * 40) * windP, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     }
     ctx.restore();
     if (e.stun > 0) {
@@ -542,15 +832,19 @@ export function createRenderer(container, state) {
     }
     if (e.reloadTimer > 0) { ctx.fillStyle = '#ffd27a'; for (let i = 0; i < 3; i++) { ctx.globalAlpha = 0.4 + 0.6 * (Math.sin(vis.time * 8 + i) * 0.5 + 0.5); ctx.beginPath(); ctx.arc(e.x - 5 + i * 5, e.y - look.r - 5, 1.2, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; }
     if (e.elite || (v.barT || 0) > 0 && e.hp < e.maxHp) bar(e.x, e.y - look.r * scale - 8, e.elite ? 34 : 18, e.elite ? 3.6 : 2.4, e.hp / e.maxHp, e.elite ? '#ff9566' : '#e96a78');
-    if (v.alertT > 0 && !(e.aimTimer > 0 || windup)) {
-      ctx.save(); ctx.translate(e.x, e.y - look.r - 10 - (1 - v.alertT / 0.9) * 4); ctx.globalAlpha = Math.min(1, v.alertT * 3);
-      ctx.font = `900 11px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#ffd86e'; ctx.strokeText('!', 0, 0); ctx.fillText('!', 0, 0); ctx.restore();
+    if (alertAge < 0.9 && !(e.aimTimer > 0 || windup)) {
+      // "!" drops in from above with a bounce and a squash, a ring pops out of it, then it fades
+      const u = clamp(alertAge / 0.5), drop = (1 - outBounce(u)) * 10, s = outBack(clamp(alertAge / 0.16), 3), land = alertAge > 0.12 && alertAge < 0.26 ? Math.sin((alertAge - 0.12) / 0.14 * Math.PI) * 0.25 : 0;
+      ctx.save(); ctx.translate(e.x, e.y - look.r - 10 - drop); ctx.scale(s * (1 + land), s * (1 - land)); ctx.globalAlpha = Math.min(1, v.alertT * 3.3);
+      ctx.font = `900 12px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#ffd86e'; ctx.strokeText('!', 0, 0); ctx.fillText('!', 0, 0);
+      if (alertAge < 0.3) { ctx.strokeStyle = rgba('#ffd86e', 1 - alertAge / 0.3); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 0, 4 + alertAge * 38, 0, TAU); ctx.stroke(); }
+      ctx.restore();
     } else if (e.intent === 'search' && !(e.aimTimer > 0 || windup)) {
-      ctx.save(); ctx.translate(e.x, e.y - look.r - 9); ctx.globalAlpha = 0.85; ctx.font = `900 10px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#9fd0ff'; ctx.strokeText('?', 0, 0); ctx.fillText('?', 0, 0); ctx.restore();
+      ctx.save(); ctx.translate(e.x, e.y - look.r - 9 + Math.sin(vis.time * 4 + (e.id || 0) * 20) * 0.8); ctx.rotate(Math.sin(vis.time * 3 + (e.id || 0) * 9) * 0.18); ctx.globalAlpha = 0.85; ctx.font = `900 10px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#9fd0ff'; ctx.strokeText('?', 0, 0); ctx.fillText('?', 0, 0); ctx.restore();
     }
-    if (e.aimTimer > 0 || windup) {
+    if (aimP > 0 || windup) {
       // alert tick above the head
-      const p = windup ? 1 - e.meleeWindup / 0.48 : 1 - e.aimTimer / (e.vis?.aimMax || 0.5);
+      const p = windup ? windP : aimP;
       ctx.save(); ctx.translate(e.x, e.y - look.r - (e.elite ? 12 : 8) - Math.sin(p * 9) * 0.8);
       ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(0, 11, 6.5, 0, TAU); ctx.stroke(); ctx.strokeStyle = windup ? '#ffad57' : '#ff3a50'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(0, 11, 6.5, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke();
       ctx.fillStyle = windup ? '#ffad57' : '#ff4a5e'; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.lineWidth = 1.4;
@@ -559,11 +853,49 @@ export function createRenderer(container, state) {
     void now;
   }
 
+  // Death animation per type, then the body settles into the same pose the baked corpse decal uses (angle + spin*0.3, 0.94 x 0.9).
+  function drawCorpse(e, v, kind, spr, look) {
+    const D = DEATH[kind] || DEATH.gunner, dt = v.deathT ?? 1, t = clamp(dt / D.dur), spin = v.spin || 0, ang0 = v.ang || 0, sgn = spin < 0 ? -1 : 1;
+    const settle = outCubic(t), base = e.elite ? 0.9 : 1;
+    const ang = ang0 + spin * 0.3 * settle + sgn * D.whirl * hump(Math.min(1, t * 1.15)) * 0.9;
+    let sx = lerp(base, 0.94, settle), sy = lerp(base, 0.9, settle);
+    const air = 1 + D.hop * hump(clamp(t * 1.6));
+    sx *= air; sy *= air;
+    if (D.buckle) { const kneel = hump(clamp(t / 0.5)); sx *= 1 + 0.1 * kneel; sy *= 1 - 0.1 * kneel; }
+    if (D.tumble) sy *= 0.45 + 0.55 * Math.abs(Math.cos(t * Math.PI * 3));
+    const fxo = v.fpx || 0, fyo = v.fpy || 0;
+    ctx.save(); ctx.translate(e.x + fxo, e.y + fyo);
+    // dropped gear skids away from the body
+    if (D.drop && dt < 9) {
+      const fade = e.corpseTimer !== undefined ? clamp(e.corpseTimer / 0.6) : 1, da = v.deathAngle ?? ang0, sl = outCubic(clamp(dt / 0.55));
+      if (fade > 0) {
+        ctx.save(); ctx.globalAlpha = fade;
+        if (D.drop === 'gun' && ENEMY_GUNS[e.type]) {
+          const px = Math.cos(ang0) * 6 + Math.cos(da) * 20 * sl + Math.cos(da + 1.57) * 4 * sl * sgn, py = Math.sin(ang0) * 6 + Math.sin(da) * 20 * sl + Math.sin(da + 1.57) * 4 * sl * sgn;
+          ctx.translate(px, py - 3 * hump(clamp(dt / 0.3))); ctx.rotate(ang0 + spin * 0.9 * sl + 0.4); drawGun(ctx, ENEMY_GUNS[e.type], {reach: -6, enemy: true});
+        } else if (D.drop === 'shield') {
+          ctx.translate(Math.cos(da) * 20 * sl, Math.sin(da) * 20 * sl); ctx.rotate(spin * 0.5 * sl); drawRiotShield(e, v, (e.shieldAng || 0), true, 1);
+        }
+        ctx.restore();
+      }
+    }
+    ctx.rotate(ang); ctx.scale(sx, sy);
+    const cs = corpseSprite(kind);
+    if (t < 1) {
+      ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+      ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+      ctx.globalAlpha = outQuad(t); ctx.drawImage(cs.img, -cs.half, -cs.half, cs.half * 2, cs.half * 2); ctx.globalAlpha = 1;
+      if (v.flash > 0) { ctx.globalAlpha = Math.min(1, v.flash * 1.6); ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.drawImage(spr.whiteDetail, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
+    } else ctx.drawImage(cs.img, -cs.half, -cs.half, cs.half * 2, cs.half * 2);
+    ctx.restore();
+  }
+
   // RIOT shield: a curved steel plate on the side that blocks (e.shieldAng is the same angle the block test uses).
-  function drawRiotShield(e, v) {
-    const down = e.stun > 0.35, a = e.shieldAng || 0, flash = e.shieldFlash || 0;
-    ctx.save(); ctx.rotate(a); if (down) ctx.globalAlpha = 0.45;
-    const R = down ? 11 : 15.5, half = 1.12;
+  // braced shields push out and shiver on a block; `loose` draws it as a dropped piece lying flat.
+  function drawRiotShield(e, v, a, loose, alpha) {
+    const down = e.stun > 0.35, flash = e.shieldFlash || 0, brace = v.brace || 0;
+    ctx.save(); ctx.rotate(a + (flash > 0 && !loose ? Math.sin(vis.time * 70) * flash * 0.16 : 0)); if (down || alpha < 1) ctx.globalAlpha = down ? 0.45 : alpha;
+    const R = loose ? 9 : (down ? 11 : 15.5 + brace * 2.4 - Math.min(2.5, flash * 9)), half = 1.12;
     ctx.lineCap = 'round';
     ctx.strokeStyle = INK; ctx.lineWidth = 8.2; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
     ctx.strokeStyle = flash > 0 ? mix('#9fb6c8', '#ffffff', clamp(flash * 4, 0, 1)) : '#9fb6c8'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
@@ -571,7 +903,7 @@ export function createRenderer(container, state) {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, R + 1.6, -half * 0.8, -half * 0.1); ctx.stroke();
     ctx.fillStyle = '#ffd36e'; ctx.strokeStyle = INK; ctx.lineWidth = 0.8;
     for (const o of [-0.55, 0, 0.55]) { ctx.save(); ctx.rotate(o); ctx.fillRect(R - 2.4, -1.1, 4.8, 2.2); ctx.restore(); }
-    if (flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = clamp(flash * 3, 0, 1); ctx.drawImage(glowSprite('#bfe4ff'), R - 10, -10, 20, 20); }
+    if (flash > 0 && !loose) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = clamp(flash * 3, 0, 1); ctx.drawImage(glowSprite('#bfe4ff'), R - 12, -12, 24, 24); drawStar(R + 2, 0, 5 + flash * 14, '#e8f4ff'); }
     ctx.restore();
   }
 
@@ -631,32 +963,49 @@ export function createRenderer(container, state) {
 
   function drawPlayer(now) {
     const p = state.player; if (!p) return;
-    const gun = GUNS[state.weaponIndex], ang = Math.atan2(state.aim.y, state.aim.x), spr = actorSprite('player');
+    const gun = GUNS[state.weaponIndex], ang = Math.atan2(state.aim.y, state.aim.x), bAng = vis.bodyAng, spr = actorSprite('player');
     const reloading = state.reloadTimer > 0, blink = state.invuln > 0 && Math.floor(vis.time * 22) % 2 === 0;
+    const kick = vis.kick, sprint = state.sprintBlend || 0, amp = vis.pMv, frac = vis.reloadFrac || 0, flip = Math.abs(ang) > Math.PI / 2 ? -1 : 1;
     trail.draw(ctx, now, '#e9f5ee', 1.5, 0.45);
     if (blink) ctx.globalAlpha = 0.45;
-    ctx.save(); ctx.translate(p.x, p.y);
-    const kick = vis.kick;
-    ctx.save(); ctx.translate(-Math.cos(ang) * kick * 0.8, -Math.sin(ang) * kick * 0.8);
+    ctx.save(); ctx.translate(p.x + vis.fl.x, p.y + vis.fl.y);
+    ctx.translate(-Math.cos(ang) * kick * 0.8 + state.recoil.x * 0.06, -Math.sin(ang) * kick * 0.8 + state.recoil.y * 0.06);
+    walkPose(vis.pPhase, _wp);
+    drawFeet(vis.mvAng, 10.5, vis.pPhase, amp, '#1d3a36');
+    // body: breathes at rest, bobs and stretches along travel while walking, stretches more when sprinting
+    const bob = 1 + 0.032 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.018 * Math.sin(vis.time * 2.4) * (1 - amp), punch = 1 + vis.flashHit * 0.07;
+    ctx.save(); ctx.scale(bob * breath * punch, bob * breath * punch);
+    ctx.rotate(vis.mvAng); ctx.scale(1 + 0.07 * amp + 0.06 * sprint, 1 - 0.05 * amp - 0.04 * sprint); ctx.rotate(-vis.mvAng);
     ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-    ctx.save(); ctx.rotate(ang);
-    const frac = vis.reloadFrac || 0;
-    const tilt = reloading ? Math.sin(Math.min(1, frac * 1.0) * Math.PI) * 1.05 : 0;
-    ctx.save(); ctx.translate(2, 0); ctx.rotate(tilt * (Math.abs(ang) > Math.PI / 2 ? -1 : 1)); ctx.translate(-kick * 3.2, 0);
-    const m = drawGun(ctx, gun, {reach: 4});
     ctx.restore();
+    // torso / head layer follows the lagged body angle and leans into a sprint
+    ctx.save(); ctx.rotate(bAng); ctx.translate(sprint * 1.6, 0);
     ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-    const hand = shade('#62e1ad', 0.62), handLift = reloading ? Math.sin(frac * Math.PI * 3) * 1.2 : 0;
-    ctx.save(); ctx.translate(2, 0); ctx.rotate(tilt * (Math.abs(ang) > Math.PI / 2 ? -1 : 1)); ctx.translate(-kick * 3.2, 0);
-    drawHand(ctx, m.rear, 0, hand, 2.8); drawHand(ctx, m.front, 1.2 + handLift, hand, 2.8);
     ctx.restore();
+    // gun layer follows the aim exactly
+    ctx.save(); ctx.rotate(ang);
+    reloadPose(reloading ? frac : 0, _rp);
+    const sw = vis.swapT < 1 ? swapPose(vis.swapT, _sw) : null, rpz = reloading ? _rp : null;
+    let tilt = sprint * 0.55 - kick * 0.05 * (kick > 0 ? 1 : 0) + (rpz ? rpz.tilt : 0) * flip * 0 + 0;
+    ctx.translate(2 - sprint * 1.5 - (rpz ? rpz.seat * 1.2 : 0), Math.sin(vis.pPhase * TAU) * 0.7 * amp);
+    const g0 = (sw && sw.which === 0) ? GUNS[vis.prevGun] || gun : gun;
+    ctx.save();
+    ctx.rotate((tilt + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0)) * flip);
+    ctx.translate(-kick * 3.2 + (sw ? sw.dx : 0), 0);
+    if (sw) ctx.scale(sw.k, sw.k);
+    const m = drawGun(ctx, g0, {reach: 4, slide: kick, rack: rpz ? rpz.rack : 0, noMag: !!rpz && rpz.mag > 0.02});
+    const hand = shade('#62e1ad', 0.62);
+    const hy = 1.2 + (rpz ? -rpz.hy * 0.9 : 0) + (rpz ? 0 : 0);
+    drawHand(ctx, m.rear, 0, hand, 2.8);
+    if (rpz && rpz.mag > 0.02) drawMagSprite(ctx, m.front + (rpz ? rpz.hx : 0) - 2, hy, 0.25, 6, 3.4);
+    drawHand(ctx, m.front + (rpz ? rpz.hx : 0), hy, hand, 2.8);
     ctx.restore();
     ctx.restore();
     if (state.armor > 0) {
       ctx.strokeStyle = '#7fdcf0'; ctx.lineWidth = 2; ctx.lineCap = 'round';
-      const n = state.armor, gap = 0.5; for (let i = 0; i < n; i++) { const a0 = -Math.PI / 2 + i * (TAU / n) + gap / 2, a1 = -Math.PI / 2 + (i + 1) * (TAU / n) - gap / 2; ctx.beginPath(); ctx.arc(0, 0, 13.4, a0, a1); ctx.stroke(); }
+      const n = state.armor, gap = 0.5, spinA = vis.time * 0.15; for (let i = 0; i < n; i++) { const a0 = -Math.PI / 2 + spinA + i * (TAU / n) + gap / 2, a1 = -Math.PI / 2 + spinA + (i + 1) * (TAU / n) - gap / 2; ctx.beginPath(); ctx.arc(0, 0, 13.4, a0, a1); ctx.stroke(); }
     }
-    if (vis.flashHit > 0) { ctx.globalAlpha = vis.flashHit; ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
+    if (vis.flashHit > 0) { ctx.globalAlpha = Math.min(1, vis.flashHit * 1.4); ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
     if (reloading) {
       ctx.strokeStyle = 'rgba(14,10,20,0.7)'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(0, 0, 16.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
       ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(0, 0, 16.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
@@ -672,15 +1021,17 @@ export function createRenderer(container, state) {
   function drawThrown() {
     for (const t of state.thrown) {
       const color = {smoke: '#aaa8b3', flash: '#ffe59b', frag: '#6a7a58', incendiary: '#ff673d'}[t.id], urgent = t.fuse < 0.3;
-      const blink = Math.floor(vis.time * (urgent ? 30 : 12)) % 2 === 0;
-      const lift = 2 + Math.sin(vis.time * 14) * 1.2;
-      ctx.save(); ctx.translate(t.x, t.y - lift); ctx.rotate(vis.time * 9);
+      const blink = Math.floor(vis.time * (urgent ? 30 : 12)) % 2 === 0, a = grenadeAir(t), lift = 2 + a.z;
+      ctx.save(); ctx.translate(t.x, t.y - lift); ctx.rotate(t.vis ? t.vis.rot : 0);
+      // squash flat for a moment at every bounce (axes follow the spin, so this reads as a tumble)
+      ctx.scale(1 + 0.22 * a.sq, 1 - 0.25 * a.sq);
       ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, 0, 3.8, 0, TAU); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.arc(-1.2, -1.2, 1.2, 0, TAU); ctx.fill();
       ctx.fillStyle = '#2a2530'; ctx.fillRect(-1, -4.6, 2, 2.2);
       ctx.fillStyle = blink ? '#ff4a3a' : '#5a1a18'; ctx.beginPath(); ctx.arc(2, 0.4, 1, 0, TAU); ctx.fill();
       ctx.restore();
+      if (a.sq > 0.5) { ctx.fillStyle = 'rgba(190,180,170,0.35)'; ctx.beginPath(); ctx.ellipse(t.x, t.y, 4 + a.sq * 2, 1.6, 0, 0, TAU); ctx.fill(); }
       ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = blink ? 0.6 : 0.2; ctx.drawImage(glowSprite('#ff6a4a'), t.x - 8, t.y - lift - 8, 16, 16); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
   }
@@ -688,37 +1039,56 @@ export function createRenderer(container, state) {
   function drawEffects(b) {
     for (const effect of state.effects) {
       if (!inView(effect, b, effect.item.radius + 30)) continue;
-      const v = effect.vis ??= {puffs: Array.from({length: 16}, (_, i) => { const r = seeded(Math.floor(effect.x * 31 + effect.y * 17 + i * 7)); const a = r() * TAU, d = Math.sqrt(r()); return {a, d, s: 0.45 + r() * 0.55, rot: r() * TAU, sp: (r() - 0.5) * 0.4}; })};
+      const v = effect.vis ??= {
+        puffs: Array.from({length: 16}, (_, i) => { const r = seeded(Math.floor(effect.x * 31 + effect.y * 17 + i * 7)); const a = r() * TAU, d = Math.sqrt(r()); return {a, d, s: 0.45 + r() * 0.55, rot: r() * TAU, sp: (r() - 0.5) * 0.4}; }),
+        tongues: Array.from({length: 12}, (_, i) => { const r = seeded(Math.floor(effect.x * 13 + effect.y * 29 + i * 11)); return {a: r() * TAU, d: Math.sqrt(r()) * 0.8, ph: r() * TAU, h: 0.6 + r() * 0.6}; }),
+        wx: Math.cos(effect.x * 0.37 + effect.y * 0.11) * 3.2, wy: Math.sin(effect.x * 0.21 + effect.y * 0.43) * 2.2 - 1.2,
+      };
       const R = effect.item.radius, el = effect.elapsed, rem = effect.remaining;
       if (effect.id === 'smoke') {
-        const grow = Math.min(1, el / 0.7), fade = Math.min(1, rem / 1.2);
+        // billows out fast then keeps churning and drifting downwind; each puff breathes and rises a little
+        const grow = outCubic(Math.min(1, el / 0.9)), fade = Math.min(1, rem / 1.2);
+        const px = puffSprite('#b9b5c2');
         for (const p of v.puffs) {
-          const a = p.a + el * p.sp * 0.5, d = p.d * R * 0.62 * (0.4 + 0.6 * grow), r = R * 0.34 * p.s * (0.5 + 0.5 * grow), wob = Math.sin(el * 0.9 + p.rot) * 3;
-          ctx.globalAlpha = 0.52 * fade; const x = effect.x + Math.cos(a) * d + wob, y = effect.y + Math.sin(a) * d - wob * 0.6;
-          ctx.drawImage(puffSprite('#b9b5c2'), x - r, y - r, r * 2, r * 2);
+          const a = p.a + el * p.sp * 0.5, d = p.d * R * 0.62 * (0.35 + 0.65 * grow), r = R * 0.34 * p.s * (0.45 + 0.55 * grow) * (1 + 0.07 * Math.sin(el * 1.6 + p.rot)), wob = Math.sin(el * 0.9 + p.rot) * 3;
+          ctx.globalAlpha = 0.52 * fade; const x = effect.x + Math.cos(a) * d + wob + v.wx * el * 0.9, y = effect.y + Math.sin(a) * d - wob * 0.6 + v.wy * el * 0.9 - Math.min(6, el * 1.2) * p.s;
+          ctx.drawImage(px, x - r, y - r, r * 2, r * 2);
         }
         ctx.globalAlpha = 1;
         ctx.strokeStyle = rgba('#d8d4e2', 0.12 * fade); ctx.lineWidth = 1; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(effect.x, effect.y, R * 0.92, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       } else if (effect.id === 'incendiary') {
-        const fade = Math.min(1, rem / 0.6), pulse = 0.5 + 0.5 * Math.sin(el * 8);
-        const g = ctx.createRadialGradient(effect.x, effect.y, 0, effect.x, effect.y, R); g.addColorStop(0, rgba('#ff8a3c', 0.3 * fade)); g.addColorStop(0.7, rgba('#ff5a24', 0.14 * fade)); g.addColorStop(1, rgba('#ff5a24', 0));
+        const fade = Math.min(1, rem / 0.6), pulse = 0.5 + 0.5 * Math.sin(el * 8) + 0.15 * Math.sin(el * 23);
+        const g = ctx.createRadialGradient(effect.x, effect.y, 0, effect.x, effect.y, R); g.addColorStop(0, rgba('#ff8a3c', (0.26 + 0.08 * pulse) * fade)); g.addColorStop(0.7, rgba('#ff5a24', 0.14 * fade)); g.addColorStop(1, rgba('#ff5a24', 0));
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(effect.x, effect.y, R, 0, TAU); ctx.fill();
         ctx.strokeStyle = rgba('#ffb060', (0.3 + pulse * 0.2) * fade); ctx.lineWidth = 1.4; ctx.setLineDash([5, 5]); ctx.lineDashOffset = -el * 12; ctx.beginPath(); ctx.arc(effect.x, effect.y, R * 0.94, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        // flat-shaded flame tongues that lick up and sway, each on its own flicker
+        for (const f of v.tongues) {
+          const fl = 0.55 + 0.45 * Math.sin(el * 9 + f.ph) * Math.sin(el * 5.3 + f.ph * 1.7), h = (5 + 9 * f.h * fl) * fade, w = 3.2 * (0.7 + 0.3 * fl) * fade, sway = Math.sin(el * 7 + f.ph) * 1.8;
+          const fx0 = effect.x + Math.cos(f.a) * f.d * R * 0.82, fy0 = effect.y + Math.sin(f.a) * f.d * R * 0.82;
+          ctx.fillStyle = '#ff6a2a'; ctx.beginPath(); ctx.moveTo(fx0 - w, fy0); ctx.quadraticCurveTo(fx0 - w * 0.4 + sway, fy0 - h * 0.6, fx0 + sway * 1.6, fy0 - h); ctx.quadraticCurveTo(fx0 + w * 0.4 + sway, fy0 - h * 0.6, fx0 + w, fy0); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#ffc24a'; ctx.beginPath(); ctx.moveTo(fx0 - w * 0.5, fy0); ctx.quadraticCurveTo(fx0 + sway * 0.6, fy0 - h * 0.5, fx0 + sway, fy0 - h * 0.62); ctx.quadraticCurveTo(fx0 + w * 0.2 + sway * 0.6, fy0 - h * 0.4, fx0 + w * 0.5, fy0); ctx.closePath(); ctx.fill();
+        }
       } else if (effect.id === 'flash' || effect.id === 'frag') {
-        // the burst itself is drawn by fx; leave a faint shock disc for a moment
         const k = clamp(el / 0.35, 0, 1);
         if (k < 1) { ctx.globalAlpha = (1 - k) * 0.22; ctx.fillStyle = effect.id === 'flash' ? '#fff6c8' : '#ffb877'; ctx.beginPath(); ctx.arc(effect.x, effect.y, R * (0.5 + k * 0.5), 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
+        if (effect.id === 'flash') {
+          // a flashbang's white bloom swells past its radius and washes out
+          const kb = clamp(el / 0.6, 0, 1), rr = R * (0.45 + kb * 1.0);
+          if (kb < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - kb) * (1 - kb) * 0.7; ctx.drawImage(glowSprite('#fffbe8'), effect.x - rr, effect.y - rr, rr * 2, rr * 2); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+        }
       }
     }
   }
 
   function drawBullets(b) {
     ctx.lineCap = 'round';
+    const slowK = 1 + vis.slow * 1.1; // trails stretch while time is thin so a dodge reads
     for (const bl of state.bullets) {
       if (!inView(bl, b, 60)) continue;
       const sp = Math.hypot(bl.vx, bl.vy) || 1, dx = bl.vx / sp, dy = bl.vy / sp;
       if (bl.owner === 'player') {
-        const color = bl.color !== undefined ? hexStr(bl.color) : '#ffd17c', len = clamp(sp * 0.04, 12, 40);
+        const color = bl.color !== undefined ? hexStr(bl.color) : '#ffd17c', born = Math.hypot(bl.x - (bl.ox ?? bl.x), bl.y - (bl.oy ?? bl.y));
+        const len = Math.min(clamp(sp * 0.04, 12, 40) * slowK, 6 + born * 1.1);
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 3; i++) {
           const f0 = i / 3, f1 = (i + 1) / 3;
@@ -732,7 +1102,7 @@ export function createRenderer(container, state) {
       } else {
         // Enemy rounds: big hot orbs with a pulsing halo and a fading comet tail. Round + red/white, the opposite of the
         // thin gold streaks the player fires, so they stay readable at 0.18x.
-        const sn = bl.style === 'sniper', R = sn ? 4.6 : 3.7, tail = sn ? 38 : 22, pulse = 0.5 + 0.5 * Math.sin(vis.time * 16 + bl.x * 0.05);
+        const sn = bl.style === 'sniper', R = sn ? 4.6 : 3.7, tail = (sn ? 38 : 22) * slowK, pulse = 0.5 + 0.5 * Math.sin(vis.time * 16 + bl.x * 0.05);
         ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 4; i++) {
           const f0 = i / 4, f1 = (i + 1) / 4;
@@ -811,22 +1181,28 @@ export function createRenderer(container, state) {
     const dt = clamp(frame.dt ?? 1 / 60, 0, 0.1), dpr = vis.dpr, now = performance.now() / 1000;
     const w = cam.w, h = cam.h;
     if (frame.mouseX !== undefined) { vis.mouseX = frame.mouseX; vis.mouseY = frame.mouseY; vis.mouseActive = true; }
+    vis.motion = clamp(frame.motion ?? 1); vis.flashK = clamp(frame.flash ?? 1);
     vis.reloadFrac = frame.reloadFrac ?? 0; vis.bloom = frame.bloom || 0; vis.exitReady = !!frame.exitReady;
     fx.tick(dt);
     const p = state.player;
     if (!levelReady || !p) { drawAttract(w, h, dt); return; }
 
-    vis.slow += (slowAmount(frame.timeScale ?? 1, frame.idleScale ?? 0.18) - vis.slow) * (1 - Math.exp(-5 * dt));
+    vis.slow = timeFx.step(frame, dt);
     vis.deadT = state.mode === 'dead' ? vis.deadT + dt : 0;
     vis.flicker = Math.sin(now * 17) * 0.5 + Math.sin(now * 29) * 0.5;
-    for (const e of state.enemies) if (e.vis) { e.vis.flash = Math.max(0, (e.vis.flash || 0) - dt * 7); e.vis.barT = Math.max(0, (e.vis.barT || 0) - dt); }
+    for (const e of state.enemies) if (e.vis) { e.vis.flash = Math.max(0, (e.vis.flash || 0) - dt * 18); e.vis.barT = Math.max(0, (e.vis.barT || 0) - dt); }
     for (const c of state.crates) if (c.flash > 0) c.flash = Math.max(0, c.flash - dt * 7);
-    vis.flashHit = Math.max(0, (vis.flashHit || 0) - dt * 6);
+    vis.flashHit = Math.max(0, (vis.flashHit || 0) - dt * 14); vis.hurtSat = Math.max(0, vis.hurtSat - dt * 2.4);
     // camera
     const look = vis.mouseActive && state.mode === 'play' ? lookAheadOffset(vis.mouseX, vis.mouseY, w, h, 46) : {x: 0, y: 0};
     followStep(cam, p.x + look.x, p.y + look.y, dt, 6.5);
-    const shake = frame.shake || 0;
-    const viewCam = {x: cam.x + (shake ? (Math.random() * 2 - 1) * shake : 0), y: cam.y + (shake ? (Math.random() * 2 - 1) * shake : 0), w, h, scale: cam.scale};
+    const shake = frame.shake || 0, motion = vis.motion;
+    // camera punches (kills, hits), sprint pull-out and slow-time push-in all vanish when the shake slider is 0
+    if (fx.camPunch > 0) { vis.zoom.x += fx.camPunch; fx.camPunch = 0; }
+    stepSpring(vis.zoom, 0, 200, springDamping(200, 0.4), dt); stepSpring(vis.camX, 0, 170, springDamping(170, 0.45), dt); stepSpring(vis.camY, 0, 170, springDamping(170, 0.45), dt);
+    vis.zbase = damp(vis.zbase, cameraZoom({sprint: state.sprintBlend || 0, slow: vis.slow, motion}), 4, dt);
+    cam.scale = (cam.base || cam.scale) * (vis.zbase + vis.zoom.x * motion);
+    const viewCam = {x: cam.x + vis.camX.x + (shake ? (Math.random() * 2 - 1) * shake : 0), y: cam.y + vis.camY.x + (shake ? (Math.random() * 2 - 1) * shake : 0), w, h, scale: cam.scale};
     const b = viewBounds(viewCam, 0), bp = viewBounds(viewCam, 40);
     const sc = viewCam.scale * dpr;
     // decals queued by fx get baked onto the floor
@@ -875,9 +1251,9 @@ export function createRenderer(container, state) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     fx.drawFloaters(ctx, viewCam, dpr);
-    if (vis.slow > 0.02) {
-      // slow time drains colour (a single 'saturation' blend; skipped at full speed)
-      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.4 * vis.slow; ctx.fillStyle = '#808080';
+    timeFx.draw(ctx, canvas.width, canvas.height, dpr, vis.flashK ?? 1); // unified time grade + beat tick + edge meter (timefx.js)
+    if (vis.hurtSat > 0.02) {
+      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.55 * vis.hurtSat * vis.flashK; ctx.fillStyle = '#808080';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     }

@@ -64,8 +64,8 @@ export function createTimeFx() {
   };
 
   // Screen space (identity transform), after the world and lights are drawn. w/h are canvas pixels.
-  fx.draw = function draw(ctx, w, h, dpr = 1) {
-    const g = clamp(this.slow * (1 - 0.55 * this.pulse), 0, 1);
+  fx.draw = function draw(ctx, w, h, dpr = 1, flashK = 1) {
+    const g = clamp(this.slow * (1 - 0.55 * this.pulse * flashK), 0, 1);
     if (g > 0.01) {
       ctx.save();
       // 1. drain colour hard
@@ -80,16 +80,16 @@ export function createTimeFx() {
       if (this.grain.length) {
         const frameIdx = Math.floor(this.t * 12), tile = this.grain[frameIdx % this.grain.length];
         const ox = (frameIdx * 53) % GRAIN_SIZE, oy = (frameIdx * 97) % GRAIN_SIZE, s = Math.max(1, dpr);
-        ctx.globalAlpha = 0.1 + 0.34 * g;
+        ctx.globalAlpha = (0.1 + 0.34 * g) * flashK;
         const pat = ctx.createPattern(tile, 'repeat');
         if (pat) { ctx.translate(-ox * s, -oy * s); ctx.scale(s, s); ctx.fillStyle = pat; ctx.fillRect(ox, oy, w / s + GRAIN_SIZE, h / s + GRAIN_SIZE); ctx.setTransform(1, 0, 0, 1, 0, 0); }
       }
       const fl = (Math.sin(this.t * 41) + Math.sin(this.t * 23.3 + 1.7)) * 0.5;
-      ctx.globalAlpha = Math.max(0, 0.05 * g * (0.5 + fl)); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = Math.max(0, 0.05 * g * (0.5 + fl)) * flashK; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
       ctx.restore();
     }
     if (this.pulse > 0.02) { // beat: a brief cool-white tick as the world lets a moment through
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.07 * this.pulse; ctx.fillStyle = '#cfe0ff'; ctx.fillRect(0, 0, w, h); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.07 * this.pulse * flashK; ctx.fillStyle = '#cfe0ff'; ctx.fillRect(0, 0, w, h); ctx.restore();
     }
     this.drawMeter(ctx, w, h, dpr);
   };
