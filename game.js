@@ -1039,7 +1039,7 @@ function update(dt){
     physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
   if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
   state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateDoors(dt);updateSignal(dt,step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
-  updateRateChip(scale);pollKnowledge(dt);
+  pollKnowledge(dt);
   drawMinimap();syncHudFrame();
 }
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);mm.key='';mm.lookup=null;}
@@ -1270,7 +1270,9 @@ function spawnSignalRoom(index){
   if(script.flash){state.throwables.flash=Math.max(state.throwables.flash||0,script.flash);const i=THROWABLES.findIndex(item=>item.id==='flash');if(i>=0)state.throwableIndex=i;updateThrowableHud();}
 }
 function enterSignalRoom(index){
-  const sg=state.signal;sg.room=index;sg.idle=0;sg.roomTime=0;sg.shotsAtEntry=state.shotsFired||0;spawnSignalRoom(index);
+  const sg=state.signal;sg.room=index;sg.idle=0;sg.roomTime=0;sg.shotsAtEntry=state.shotsFired||0;
+  for(const e of state.enemies.filter(en=>en.roomIndex<index))physics.removeRigidBody(e.body);state.enemies=state.enemies.filter(en=>en.roomIndex>=index);   // earlier rooms are behind you
+  spawnSignalRoom(index);
   queueCard(SIGNAL_SCRIPT[index].card.id);hud();
 }
 function shatterGlass(){
