@@ -342,7 +342,7 @@ test('a dormant boss does nothing, and activation starts an invulnerable intro',
 });
 
 test('every attack shows a telegraph before it fires, and the telegraph lasts long enough to read', () => {
-  for (const [kind, spec] of Object.entries(PATTERN_SPECS)) assert.ok(spec.telegraph >= .8, kind);
+  for (const [kind, spec] of Object.entries(PATTERN_SPECS)) assert.ok(kind === 'beat' || spec.telegraph >= .8, kind); // the beat pattern telegraphs on the music (two beats: mark, then move), see boss.test.js
   const b = boss();
   let sawTelegraph = false, firedAfter = null, elapsed = 0;
   for (let i = 0; i < 400 && firedAfter === null; i++) {
@@ -375,7 +375,7 @@ test('phase changes pause the boss, then summon adds', () => {
 });
 
 test('phase 3 charges, then is exposed to extra damage', () => {
-  const b = boss({phase: 3, patternIndex: 0});
+  const b = boss({phase: 3, patternIndex: 2});
   const actions = [];
   let exposedSeen = false;
   for (let i = 0; i < 100; i++) {

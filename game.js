@@ -3,7 +3,7 @@ import {VIEW_HALF_HEIGHT as CAMERA_HALF_HEIGHT} from './camera2d.js';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
 import {playFootstep, playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playLowAmmo, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playUiClick, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
-import {armMusicOnGesture, loadMusicSettings, musicSyncGame, setMasterMusicVolume, setMusicTimeScale} from './music.js';
+import {armMusicOnGesture, getMusicBeat, loadMusicSettings, musicSting, musicSyncGame, setMasterMusicVolume, setMusicTimeScale} from './music.js';
 import {ambienceSync, ambienceChatter} from './ambience.js';
 import {ENEMY_TYPES, GEAR, GUNS, MODS, MOD_BY_ID, modFits, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
 import {drawIcon} from './icons.js';
@@ -18,7 +18,8 @@ import {recordRun} from './goals.js';
 import {assignRoomRewards, computeDoorLinks, doorPreviews} from './door-rewards.js';
 import {collectTape, operatorLines, causeName} from './story.js';
 import {interferenceStats, toggleInterference} from './interference.js';
-import {spawnBoss, updateBossEnemy, bossDamageFor} from './boss-fight.js';
+import {spawnBoss, updateBossEnemy, bossDamageFor, bossLights, bossCamShift} from './boss-fight.js';
+import {BOSS_ROOM_NAME} from './boss.js';
 import {BOSS} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
@@ -296,6 +297,7 @@ function makeLevel(){
   state.player={body,x:sx,y:sy,hp:state.health};state.workbench=null;
   const exit=state.rooms.at(-1);dropPickup('exit',(exit.cx+.5)*TILE,(exit.cy+.5)*TILE);
   state.boss=state.floorCfg.boss?spawnBoss(bossApi,state.rooms.at(-1),interferenceStats(state.progress).bossHpMult):null;
+  if(state.boss)state.rooms.at(-1).name=BOSS_ROOM_NAME;state.stageLights=[];state.camFocus={x:0,y:0};
   state.currentRoom=0;state.roomsCleared=0;updateRoom();makeMinimap();hud();view.setLevel();
 }
 function clearLevel(){
@@ -651,7 +653,7 @@ function takeSupply(index){
 function finishRun(result,cause){if(state.paidOut)return;finishRunImpl(result,cause);}
 function winRun(){finishRun('won');}
 /* ============================================================ macro loop: floors, decisions, frequencies, run end */
-const bossApi={get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
+const bossApi={speedRatio:()=>playerSpeedRatio(),musicBeat:()=>getMusicBeat(),get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
 const scrapGain=amount=>Math.max(1,Math.round(amount*interferenceStats(state.progress).scrapMult));
 function setBossBar(init,e){
   const bar=$('boss-bar');if(!bar)return;
@@ -660,7 +662,7 @@ function setBossBar(init,e){
   const fill=$('boss-fill'),ghost=$('boss-ghost');if(!fill)return;
   fill.style.width=`${Math.max(0,e.hp/e.maxHp*100)}%`;ghost.style.width=`${Math.max(0,(e.shownHp??e.hp)/e.maxHp*100)}%`;
   bar.dataset.phase=String(e.boss.phase);bar.classList.toggle('exposed',e.boss.exposed>0);bar.classList.toggle('shielded',!!e.boss.invuln);
-  const label=bar.querySelector('.boss-name small'),text=`FLOOR ${FINAL_FLOOR} · PHASE ${['','I','II','III'][e.boss.phase]}`;if(label&&label.textContent!==text)label.textContent=text;
+  const label=bar.querySelector('.boss-name small'),text=`FLOOR ${FINAL_FLOOR} · PHASE ${['','I','II · TEMPO','III · BEATDROP'][e.boss.phase]}`;if(label&&label.textContent!==text)label.textContent=text;
 }
 function trackRunClock(dt){
   state.timeCredit=Math.max(0,state.timeCredit-dt);state.freezeT=Math.max(0,(state.freezeT||0)-dt);
@@ -793,10 +795,15 @@ function ricochetBullet(b,previous){
   if(f.bounceArc){const hit=arcStrike(b,b.damage*.5,new Set(),{color:'#74dfab'});if(hit)view.fx.floater(b.x,b.y-14,'SIGNAL BOOST','#9ad8ff',11,.8);}
   return true;
 }
+// The boss-death moment: the world nearly stops, he shatters into pink shards, a ring per phase colour rolls out, the music resolves.
 function onBossKilled(enemy){
   state.bossKilled=true;state.bossPistol=GUNS[state.weaponIndex].category==='PISTOL';
-  $('boss-bar').hidden=true;state.shake=12;state.hitstop=Math.max(state.hitstop,.25);
-  showBanner('THE CONDUCTOR FALLS','THE EXIT IS OPEN','clear');pushFeed('THE CONDUCTOR · DOWN','good');playExplosion();
+  $('boss-bar').hidden=true;state.shake=14;state.hitstop=Math.max(state.hitstop,.35);state.flourishT=2.4;
+  showBanner('THE CONDUCTOR FALLS','THE EXIT IS OPEN','clear');pushFeed('THE CONDUCTOR · DOWN','good');playExplosion();playRoomClear();musicSting('win');
+  const fx=view.fx;fx.explode('frag',enemy.x,enemy.y,90);
+  ['#8a2f7a','#c13a6a','#ff6a58','#ffffff'].forEach((c,n)=>fx.ring(enemy.x,enemy.y,10,90+n*70,c,.7+n*.25,4-n*.6));
+  for(let n=0;n<26;n++){const a=n/26*TAU;fx.spark(enemy.x,enemy.y,a,3,.2,[140,520],n%2?'#ff7aa8':'#e8c58c');}
+  fx.chips(enemy.x,enemy.y,0,['#8a2f7a','#e9dfe8','#ff7aa8','#e8c58c'],34,Math.PI,[60,320],[2,5],[.8,1.6]);
   for(const other of state.enemies)if(other.alive&&other!==enemy){other.hp=0;killEnemy(other,{vx:0,vy:0,damage:0});}
 }
 function roomRewardDrop(room){
@@ -933,7 +940,7 @@ function roomClearSupplies(room){
 function checkExtractionOpen(){
   if(state.extractionOpen||state.mode!=='play')return;
   if(hasUnclearedRouteEnemies(state.rooms,state.enemies))return;
-  state.extractionOpen=true;showBanner('EXTRACTION OPEN','FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
+  state.extractionOpen=true;if(state.bossKilled)showBanner('THE CONDUCTOR FALLS','EXTRACTION OPEN · FOLLOW THE ARROW','clear');else showBanner('EXTRACTION OPEN','FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
 }
 function updateRoom(){
   const px=state.player.x/TILE,py=state.player.y/TILE;let found=state.rooms.findIndex(r=>px>=r.x1-1&&px<=r.x2+1&&py>=r.y1-1&&py<=r.y2+1);
@@ -1064,7 +1071,14 @@ function updateEnemies(dt){
   state.noises.length=0;
 }
 // Per-frame frequency upkeep on the real clock: queued echoes, the cone scale BLACKOUT applies to brain + renderer, and the DISTORTION ring.
-function stepFrequencyFx(dt){
+// Boss arena staging: stage lights so he is always lit, and a camera nudge toward him while the fight is on.
+function stageDirect(){
+  const boss=state.boss,p=state.player,live=boss?.alive&&boss.boss?.active&&state.currentRoom===boss.roomIndex;
+  state.stageLights=live||(boss&&!boss.alive&&boss.corpseTimer>0)?bossLights(state.rooms[boss.roomIndex],{...boss,alive:true}):[];
+  const want=live?bossCamShift(p,boss):{x:0,y:0},cf=state.camFocus||(state.camFocus={x:0,y:0}),k=Math.min(1,(state.frameDt||1/60)*3);
+  cf.x+=(want.x-cf.x)*k;cf.y+=(want.y-cf.y)*k;
+}
+function stepFrequencyFx(dt){stageDirect();
   const f=freqStats(state.freq),p=state.player;
   stepEchoes(dt);setConeScale({range:f.coneRange,half:f.coneHalf});enemyWorld.stillCloak=f.stillCloak;
   state.flourishT=Math.max(0,(state.flourishT||0)-dt);

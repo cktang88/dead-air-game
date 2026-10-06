@@ -1222,7 +1222,8 @@ export function createRenderer(container, state) {
     vis.flashHit = Math.max(0, (vis.flashHit || 0) - dt * 14); vis.hurtSat = Math.max(0, vis.hurtSat - dt * 2.4);
     // camera
     const look = vis.mouseActive && state.mode === 'play' ? lookAheadOffset(vis.mouseX, vis.mouseY, w, h, 46) : {x: 0, y: 0};
-    followStep(cam, p.x + look.x, p.y + look.y, dt, 6.5);
+    const cf = state.camFocus || {x: 0, y: 0};
+    followStep(cam, p.x + look.x + cf.x, p.y + look.y + cf.y, dt, 6.5);
     const shake = frame.shake || 0, motion = vis.motion;
     // camera punches (kills, hits), sprint pull-out and slow-time push-in all vanish when the shake slider is 0
     if (fx.camPunch > 0) { vis.zoom.x += fx.camPunch; fx.camPunch = 0; }
@@ -1270,7 +1271,7 @@ export function createRenderer(container, state) {
 
     // darkness + light pools
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList().concat(world.lights(b, state.currentRoom)), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
+    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList().concat(world.lights(b, state.currentRoom), state.stageLights || []), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
 

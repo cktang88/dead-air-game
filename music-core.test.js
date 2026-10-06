@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SCALES,ambienceThemeFor,chatterPlan,chordForBar,createCombatTracker,createLayerMachine,generateTrack,introPhaseAt,INTRO_TOTAL,isLowHealth,layersForScene,makeRng,midiToHz,musicCutoff,musicRate,nextMachineryEvent,rateToCents,sceneFromGame,seedFor,stepDuration} from './music-core.js';
+import {SCALES,ambienceThemeFor,chatterPlan,chordForBar,createCombatTracker,createLayerMachine,generateTrack,introPhaseAt,INTRO_TOTAL,isLowHealth,layersForScene,makeRng,midiToHz,musicCutoff,musicRate,nextMachineryEvent,rateToCents,sceneFromGame,seedFor,stepDuration,beatAt} from './music-core.js';
 import {DEFAULT_MUSIC_VOLUME,parseMusicSettings,serializeMusicSettings} from './music.js';
 
 test('stepDuration: a 16th at 120 bpm is 125 ms and scales by 1/rate', () => {
@@ -167,4 +167,15 @@ test('music settings parse and serialize safely', () => {
   assert.equal(parseMusicSettings(serializeMusicSettings(.25)).volume, .25);
   assert.equal(parseMusicSettings(serializeMusicSettings(4)).volume, 1);
   assert.equal(parseMusicSettings(JSON.stringify({version: 9, volume: .2})).volume, DEFAULT_MUSIC_VOLUME);
+});
+
+test('beatAt: the heard beat lags the scheduler by the lookahead and advances four steps at a time', () => {
+  const dur = stepDuration(120, 1); // 125 ms
+  const a = beatAt({step: 8, nextTime: 10, now: 10 - dur * 0, bpm: 120});
+  assert.equal(a.index, 2); assert.equal(a.phase, 0);
+  const lag = beatAt({step: 8, nextTime: 10.1, now: 10, bpm: 120}); // 100 ms ahead = 0.8 step
+  assert.equal(lag.index, 1); assert.ok(lag.phase > 0.8 && lag.phase < 0.9);
+  assert.equal(beatAt({step: 2, nextTime: 20, now: 0, bpm: 120}).index, 0, 'never negative');
+  const slow = beatAt({step: 4, nextTime: 1, now: 0.5, bpm: 120, rate: 0.5}); // a step lasts 250 ms: 2 steps behind
+  assert.equal(slow.index, 0); assert.ok(Math.abs(slow.phase - 0.5) < 1e-9);
 });
