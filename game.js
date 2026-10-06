@@ -733,12 +733,13 @@ function roomClearTracking(room){
 }
 
 /* ---------- run modal (decision + frequency pick) */
+let runModalClear=0;
 function setRunModal(kind,html){
   state.runModal=kind;input.keys.clear();input.firing=false;
-  const el=$('run-modal');el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');el.querySelector('button')?.focus();
+  const el=$('run-modal');clearTimeout(runModalClear);el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');el.querySelector('button')?.focus();
 }
 function closeRunModal(){
-  state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');el.innerHTML='';dialogClosedAt=performance.now();view?.canvas.focus();
+  state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
 }
 const runCoinMult=()=>runStats().coinMult*(1+interferenceStats(state.progress).coinBonus);
 function reachExit(){
