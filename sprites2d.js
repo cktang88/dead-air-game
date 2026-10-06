@@ -280,7 +280,7 @@ const GUN_ART = {
 };
 
 // Draws a gun lying along +x with the actor's centre at the origin. Returns the muzzle distance.
-export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530'} = {}) {
+export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530', slide = 0, rack = 0, noMag = false} = {}) {
   const art = GUN_ART[gun.category] || GUN_ART.SMG;
   const L = gun.visual.length * 0.7, W = Math.max(3.2, gun.visual.width * 0.78);
   const body = enemy ? '#2b2530' : '#2a2c33', alt = enemy ? '#3a3039' : '#3d4049', metal = '#8d8b92';
@@ -296,14 +296,17 @@ export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530'} = 
     if (art.twin && kind === 'm') continue;
     const x0 = Math.min(a, b), x1 = Math.max(a, b);
     if (x1 - x0 < 0.01) continue;
-    rect(a < b ? a : b, a < b ? b : a, t, kind === 'm' ? metal : kind === 'a' ? alt : body);
+    // the slide / receiver body rocks back on each shot (kick 1 -> 0)
+    const sx = kind === 'b' && !art.pump ? -(slide + rack * 0.8) * 0.07 : 0;
+    rect((a < b ? a : b) + sx, (a < b ? b : a) + sx, t, kind === 'm' ? metal : kind === 'a' ? alt : body);
   }
-  if (art.mag) rect(art.mag[0], art.mag[0] + art.mag[1], art.mag[2] * 0.0 + 0.55, '#33363e', W * 0.78);
-  if (art.pump) rect(art.pump[0], art.pump[0] + art.pump[1], art.pump[2], '#4a3a30');
+  if (art.mag && !noMag) rect(art.mag[0], art.mag[0] + art.mag[1], art.mag[2] * 0.0 + 0.55, '#33363e', W * 0.78);
+  if (art.pump) { const po = -L * 0.2 * Math.sin(Math.PI * Math.min(1, Math.max(0, (0.95 - slide) / 0.95))) * (slide > 0.02 ? 1 : 0) - rack * L * 0.15; rect(art.pump[0] + po / L, art.pump[0] + art.pump[1] + po / L, art.pump[2], '#4a3a30'); }
+  else { const hx = reach + 0.3 * L - (slide * 0.1 + rack * 0.16) * L; g.fillStyle = '#c9c6cf'; g.fillRect(hx, -W * 0.5 - 0.2, L * 0.1, 1.1); g.strokeStyle = INK; g.lineWidth = 0.5; g.strokeRect(hx, -W * 0.5 - 0.2, L * 0.1, 1.1); g.lineWidth = 0.9; }
   if (art.scope) { rect(art.scope[0], art.scope[0] + art.scope[1], 0.62, '#1f2128', -W * 0.0); g.fillStyle = '#7fe0ff'; g.fillRect(reach + (art.scope[0] + art.scope[1]) * L - 0.9, -W * 0.22, 1.1, W * 0.44); }
   g.fillStyle = accent; g.fillRect(reach + 0.2 * L, -W * 0.12, L * 0.22, W * 0.24);
   g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(reach + 0.12 * L, -W * 0.46, L * 0.34, 0.7);
-  if (art.extra === 'drum') { g.beginPath(); g.arc(reach + 0.38 * L, W * 0.95, W * 0.48, 0, TAU); g.fillStyle = '#33363e'; g.fill(); g.strokeStyle = INK; g.stroke(); }
+  if (art.extra === 'drum' && !noMag) { g.beginPath(); g.arc(reach + 0.38 * L, W * 0.95, W * 0.48, 0, TAU); g.fillStyle = '#33363e'; g.fill(); g.strokeStyle = INK; g.stroke(); }
   return {muzzle: reach + L, rear: reach + L * 0.18, front: reach + L * (art.scope ? 0.5 : 0.58), width: W, length: L};
 }
 
@@ -385,3 +388,12 @@ export function pillarSprite(stage = 0) {
 }
 
 export const gunMuzzle = (gun, reach = 5) => reach + gun.visual.length * 0.7;
+
+// A magazine held in a hand or sitting in a gun. Lies along +x.
+export function drawMagSprite(g, x, y, rot = 0, len = 5.6, wid = 3.2) {
+  g.save(); g.translate(x, y); g.rotate(rot);
+  g.fillStyle = INK; g.fillRect(-len / 2 - 0.8, -wid / 2 - 0.8, len + 1.6, wid + 1.6);
+  g.fillStyle = '#3a3e48'; g.fillRect(-len / 2, -wid / 2, len, wid);
+  g.fillStyle = '#d3ac55'; g.fillRect(len / 2 - 1.2, -wid / 2 + 0.6, 1.2, wid - 1.2);
+  g.restore();
+}
