@@ -45,7 +45,25 @@ Great small action games are the opposite shape. SUPERHOT is one rule pushed unt
 - Meta unlocks add options (guns, starting kits, perks), not raw stats. Challenges teach mastery ("clear a room without being seen", "three kills in one breath").
 - A daily seed with a shareable result line.
 
-### 6. Identity and polish
+### 5b. Roguelike structure that earns replays (Hades, Gungeon, Dead Cells, Slay the Spire)
+- **Choose your next reward at the door (Hades).** Every exit door shows an icon for what the next room pays out: a frequency, scrap, a gun, healing, a supply drop, or a skull for an elite. Route choice becomes the run's strategy, and it fits pillar 2.
+- **Frequencies, not perks.** In-run upgrades come from radio "stations". Each station is a family with its own voice and play style:
+  - STATIC: shots chain, stun and interfere.
+  - DEADLINE: kills refund time and extend slow time.
+  - CARRIER: piercing and ricochet.
+  - NIGHT SHIFT: stealth and silent kills.
+  - FEEDBACK: damage scales with risk.
+  Upgrades stack and rank up within a station, and a two-station pair unlocks a rare **crossfade** synergy. Builds should feel distinct by floor 2.
+- **Death moves the story forward (Hades).** The safehouse has a radio operator who comments on how you died, what you found and what you killed. Recovered tapes play short transmissions that slowly explain what happened to the station. A failed run still ends with something new.
+- **Interference (Hades' heat).** After the first win, players can stack difficulty modifiers for better rewards: armored enemies, faster wind-ups, no slow time below a certain health, and so on.
+- **Mastery tools.** A short dash with invulnerability frames, on a cooldown measured in world time. Gun aspects unlocked in the safehouse change how a gun works, not just its numbers. Seeded daily runs come with a one-line result to share.
+
+### 6. First 60 seconds (what a judge sees)
+- 0–5 s: a broadcast test card glitches into the title, with static, a tone and a dropout.
+- 5–20 s: the player loads into the first room with no menus between. One line of instruction appears. The world is frozen until they move, so the time rule is felt before it is explained.
+- 20–60 s: the first room is hand-tuned: two enemies, a door to peek through, one perfect slow-time dodge, and a kill with a huge hit-stop. A reward pick at the exit door shows the roguelike layer immediately.
+
+### 7. Identity and polish
 - Title: a broadcast test card that glitches into the game. UI uses tape labels, monospace readouts and CRT-free restraint; no generic dark-glass panels.
 - Sound: room tone, distant machinery, radio chatter from enemies that cuts when they die, a heartbeat at low health. Silence is a feature.
 - Every animation sells weight and intent. Nothing moves without a reason.
