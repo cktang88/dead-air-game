@@ -48,8 +48,9 @@ export function roomPickupKinds(role){
   return [];
 }
 
-export function roomEncounterTypes(role,ordinaryTypes){
-  return role==='elite'?['brute','guard']:ordinaryTypes;
+export function roomEncounterTypes(role,ordinaryTypes,depth=0){
+  if(role==='elite')return depth>=.6?['brute','riot']:['brute','guard'];
+  return ordinaryTypes;
 }
 
 export function roomHasLivingEnemies(roomIndex,enemies){

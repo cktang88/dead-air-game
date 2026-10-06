@@ -2,7 +2,7 @@ import {createRenderer,hexStr} from './render2d.js';
 import {VIEW_HALF_HEIGHT as CAMERA_HALF_HEIGHT} from './camera2d.js';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
+import {playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
 import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, MODS, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
 import {drawIcon} from './icons.js';
 import {HINTS_KEY, loadSeen, pickHint, saveSeen} from './hints.js';
@@ -25,7 +25,8 @@ import {lootTier,lootTierForRoll} from './loot.js';
 import {gunIcon,strokeIcon,statBarsHtml,tierColor,categoryColor,tempoView,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone} from './hud-ui.js';
 export {pushFeed};
 import {cacheRewardAvailable} from './cache-rewards.js';
-import {bruteMeleeHits,stepBruteMelee} from './enemy-attacks.js';
+import {bruteMeleeHits,shieldBlocks,stepBruteMelee,turnShield} from './enemy-attacks.js';
+import {registerHitIndicator} from './threat-indicators.js';
 import {trapDialogTab} from './dialog-focus.js';
 import {KNOCK_DECAY,ENEMY_KNOCK_DECAY,MOVE_TUNING,PRESS_BUFFER,addRecoil,approach,clipBlockedVelocity,cornerNudge,easeTimeScale,effectiveSpread,enemyKnockback,fanAngles,gunFeel,hitstopFor,loadoutMobility,muzzlePoint,newBloom,nextFireTime,playerHitKnock,pushEvent,registerShot,reloadTime,stepBloom,stepRecoil,stepVelocity}from './feel.js';
 import {advanceWeaponBurst,beginWeaponBurst} from './weapon-burst.js';
@@ -308,7 +309,7 @@ function makeLevel(){
   for(const [i,room] of state.rooms.entries()){
     if(i===0)continue;
     if(room.role==='merchant')continue;
-    const count=paceEnemyCount(room,roomEnemyCount(room.role,random(),combatIndex)),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
+    const count=paceEnemyCount(room,roomEnemyCount(room.role,random(),combatIndex)),depth=i/Math.max(1,state.rooms.length-1),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919,depth),depth);
     if(room.role==='combat')combatIndex++;
     for(let j=0;j<count;j++){
       const elite=room.role==='elite'&&encounter[j]==='brute',point=findEnemySpawn(room,encounter[j],elite);
@@ -346,7 +347,7 @@ function freeRoomPoint(room){
   return [(room.cx+.5)*TILE+TILE,(room.cy+.5)*TILE];
 }
 function findEnemySpawn(room,type,elite=false){
-  const radius=elite?13:type==='brute'?10:8;
+  const radius=elite?13:type==='brute'||type==='riot'?10:8;
   const clear=(x,y)=>state.solidMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]===0&&
     state.doors.every(door=>Math.hypot(x-(door.x+.5)*TILE,y-(door.y+.5)*TILE)>=TILE*1.2)&&
     !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
@@ -379,8 +380,8 @@ function breakCrate(crate){
   if(random()<progressionStats(state.progress).crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(random()*13));
 }
 function spawnEnemy(type,x,y,roomIndex,elite=false){
-  const base=ENEMY_TYPES[type],def=elite?{...base,name:'WARDEN',hp:200,speed:26,damage:2,color:0xff9566}:base,radius=elite?13:type==='brute'?10:8,body=makeBody({x,y},radius,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
-  const mag=type==='gunner'?5:type==='guard'?3:0;state.rooms[roomIndex].hadEncounter=true;state.enemies.push({type,def,body,elite,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},meleeWindup:0,meleeCooldown:0,mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null});
+  const base=ENEMY_TYPES[type],def=elite?{...base,name:'WARDEN',hp:200,speed:26,damage:2,color:0xff9566}:base,radius=elite?13:type==='brute'||type==='riot'?10:8,body=makeBody({x,y},radius,false);body.lockRotations(true,true);body.setLinearDamping(3.4);
+  const mag=type==='gunner'?5:type==='guard'?3:type==='sniper'?3:0;state.rooms[roomIndex].hadEncounter=true;state.enemies.push({type,def,body,elite,x,y,roomIndex,radius,hp:def.hp,maxHp:def.hp,fire:rand(.55,1.7),aimTimer:0,aim:{x:1,y:0},meleeWindup:0,meleeCooldown:0,mag,ammo:mag,reloadTimer:0,stun:0,knock:{x:0,y:0},alive:true,id:random(),side:random()<.5?-1:1,tacticTimer:rand(0,.25),intent:'hold',intentGoal:null,navGoal:null,shieldAng:0,shieldFlash:0,locked:false});
 }
 function possiblePickupGuns(){
   return GUNS.map((gun,index)=>index).filter(index=>!state.weaponSlots.includes(index)&&canEquipGun(index));
@@ -401,7 +402,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   const start=owner==='player'?muzzlePoint(x,y,dx,dy,gun):{x:x+dx*13,y:y+dy*13};
   const color=owner==='player'?gun.color:0xff6a64;
   const mods=owner==='player'?attachmentsFor(gun):new Set();
-  const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'?weaponPenetration(gun,mods):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false};
+  const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'?weaponPenetration(gun,mods):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.style||null,missed:false};
   state.bullets.push(bullet);
 }
 function playerMoveRatio(){const ratio=Math.hypot(state.playerVel.x,state.playerVel.y)/(progressionStats(state.progress).moveSpeed||112);return ratio>.2?clamp(ratio,0,1):0;}
@@ -455,9 +456,9 @@ function updateWeaponBurst(){
   hud();markAction(hasMovementInput()?'move':'fire');
 }
 function enemyShoot(enemy,dx,dy){
-  playEnemyShot({distance:distance(enemy,state.player),pan:(enemy.x-state.player.x)/480});
+  playEnemyShot({distance:distance(enemy,state.player),pan:(enemy.x-state.player.x)/480,heavy:enemy.type==='sniper'});
   view.shot('enemy',enemy,Math.atan2(dy,dx));
-  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1,{enemyId:enemy.id});
+  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1,{enemyId:enemy.id,style:enemy.type==='sniper'?'sniper':null});
 }
 function burst(){}
 
@@ -468,8 +469,9 @@ function killEnemy(enemy,bullet){
   if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
   playKill();hud();checkRoomClear();
 }
-function hitPlayer(damage,x,y){
+function hitPlayer(damage,x,y,srcAng=null){
   if(state.invuln>0||state.mode!=='play')return;
+  {const p=state.player;if(p){(state.hitIndicators??=[]);registerHitIndicator(state.hitIndicators,srcAng??Math.atan2(y-p.y,x-p.x),damage>1?1.25:1);}}
   const impact=absorbArmorDamage(state.armor,damage);state.armor=impact.armor;state.health=Math.max(0,state.health-impact.healthDamage);state.invuln=.85;pulseHurt();state.shake=impact.healthDamage>0?5.5:2.8;state.hitstop=Math.max(state.hitstop,.075);(impact.healthDamage>0?playPlayerHurt:playArmorHit)();markAction();emit('playerHurt',state.player.x,state.player.y,{damage:damage,armorOnly:impact.healthDamage===0,health:state.health,sx:x,sy:y});burst(state.player.x,state.player.y,impact.healthDamage>0?0xff4e63:0x75cfe0,12,1.1);
   const message=impact.healthDamage===0?state.armor===0?'PLATE BROKEN · HEALTH HELD':`PLATE HIT · ${state.armor} LEFT`:impact.absorbed>0?'PLATE HIT · VITALS DAMAGED':damage>1?'BRUTAL HIT':'YOU GOT TAGGED';toast(message,900);hud();
   {const kn=playerHitKnock(state.player.x-x,state.player.y-y,impact.healthDamage);state.playerKnock.x+=kn.x;state.playerKnock.y+=kn.y;}
@@ -666,11 +668,13 @@ function updateEnemies(dt){
   const world={nav,player:{x:player.x,y:player.y,vx:pv.x,vy:pv.y,radius:8},los:(ax,ay,bx,by)=>!lineBlocked(ax,ay,bx,by),enemies:state.enemies,
     smoke:state.effects.filter(effect=>effect.id==='smoke'&&effect.remaining>0).map(effect=>({x:effect.x,y:effect.y,radius:effect.item.radius})),
     projectiles:state.bullets.filter(b=>b.owner==='player'),noises:state.noises,
-    fireAllowed:e=>withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT)};
+    fireAllowed:e=>{const k=e.def.longSight?1.7:1;return withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight*k,CAMERA_HALF_HEIGHT*k);}};
   for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
     const out=stepEnemyBrain(e,world,dt,random),canSee=out.sees;
     e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;
     if(out.aiming&&!e.wasAiming)playEnemyTell();e.wasAiming=out.aiming;
+    if(out.locked&&!e.locked&&e.type==='sniper')playSniperLock({distance:d,pan:(e.x-player.x)/480});e.locked=!!out.locked;
+    if(e.def.shield){e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,1.5);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}
     if(e.type==='brute'){
       if(e.stun>0){e.meleeWindup=0;}
       else{
@@ -685,20 +689,20 @@ function updateEnemies(dt){
       // The brain owns the telegraph: out.windup is the scaled seconds left before the shot and the aim is locked for all of it.
       e.aimTimer=out.windup;
       if(out.aiming)e.aim={x:out.aimX,y:out.aimY};
-      if(out.fire){enemyShoot(e,out.aimX,out.aimY);e.ammo--;if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;playReload();}}
+      if(out.fire){enemyShoot(e,out.aimX,out.aimY);e.ammo--;if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:e.type==='sniper'?2.8:1.55;playReload();}}
     }
     let vx=out.moveX*e.def.speed,vy=out.moveY*e.def.speed;
     if(e.stun>0||e.meleeWindup>0){vx=0;vy=0;}
     e.body.setLinvel({x:vx+e.knock.x,y:vy+e.knock.y},true);e.knock.x=approach(e.knock.x,0,ENEMY_KNOCK_DECAY,dt);e.knock.y=approach(e.knock.y,0,ENEMY_KNOCK_DECAY,dt);
     const pos=e.body.translation();e.x=pos.x;e.y=pos.y;
-    if(e.type==='chaser'&&canSee&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
+    if((e.type==='chaser'||e.def.shield)&&canSee&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
   }
   state.noises.length=0;
 }
 function updateBullets(dt){
   for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};b.ox=undefined;b.life-=dt;if(b.life<=0){removeBullet(i);continue;}if(!state.stepHitstop){b.x+=b.vx*dt;b.y+=b.vy*dt;}
     const impacts=[];
-    if(b.owner==='player')for(const enemy of state.enemies){if(!enemy.alive||b.hitEnemies.has(enemy))continue;const t=segmentCircleHitTime(previous,b,enemy,enemy.type==='brute'?13:11);if(t!==null)impacts.push({t,kind:'enemy',target:enemy});}
+    if(b.owner==='player')for(const enemy of state.enemies){if(!enemy.alive||b.hitEnemies.has(enemy))continue;const t=segmentCircleHitTime(previous,b,enemy,enemy.type==='brute'?13:11);if(t!==null){const blocked=enemy.def.shield&&shieldBlocks({facing:enemy.shieldFacing,halfArc:enemy.def.shieldHalfArc,bulletVx:b.vx,bulletVy:b.vy,stun:enemy.stun});impacts.push({t,kind:blocked?'shield':'enemy',target:enemy});}}
     for(const crate of state.crates){if(b.hitCrates.has(crate))continue;const t=segmentCircleHitTime(previous,b,crate,17);if(t!==null)impacts.push({t,kind:'crate',target:crate});}
     for(const cover of state.cover){if(cover.crate)continue;const t=segmentCircleHitTime(previous,b,cover,cover.radius+2);if(t!==null)impacts.push({t,kind:'cover',target:cover});}
     if(b.owner==='enemy'&&state.player){const t=segmentCircleHitTime(previous,b,state.player,10);if(t!==null)impacts.push({t,kind:'player',target:state.player});}
@@ -714,12 +718,15 @@ function updateBullets(dt){
       }else if(impact.kind==='crate'){
         const crate=impact.target;b.hitCrates.add(crate);crate.hp=damageDurability(crate.hp,b.damage);emit('hit',b.x,b.y,{dx:b.vx/(Math.hypot(b.vx,b.vy)||1),dy:b.vy/(Math.hypot(b.vx,b.vy)||1),damage:b.damage,target:'crate',kill:crate.hp===0});updateCrateDamageVisual(crate);if(crate.hp>0)view.fx.hitCrate(crate,b.vx,b.vy);if(crate.hp===0)breakCrate(crate);
       }else if(impact.kind==='player'){
-        hitPlayer(b.damage,b.x,b.y);
+        {const shooter=b.enemyId!=null?state.enemies.find(en=>en.id===b.enemyId):null,pl=state.player;hitPlayer(b.damage,b.x,b.y,shooter&&pl?Math.atan2(shooter.y-pl.y,shooter.x-pl.x):Math.atan2(-b.vy,-b.vx));}
+      }else if(impact.kind==='shield'){
+        const enemy=impact.target;enemy.shieldFlash=.28;burst(b.x,b.y,0xbfd4e4,4,.7);playShieldBlock({distance:distance(b,state.player),pan:(b.x-state.player.x)/480});emit('impact',b.x,b.y,{surface:'cover',owner:b.owner,vx:b.vx,vy:b.vy});view.fx.spark(b.x,b.y,Math.atan2(-b.vy,-b.vx),6,1.1);
       }else if(impact.kind==='cover'){
         burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);emit('impact',b.x,b.y,{surface:'cover',owner:b.owner,vx:b.vx,vy:b.vy});
       }
     }
-    if(removed&&resolution.impacts.at(-1)?.kind!=='cover'&&resolution.impacts.at(-1)?.kind!=='player'){
+    if(b.owner==='enemy'&&!b.missed&&state.player&&!removed){const pn=segmentCircleHitTime(previous,b,state.player,28);if(pn!==null){b.missed=true;playNearMiss({distance:distance(b,state.player),pan:(b.x-state.player.x)/480});state.shake=Math.max(state.shake,.9);}}
+    if(removed&&resolution.impacts.at(-1)?.kind!=='cover'&&resolution.impacts.at(-1)?.kind!=='player'&&resolution.impacts.at(-1)?.kind!=='shield'){
       playWallImpact({distance:distance(b,state.player),pan:(b.x-state.player.x)/480});burst(b.x,b.y,b.owner==='player'?0xf0c986:0xfa7068,3,.5);const last=resolution.impacts.at(-1);emit('impact',b.x,b.y,{surface:last?.kind||'wall',owner:b.owner,vx:b.vx,vy:b.vy});}
     if(removed){removeBullet(i);continue;}
   }

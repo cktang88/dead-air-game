@@ -172,7 +172,7 @@ export function addRecoil(recoil, aimX, aimY, kick) {
 
 // Enemy knockback velocity magnitude from a bullet's damage. Brutes shrug it off.
 export function enemyKnockback(damage, type) {
-  const mass = type === 'brute' ? 0.4 : type === 'guard' ? 0.8 : 1;
+  const mass = type === 'brute' ? 0.4 : type === 'riot' ? 0.35 : type === 'guard' ? 0.8 : 1;
   return clamp(40 + damage * 2.2, 40, 260) * mass;
 }
 export const ENEMY_KNOCK_DECAY = 7; // 1/s

@@ -178,15 +178,37 @@ test('locked reward gates require the full price and cannot be charged twice',()
 });
 
 test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{
-  const first=chooseEncounterTypes(4,301);
-  assert.deepEqual(chooseEncounterTypes(4,301),first);
-  assert.notDeepEqual(chooseEncounterTypes(4,302),first);
+  const first=chooseEncounterTypes(4,301,.8);
+  assert.deepEqual(chooseEncounterTypes(4,301,.8),first);
+  assert.notDeepEqual(chooseEncounterTypes(4,302,.8),first);
   assert.equal(first.length,4);
-  assert.ok(first.every(type=>['chaser','gunner','guard','brute'].includes(type)));
-  for(let count=2;count<=4;count++)for(let seed=1;seed<=256;seed++){
-    const encounter=chooseEncounterTypes(count,seed),rushers=encounter.filter(type=>type==='chaser'||type==='brute').length;
-    assert.ok(rushers<=Math.floor(count/2),`${count} enemies at seed ${seed} should include ranged support`);
+  assert.ok(first.every(type=>Object.keys(ENEMY_TYPES).includes(type)));
+});
+
+test('encounters are mixed by design: never all one type, always a shooter present',()=>{
+  const rushers=new Set(['chaser','brute','riot']);
+  for(const depth of [0,.3,.5,.9])for(let count=2;count<=5;count++)for(let seed=1;seed<=400;seed++){
+    const encounter=chooseEncounterTypes(count,seed,depth);
+    assert.equal(encounter.length,count);
+    assert.ok(new Set(encounter).size>=2,`${count} enemies at seed ${seed} depth ${depth} must mix types: ${encounter}`);
+    assert.ok(encounter.some(type=>!rushers.has(type)),`seed ${seed} needs at least one shooter: ${encounter}`);
   }
+});
+
+test('marksman and riot are introduced later in the floor and respect their caps',()=>{
+  const specialists=['sniper','riot'];
+  for(let seed=1;seed<=300;seed++)for(let count=2;count<=5;count++){
+    assert.ok(!chooseEncounterTypes(count,seed,.1).some(type=>specialists.includes(type)),'no specialists in the opening rooms');
+    assert.ok(!chooseEncounterTypes(count,seed,.3).includes('sniper'),'no marksman before mid-floor');
+  }
+  let sawSniper=false,sawRiot=false;
+  for(let seed=1;seed<=300;seed++){
+    const late=chooseEncounterTypes(4,seed,.9);
+    sawSniper||=late.includes('sniper');sawRiot||=late.includes('riot');
+    assert.ok(late.filter(type=>type==='sniper').length<=1,'at most one marksman per room');
+    assert.ok(late.filter(type=>type==='riot').length<=2);
+  }
+  assert.ok(sawSniper&&sawRiot,'late rooms should actually roll the new types');
 });
 
 test('crate durability loses health per hit and never drops below zero',()=>{

@@ -138,6 +138,8 @@ export const ACTOR_LOOK = {
   gunner: {r: 10.5, color: '#e9a45a', half: 15},
   brute: {r: 14.5, color: '#a17ae7', half: 20},
   guard: {r: 10.5, color: '#58aeca', half: 16},
+  sniper: {r: 9.5, color: '#4fd0c4', half: 15},
+  riot: {r: 11.5, color: '#8aa0b4', half: 17},
   elite: {r: 19.5, color: '#ff9566', half: 27},
 };
 
@@ -209,6 +211,25 @@ const DETAIL = {
     g.strokeStyle = 'rgba(255,255,255,0.65)'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(5, -14.6); g.lineTo(5, -5); g.stroke();
     g.fillStyle = c; g.fillRect(5.6, -11.8, 1.8, 5.2);
   },
+  sniper(g, c) {
+    // slim hooded shooter: cloak cape trailing behind, shoulder pads, and a glowing red scope lens
+    g.beginPath(); g.moveTo(-3, -9); g.lineTo(-12, -4); g.lineTo(-13, 0); g.lineTo(-12, 4); g.lineTo(-3, 9); g.closePath(); inked(g, shade(c, 0.5), 1);
+    g.beginPath(); g.ellipse(-0.6, 0, 4.4, 8.6, 0, 0, TAU); inked(g, shade(c, 0.7), 1);
+    g.beginPath(); g.arc(1.2, 0, 5.6, 0, TAU); inked(g, shade(c, 0.88), 1);
+    g.strokeStyle = 'rgba(255,255,255,0.3)'; g.lineWidth = 0.9; g.beginPath(); g.arc(1.2, 0, 4.4, Math.PI * 1.1, Math.PI * 1.55); g.stroke();
+    rrect(g, 3.2, -2.2, 4.2, 4.4, 1.2); inked(g, '#0f1f22', 0.8);
+    g.fillStyle = '#ff3a4e'; g.beginPath(); g.arc(5.8, 0, 1.5, 0, TAU); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(5.4, -0.5, 0.5, 0, TAU); g.fill();
+  },
+  riot(g, c) {
+    // heavy-armoured shoulders, riot helmet with a visor slit, and a baton at the hip
+    for (const s of [-1, 1]) { rrect(g, -4.8, s > 0 ? 5.2 : -11.6, 10.4, 6.4, 3); inked(g, shade(c, 0.62), 1.1); }
+    rrect(g, -9.4, -7.4, 4.6, 14.8, 1.4); inked(g, '#2b3440', 1);
+    g.beginPath(); g.arc(1.6, 0, 6.6, 0, TAU); inked(g, shade(c, 0.85), 1.1);
+    g.fillStyle = '#16202a'; rrect(g, 4.4, -4.6, 3.2, 9.2, 1); g.fill();
+    g.fillStyle = '#ffd36e'; g.fillRect(5.1, -1.1, 1.8, 2.2);
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.beginPath(); g.arc(1.6, 0, 5, Math.PI * 1.1, Math.PI * 1.6); g.stroke();
+  },
   elite(g, c) {
     for (const s of [-1, 1]) {
       tri(g, -3, s * 12, 7, s * 18, 7.5, s * 10.8); inked(g, '#3b2118', 1.2);
@@ -224,7 +245,7 @@ const DETAIL = {
   },
 };
 
-const BASE_R = {player: 10.5, chaser: 8.2, gunner: 10.5, brute: 13, guard: 10.5, elite: 17.5};
+const BASE_R = {player: 10.5, chaser: 8.2, gunner: 10.5, brute: 13, guard: 10.5, sniper: 9, riot: 11.5, elite: 17.5};
 
 export function actorSprite(kind) {
   return cached('actor|' + kind, () => {

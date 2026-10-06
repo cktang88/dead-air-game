@@ -8,6 +8,7 @@ import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobSh
 import {WorldLayer} from './world2d.js';
 import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
+import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 export {hexStr};
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
@@ -19,6 +20,7 @@ const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.ro
 const ENEMY_GUNS = {
   gunner: {category: 'ASSAULT RIFLE', visual: {length: 26, width: 5}, color: 0xff5a4a},
   guard: {category: 'SMG', visual: {length: 23, width: 5}, color: 0x58aeca},
+  sniper: {category: 'SNIPER', visual: {length: 36, width: 5}, color: 0x4fd0c4},
 };
 
 // Dashed footprint trail behind moving bodies, aged in real time.
@@ -459,6 +461,9 @@ export function createRenderer(container, state) {
     // weapons / fists under the detail layer so hands read as held
     if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+    } else if (e.type === 'riot') {
+      ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+      drawHand(ctx, 9, -7.5, shade(look.color, 0.7), 3); drawHand(ctx, 9, 7.5, shade(look.color, 0.7), 3);
     } else {
       const gun = ENEMY_GUNS[e.type];
       if (gun && !e.elite) {
@@ -481,6 +486,7 @@ export function createRenderer(container, state) {
       }
     }
     ctx.restore();
+    if (e.type === 'riot') drawRiotShield(e, v);
     if (v.flash > 0) {
       ctx.globalAlpha = Math.min(1, v.flash * 1.2);
       ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -517,9 +523,46 @@ export function createRenderer(container, state) {
     void now;
   }
 
+  // RIOT shield: a curved steel plate on the side that blocks (e.shieldAng is the same angle the block test uses).
+  function drawRiotShield(e, v) {
+    const down = e.stun > 0.35, a = e.shieldAng || 0, flash = e.shieldFlash || 0;
+    ctx.save(); ctx.rotate(a); if (down) ctx.globalAlpha = 0.45;
+    const R = down ? 11 : 15.5, half = 1.12;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = 8.2; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
+    ctx.strokeStyle = flash > 0 ? mix('#9fb6c8', '#ffffff', clamp(flash * 4, 0, 1)) : '#9fb6c8'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
+    ctx.strokeStyle = '#5d7387'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R - 2, -half + 0.05, half - 0.05); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, R + 1.6, -half * 0.8, -half * 0.1); ctx.stroke();
+    ctx.fillStyle = '#ffd36e'; ctx.strokeStyle = INK; ctx.lineWidth = 0.8;
+    for (const o of [-0.55, 0, 0.55]) { ctx.save(); ctx.rotate(o); ctx.fillRect(R - 2.4, -1.1, 4.8, 2.2); ctx.restore(); }
+    if (flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = clamp(flash * 3, 0, 1); ctx.drawImage(glowSprite('#bfe4ff'), R - 10, -10, 20, 20); }
+    ctx.restore();
+  }
+
+  function drawSniperLaser(e) {
+    const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
+    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = 3 + gun.visual.length * 0.82 + 2;
+    const sx = e.x + dx * m, sy = e.y + dy * m, len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
+    const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
+    ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+    // wide soft lane so "standing in the lane" is obvious, brighter and narrower once locked
+    ctx.strokeStyle = rgba(locked ? '#ff1f3a' : '#ff5a78', locked ? 0.30 : 0.12 + 0.12 * p); ctx.lineWidth = locked ? 16 : 11; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = rgba(locked ? '#ff6a7a' : '#ff8aa0', 0.5 + 0.35 * flick); ctx.lineWidth = locked ? 5 : 3.2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = locked ? '#ffffff' : '#ffd0d8'; ctx.globalAlpha = locked ? 1 : 0.8; ctx.lineWidth = locked ? 1.8 : 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    // end marker: a closing reticle while tracking, a hard X once the lock commits
+    ctx.strokeStyle = locked ? '#ff2a48' : rgba('#ff8aa0', 0.8); ctx.lineWidth = locked ? 2.4 : 1.6;
+    if (locked) { ctx.beginPath(); ctx.moveTo(ex - 6, ey - 6); ctx.lineTo(ex + 6, ey + 6); ctx.moveTo(ex + 6, ey - 6); ctx.lineTo(ex - 6, ey + 6); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.arc(ex, ey, 5 + (1 - p) * 9, 0, TAU); ctx.stroke(); }
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = locked ? 0.95 : 0.5 + p * 0.3; ctx.drawImage(glowSprite(locked ? '#ff3050' : '#ff7a90'), sx - 11, sy - 11, 22, 22); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
   function drawTelegraphs(b) {
     for (const e of state.enemies) {
-      if (!e.alive || !inView(e, b, 320)) continue;
+      if (!e.alive) continue;
+      if (e.type === 'sniper' && e.aimTimer > 0) { drawSniperLaser(e); continue; }
+      if (!inView(e, b, 320)) continue;
       if (e.meleeWindup > 0) {
         const p = clamp(1 - e.meleeWindup / 0.48, 0, 1), a = Math.atan2(e.aim.y, e.aim.x), R = 36, half = Math.PI / 4;
         ctx.save(); ctx.translate(e.x, e.y);
@@ -650,13 +693,21 @@ export function createRenderer(container, state) {
         ctx.strokeStyle = '#fffdf2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(bl.x - dx * len * 0.22, bl.y - dy * len * 0.22); ctx.lineTo(bl.x, bl.y); ctx.stroke();
         ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.65; ctx.drawImage(glowSprite(color), bl.x - 7, bl.y - 7, 14, 14); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       } else {
+        // Enemy rounds: big hot orbs with a pulsing halo and a fading comet tail. Round + red/white, the opposite of the
+        // thin gold streaks the player fires, so they stay readable at 0.18x.
+        const sn = bl.style === 'sniper', R = sn ? 4.6 : 3.7, tail = sn ? 38 : 22, pulse = 0.5 + 0.5 * Math.sin(vis.time * 16 + bl.x * 0.05);
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = '#ff4a5e'; ctx.globalAlpha = 0.5; ctx.lineWidth = 4.6; ctx.beginPath(); ctx.moveTo(bl.x - dx * 14, bl.y - dy * 14); ctx.lineTo(bl.x, bl.y); ctx.stroke();
+        for (let i = 0; i < 4; i++) {
+          const f0 = i / 4, f1 = (i + 1) / 4;
+          ctx.strokeStyle = sn ? '#ff7a4a' : '#ff3a52'; ctx.globalAlpha = (1 - f0) * 0.6; ctx.lineWidth = R * 2 * (1 - f0 * 0.65);
+          ctx.beginPath(); ctx.moveTo(bl.x - dx * tail * f0, bl.y - dy * tail * f0); ctx.lineTo(bl.x - dx * tail * f1, bl.y - dy * tail * f1); ctx.stroke();
+        }
+        ctx.globalAlpha = 0.55 + 0.25 * pulse; const gs = (R + 9) * 2; ctx.drawImage(glowSprite(sn ? '#ff8a4a' : '#ff3a52'), bl.x - gs / 2, bl.y - gs / 2, gs, gs);
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = '#ff7f78'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(bl.x - dx * 9, bl.y - dy * 9); ctx.lineTo(bl.x, bl.y); ctx.stroke();
-        ctx.fillStyle = '#fff1e8'; ctx.beginPath(); ctx.arc(bl.x, bl.y, 2.2, 0, TAU); ctx.fill();
-        ctx.strokeStyle = 'rgba(14,6,12,0.8)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(bl.x, bl.y, 3.4, 0, TAU); ctx.stroke();
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.75; ctx.drawImage(glowSprite('#ff4a5e'), bl.x - 10, bl.y - 10, 20, 20); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(14,6,12,0.85)'; ctx.beginPath(); ctx.arc(bl.x, bl.y, R + 1.4, 0, TAU); ctx.fill();
+        ctx.fillStyle = sn ? '#ffb070' : '#ff5a68'; ctx.beginPath(); ctx.arc(bl.x, bl.y, R, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff6ec'; ctx.beginPath(); ctx.arc(bl.x - dx * 0.6, bl.y - dy * 0.6, R * 0.52, 0, TAU); ctx.fill();
+        if (bl.missed) { ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bl.x, bl.y, R + 4, 0, TAU); ctx.stroke(); }
       }
     }
   }
@@ -793,6 +844,22 @@ export function createRenderer(container, state) {
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     }
     affordances.draw(ctx, state, viewCam, dpr, dt, vis.exitReady);
+    {
+      const hi = state.hitIndicators ?? (state.hitIndicators = []);
+      ageHitIndicators(hi, dt);
+      const cw = viewCam.w, ch = viewCam.h;
+      ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (state.mode === 'play') {
+        const threats = [];
+        for (const e of state.enemies) {
+          if (!e.alive || !(e.aimTimer > 0 || e.meleeWindup > 0)) continue;
+          threats.push({x: e.x, y: e.y, p: e.meleeWindup > 0 ? 1 - e.meleeWindup / 0.48 : clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), locked: !!e.locked});
+        }
+        drawOffscreenThreats(ctx, viewCam, threats, vis.time);
+      }
+      drawDamageArcs(ctx, cw, ch, hi);
+      ctx.restore();
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawCrosshair(dpr);
     const ms = performance.now() - t0;
