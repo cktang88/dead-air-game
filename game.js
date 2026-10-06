@@ -7,10 +7,10 @@ import {absorbArmorDamage, chooseEncounterTypes, chooseWeaponReplacementSlot, co
 import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js?v=vital-reserve-2';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js?v=vital-reserve-2';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
-import {shapeDungeon, shortestFloorPath} from './layout.js';
+import {shapeDungeon} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {generateDungeon} from './dungeon.js?v=room-names-3';
-import {chooseEnemyTactic, hasIncomingProjectile} from './enemy-tactics.js';
+import {createNav, stepEnemyBrain} from './enemy-brain.js';
 import {hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
@@ -32,7 +32,7 @@ const magSize=(gun)=>weaponStats(gun,attachmentsFor(gun)).magazine;
 const reloadDuration=(gun)=>reloadSeconds(attachmentsFor(gun),gun,GEAR.find(item=>item.id===state.gear)?.reloadMultiplier||1);
 
 const state = {
-  mode:'title', running:false, paused:false, loadoutOpen:false, time:0, elapsed:0, score:0, kills:0, scrap:0, roomsCleared:0,
+  noises:[], nav:null, mode:'title', running:false, paused:false, loadoutOpen:false, time:0, elapsed:0, score:0, kills:0, scrap:0, roomsCleared:0,
   seed:0, tileMap:[], mapW:96, mapH:72, rooms:[], currentRoom:0,
   player:null, enemies:[], bullets:[], pickups:[], crates:[], cover:[], particles:[], props:[], doors:[], lockedDoors:[], solidMap:[], colliders:[], thrown:[], effects:[],
   weaponSlots:[0,1], activeSlot:0, get weaponIndex(){return this.weaponSlots[this.activeSlot];}, gear:null, carryCapacity:BASE_CARRY_CAPACITY, weaponAmmo:GUNS.map(g=>g.mag), reserveAmmo:GUNS.map(g=>g.reserve), attachments:new Map(), health:5, maxHealth:5, armor:0, maxArmor:0,
@@ -448,7 +448,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
 function firePlayerRound(gun,stats){
   const p=state.player;
   if(!p)return;
-  playGunshot(gun);
+  playGunshot(gun);state.noises.push({x:p.x,y:p.y,radius:attachmentsFor(gun).has('suppressor')?190:380});
   const aim=Math.atan2(state.aim.y,state.aim.x),shell=gun.id==='shotgun'?shotgunShellStats(shellForRun(),stats):null;
   const count=shell?.pellets??gun.count??1,spread=shell?.spread??stats.spread;
   for(let i=0;i<count;i++){
@@ -635,43 +635,25 @@ function updatePlayer(dt){
 }
 function lineBlocked(x1,y1,x2,y2){const start={x:x1,y:y1},end={x:x2,y:y2},length=Math.hypot(x2-x1,y2-y1),steps=Math.ceil(length/8);for(let i=1;i<steps;i++){const t=i/steps,tx=Math.floor((x1+(x2-x1)*t)/TILE),ty=Math.floor((y1+(y2-y1)*t)/TILE);if(state.solidMap[ty]?.[tx]!==0)return true;}return state.crates.some(crate=>segmentIntersectsCircle(start,end,crate,17))||state.cover.some(cover=>!cover.crate&&segmentIntersectsCircle(start,end,cover,cover.radius));}
 function smokeBlocksLine(x1,y1,x2,y2){return state.effects.some(effect=>effect.id==='smoke'&&effect.remaining>0&&segmentIntersectsCircle({x:x1,y:y1},{x:x2,y:y2},effect,effect.item.radius));}
-function enemyPassableTile(e,x,y){
-  if(state.solidMap[y]?.[x]!==0)return false;
-  const cx=(x+.5)*TILE,cy=(y+.5)*TILE,radius=e.radius;
-  return !state.crates.some(crate=>Math.hypot(cx-crate.x,cy-crate.y)<25)&&
-    !state.cover.some(cover=>!cover.crate&&Math.hypot(cx-cover.x,cy-cover.y)<cover.radius+radius+2);
-}
-function enemyCanMoveTo(e,goal){
-  const tx=Math.floor(goal.x/TILE),ty=Math.floor(goal.y/TILE);
-  if(!enemyPassableTile(e,tx,ty))return false;
-  return shortestFloorPath(state.tileMap,{x:Math.floor(e.x/TILE),y:Math.floor(e.y/TILE)},{x:tx,y:ty},(x,y)=>enemyPassableTile(e,x,y)).length>0;
-}
-function routedEnemyGoal(e,goal){
-  if(!goal)return null;
-  const start={x:Math.floor(e.x/TILE),y:Math.floor(e.y/TILE)},end={x:Math.floor(goal.x/TILE),y:Math.floor(goal.y/TILE)};
-  if(start.x===end.x&&start.y===end.y)return goal;
-  const path=shortestFloorPath(state.tileMap,start,end,(x,y)=>enemyPassableTile(e,x,y));
-  if(path.length===0)return null;
-  if(path.length===1)return goal;
-  const next=path[1];return {x:(next.x+.5)*TILE,y:(next.y+.5)*TILE};
+// Enemy navigation grid. Rebuilt when the level changes; crates and pillars are dynamic blockers.
+function enemyNav(){
+  if(!state.nav||state.navSolid!==state.solidMap){state.nav=createNav(state.tileMap,state.solidMap);state.navSolid=state.solidMap;state.navCrates=null;state.navCrateCount=-1;}
+  if(state.navCrates!==state.crates||state.navCrateCount!==state.crates.length){
+    state.navCrates=state.crates;state.navCrateCount=state.crates.length;
+    state.nav.setBlockers(state.cover.map(cover=>({x:cover.x,y:cover.y,r:cover.crate?25:cover.radius+10})));
+  }
+  return state.nav;
 }
 function updateEnemies(dt){
-  const player=state.player;
-  const playerShots=state.bullets.filter(b=>b.owner==='player');
-  for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.fire-=dt;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
-    const ranged=e.def.brain==='shoot'||e.def.brain==='guard',actor={x:e.x,y:e.y,brain:e.def.brain,minRange:e.def.minRange,range:e.def.range,hp:e.hp,maxHp:e.maxHp,reloadTimer:e.reloadTimer,side:e.side,radius:e.radius};
-    e.tacticTimer-=dt;
-    if(e.tacticTimer<=0||hasIncomingProjectile(actor,playerShots)){
-      const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y);
-      const covers=state.cover.map(cover=>{
-        const ox=cover.x-player.x,oy=cover.y-player.y,length=Math.hypot(ox,oy)||1,offset=cover.radius+14;
-        const point={x:cover.x+ox/length*offset,y:cover.y+oy/length*offset};
-        return {...point,protected:lineBlocked(player.x,player.y,point.x,point.y)};
-      });
-      const tactic=chooseEnemyTactic({actor,target:{x:player.x,y:player.y},canSee,projectiles:playerShots,covers,canMoveTo:goal=>enemyCanMoveTo(e,goal)});
-      if(tactic.intent==='dodge'||e.tacticTimer<=0){e.intent=tactic.intent;e.intentGoal=tactic.goal;e.navGoal=tactic.intent==='dodge'?tactic.goal:routedEnemyGoal(e,tactic.goal);e.tacticTimer=tactic.intent==='dodge'?.14:.42;}
-    }
-    const canSee=!lineBlocked(e.x,e.y,player.x,player.y)&&!smokeBlocksLine(e.x,e.y,player.x,player.y),visibleForAim=withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT),canAcquire=ranged&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee&&e.reloadTimer<=0;
+  const player=state.player,nav=enemyNav(),pv=player.body.linvel();
+  const world={nav,player:{x:player.x,y:player.y,vx:pv.x,vy:pv.y,radius:8},los:(ax,ay,bx,by)=>!lineBlocked(ax,ay,bx,by),enemies:state.enemies,
+    smoke:state.effects.filter(effect=>effect.id==='smoke'&&effect.remaining>0).map(effect=>({x:effect.x,y:effect.y,radius:effect.item.radius})),
+    projectiles:state.bullets.filter(b=>b.owner==='player'),noises:state.noises,
+    fireAllowed:e=>withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT)};
+  for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
+    const out=stepEnemyBrain(e,world,dt,random),canSee=out.sees;
+    e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;
+    if(out.aiming&&!e.wasAiming)playEnemyTell();e.wasAiming=out.aiming;
     if(e.type==='brute'){
       if(e.stun>0){e.meleeWindup=0;e.aimLine.visible=false;e.meleeTelegraph.visible=false;}
       else{
@@ -683,23 +665,21 @@ function updateEnemies(dt){
         else{e.aimLine.visible=false;e.meleeTelegraph.visible=false;}
         if(attack.strike&&bruteMeleeHits({canSee,distance:d,range:e.def.range,targetRadius:10,aim:e.aim,targetDirection:{x:nx,y:ny}}))hitPlayer(e.def.damage,e.x,e.y);
       }
+      if(out.aiming&&e.meleeWindup<=0)e.aim={x:out.aimX,y:out.aimY};
+    }else{
+      // The brain owns the telegraph: out.windup is the scaled seconds left before the shot and the aim is locked for all of it.
+      e.aimTimer=out.windup;
+      if(out.aiming){e.aim={x:out.aimX,y:out.aimY};const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;}
+      else e.aimLine.visible=false;
+      if(out.fire){enemyShoot(e,out.aimX,out.aimY);e.ammo--;if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;playReload();}}
     }
-    let vx=0,vy=0;
-    if(e.intentGoal&&e.navGoal&&Math.hypot(e.navGoal.x-e.x,e.navGoal.y-e.y)<=10){
-      if(Math.hypot(e.intentGoal.x-e.x,e.intentGoal.y-e.y)<=14){e.intentGoal=null;e.navGoal=null;}
-      else e.navGoal=routedEnemyGoal(e,e.intentGoal);
-    }
-    if(e.intentGoal&&!e.navGoal)e.navGoal=routedEnemyGoal(e,e.intentGoal);
-    if(e.navGoal){const gx=e.navGoal.x-e.x,gy=e.navGoal.y-e.y,length=Math.hypot(gx,gy);if(length>9){vx=gx/length*e.def.speed;vy=gy/length*e.def.speed;}else if(!e.intentGoal)e.navGoal=null;}
-    if(e.aimTimer>0){e.aimTimer-=dt;const endX=e.x+e.aim.x*Math.min(e.def.range,280),endY=e.y+e.aim.y*Math.min(e.def.range,280),line=e.aimLine.geometry.attributes.position;line.setXYZ(0,e.x,1.1,e.y);line.setXYZ(1,endX,1.1,endY);line.needsUpdate=true;e.aimLine.visible=true;if(e.aimTimer<=0){e.aimTimer=0;e.aimLine.visible=false;const fired=e.stun<=0&&visibleForAim&&d>=e.def.minRange&&d<e.def.range&&canSee;if(fired){enemyShoot(e,e.aim.x,e.aim.y);e.ammo--;}if(e.ammo<=0){e.reloadTimer=e.def.brain==='guard'?2.05:1.55;e.fire=0;playReload();}else e.fire=fired?(e.def.brain==='guard'?rand(1.7,2.7):rand(1.1,2.2)):.18;}}
-    else if(canAcquire&&e.fire<=0&&e.stun<=0){e.aim={x:nx,y:ny};e.aimTimer=e.def.brain==='guard'?.62:.48;playEnemyTell();}
-    if(e.stun>0){vx=0;vy=0;e.navGoal=null;e.aimTimer=0;e.aimLine.visible=false;}
-    for(const other of state.enemies){if(other===e||!other.alive)continue;const ox=e.x-other.x,oy=e.y-other.y,od=Math.hypot(ox,oy);if(od>0&&od<23){vx+=ox/od*3;vy+=oy/od*3;}}
-    if(e.aimTimer>0){vx=0;vy=0;}
+    let vx=out.moveX*e.def.speed,vy=out.moveY*e.def.speed;
+    if(e.stun>0||e.meleeWindup>0){vx=0;vy=0;}
     e.body.setLinvel({x:vx+e.knock.x,y:vy+e.knock.y},true);e.knock.x*=Math.pow(.1,dt);e.knock.y*=Math.pow(.1,dt);
-    const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);if(e.healthBar){e.healthBar.position.set(e.x,e.radius*1.85,e.y-20);e.healthFill.scale.x=clamp(e.hp/e.maxHp,0,1);e.healthFill.position.x=-17*(1-e.healthFill.scale.x);}const charging=e.meleeWindup>0,facing=charging||e.aimTimer>0?e.aim:{x:nx,y:ny},reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:charging?0x8f3215:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.material.emissive.setHex(charging?0xff7738:e.def.color);e.mesh.userData.body.material.emissiveIntensity=charging?.72:.05;e.mesh.userData.body.scale.setScalar(e.type==='brute'?(charging?1.42:1.22):1);
-    if(e.type==='chaser'&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
+    const pos=e.body.translation();e.x=pos.x;e.y=pos.y;e.mesh.position.set(e.x,.2,e.y);if(e.healthBar){e.healthBar.position.set(e.x,e.radius*1.85,e.y-20);e.healthFill.scale.x=clamp(e.hp/e.maxHp,0,1);e.healthFill.position.x=-17*(1-e.healthFill.scale.x);}const charging=e.meleeWindup>0||(e.type==='brute'&&e.intent==='charge'&&e.aimTimer>=0&&e.wasAiming),facing=charging||e.aimTimer>0?e.aim:e.face,reloading=e.reloadTimer>0;e.mesh.rotation.y=Math.atan2(facing.x,facing.y);e.mesh.userData.weapon.rotation.y=reloading?1.4:0;e.mesh.userData.weaponBody.material.color.setHex(reloading?0xff875b:0x39333b);e.mesh.userData.weaponBody.material.emissive.setHex(reloading?0x802921:charging?0x8f3215:0x210c0e);e.mesh.userData.weapon.rotation.x=e.aimTimer>0?.13:0;e.mesh.userData.body.material.emissive.setHex(charging?0xff7738:e.def.color);e.mesh.userData.body.material.emissiveIntensity=charging?.72:.05;e.mesh.userData.body.scale.setScalar(e.type==='brute'?(charging?1.42:1.22):1);
+    if(e.type==='chaser'&&canSee&&d<e.def.range&&random()<dt*1.2)hitPlayer(e.def.damage,e.x,e.y);
   }
+  state.noises.length=0;
 }
 function updateBullets(dt){
   for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],previous={x:b.x,y:b.y};b.life-=dt;if(b.life<=0){removeBullet(i);continue;}const pos=b.body.translation();b.x=pos.x;b.y=pos.y;b.mesh.position.set(b.x,.7,b.y);
