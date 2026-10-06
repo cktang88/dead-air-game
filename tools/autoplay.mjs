@@ -33,6 +33,7 @@ const HELP = `usage: node tools/autoplay.mjs [options]
   --max-game-time SEC   game-clock limit per seed (counted as 'timeout')                 [900]
   --shots [SEC]         save periodic screenshots every SEC game seconds                 [off, 30]
   --width/--height PX   viewport                                                         [1280x720]
+  --extract             at the bank/descend choice, bank (extract) instead of descending
   --verbose             log the bot's task decisions
 `;
 function parseArgs(argv) {
@@ -53,6 +54,7 @@ function parseArgs(argv) {
       case '--shots': o.shots = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? +next() : 30; break;
       case '--width': o.width = +next(); break;
       case '--height': o.height = +next(); break;
+      case '--extract': o.extract = true; break;
       case '--verbose': o.verbose = true; break;
       case '-h': case '--help': console.log(HELP); process.exit(0);
       default: console.error('unknown option ' + a + '\n' + HELP); process.exit(2);
@@ -120,14 +122,14 @@ function installHooks() {
     solid() { return s.solidMap.map(r => r.slice()); },
     snap() {
       const p = s.player;
-      const out = {mode: s.mode, paused: s.paused, t: s.realElapsed, st: s.elapsed, ts: s.timeScaleSmoothed, ev: evs.splice(0)};
+      const out = {mode: s.mode, outcome: s.outcome || null, floor: s.floor, rm: s.runModal || null, paused: s.paused, t: s.realElapsed, st: s.elapsed, ts: s.timeScaleSmoothed, ev: evs.splice(0)};
       if (!p) return out;
       Object.assign(out, {
         px: p.x, py: p.y, vx: s.playerVel.x, vy: s.playerVel.y, hp: s.health, mhp: s.maxHealth, armor: s.armor, marmor: s.maxArmor, scrap: s.scrap, kills: s.kills, cleared: s.roomsCleared,
         cur: s.currentRoom, slots: s.weaponSlots.slice(), active: s.activeSlot, wi: s.weaponIndex, ammo: s.weaponAmmo.slice(), reserve: s.reserveAmmo.slice(),
         reloading: s.reloadTimer > 0, burst: !!s.weaponBurst, aim: {x: s.aim.x, y: s.aim.y}, thr: Object.assign({}, s.throwables), thrIdx: s.throwableIndex, inv: s.invuln,
         modal: {cache: !!s.cacheOpen, merchant: !!s.merchantOpen, gun: s.pendingGunPickup ? s.pendingGunPickup.gunIndex : null, loadout: !!s.loadoutOpen, pending: !!s.pendingLoadoutChange},
-        extraction: !!s.extractionOpen, gear: s.gear,
+        extraction: !!s.extractionOpen, gear: s.gear, floor: s.floor, rm: s.runModal || null, runRooms: s.runRooms || 0,
         cam: {x: v.cam.x, y: v.cam.y, w: v.cam.w, h: v.cam.h, scale: v.cam.scale},
         enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0})),
         bullets: s.bullets.filter(b => b.owner === 'enemy').map(b => ({x: b.x, y: b.y, vx: b.vx, vy: b.vy, id: b.enemyId, d: b.damage || 1})),
@@ -263,15 +265,15 @@ class Bot {
     this.recover = null; this.progress = {x: 0, y: 0, t: 0}; this.stuckEvents = []; this.stuckCount = 0; this.recentStuck = [];
     this.permBlocks = []; this.gateTraps = []; this.badRooms = new Map();
     this.declined = new Set(); this.unreachable = new Map(); this.doneMarket = new Set(); this.pulled = new Map();
-    this.stats = {scrapEarned: 0, scrapSpent: 0, starve: 0, dry: 0, hurt: [], kills: [], shotsFired: 0, stillTicks: 0, ticks: 0, throws: 0, taskTicks: {}, trapped: false, merchantBuys: [], cacheChoices: [], gunSwaps: 0, errors: []};
+    this.stats = {scrapEarned: 0, scrapSpent: 0, starve: 0, dry: 0, hurt: [], kills: [], shotsFired: 0, stillTicks: 0, ticks: 0, throws: 0, taskTicks: {}, trapped: false, merchantBuys: [], cacheChoices: [], gunSwaps: 0, freqPicks: 0, decisions: [], errors: []};
     this.lastScrap = null; this.wasStarved = false; this.wasDry = false; this.nextShot = opts.shots || 1e9; this.shotN = 0; this.lastSnap = null;
     this.lastMoveWant = 0; this.pausedFor = 0;
   }
-  async init() {
-    await this.page.evaluate(installHooks);
+  async init(first = true) {
+    if (first) await this.page.evaluate(installHooks);
+    this.floorNo = null; this.plan = null; this.task = null; this.target = null; this.seen.clear(); this.prevEn.clear(); this.unreachable.clear(); this.badRooms.clear(); this.gateOpen = new Set(); this.permBlocks = []; this.doneMarket.clear(); this.pulled.clear(); this.anchor = null; this.idle = null; this.recover = null;
     this.rooms = await this.page.evaluate(() => window.__bot.rooms());
     this.nav = new Nav(await this.page.evaluate(() => window.__bot.solid()));
-    this.gateOpen = new Set();
     this.routeRooms = this.rooms.filter(r => !r.branch).map(r => r.i);
   }
   // ── input primitives (real events) ──
@@ -301,7 +303,7 @@ class Bot {
       const pv = this.prevEn.get(e.id);
       if (pv && S.t > pv.t) { e.vx = (e.x - pv.x) / (S.t - pv.t) * .5 + (pv.vx || 0) * .5; e.vy = (e.y - pv.y) / (S.t - pv.t) * .5 + (pv.vy || 0) * .5; } else { e.vx = 0; e.vy = 0; }
       this.prevEn.set(e.id, {x: e.x, y: e.y, t: S.t, vx: e.vx, vy: e.vy});
-      e.melee = e.type === 'chaser' || e.type === 'brute';
+      e.melee = ['chaser', 'brute', 'riot', 'boss'].includes(e.type);
       if (e.onScreen && e.los) {
         if (!this.seen.has(e.id)) this.seen.set(e.id, {first: S.t, react: this.react * (.7 + .6 * this.rng())});
         e.vis = true; e.reacted = S.t - this.seen.get(e.id).first >= this.seen.get(e.id).react;
@@ -422,6 +424,12 @@ class Bot {
   // ── modals ──
   async handleModals(S) {
     const p = this.page;
+    if (S.rm === 'freq') {
+      const btns = await p.$$('#run-modal [data-freq]'); if (btns.length) { await btns[Math.floor(this.rng() * btns.length)].click(); this.stats.freqPicks++; return true; }
+    }
+    if (S.rm === 'decision') {
+      const act = this.o.extract ? 'extract' : 'descend'; const b = await p.$(`#run-modal [data-act="${act}"]`); if (b) { await b.click(); this.stats.decisions.push(act + '@' + S.floor); } return true;
+    }
     if (S.modal.cache) {
       const n = this.needs(S); const order = [];
       if (n.hurt >= 1) order.push('health');
@@ -460,7 +468,7 @@ class Bot {
     const P = {x: S.px, y: S.py}, gun = GUNS[S.wi];
     const reacted = en.filter(e => e.vis && e.reacted);
     const bullets = S.bullets.filter(b => hyp(b.x - P.x, b.y - P.y) < 260);
-    const aimingAtMe = reacted.some(e => e.aimT > 0 || e.wind > 0 || e.rel === 0 && !e.melee && e.d < ENEMY_TYPES[e.type].range);
+    const aimingAtMe = reacted.some(e => e.aimT > 0 || e.wind > 0 || e.rel === 0 && !e.melee && e.d < (ENEMY_TYPES[e.type]?.range || 200));
     const dry = S.reloading || S.ammo[S.wi] === 0, lowHp = S.hp <= Math.max(1, S.mhp * 0.34);
     const shielded = (q) => { let c = 0; for (const e of reacted) if (!e.melee && this.nav.los(q.x, q.y, e.x, e.y)) c++; return c; };
     const coverW = dry ? 9 : lowHp ? 5 : 0.4;
@@ -470,7 +478,7 @@ class Bot {
       const q = {x: P.x + d.x * mv, y: P.y + d.y * mv};
       if (!d.still) { const free = this.nav.lineClear(P, {x: P.x + d.x * 26, y: P.y + d.y * 26}, PR - .6); if (!free) continue; if (!this.nav.lineClear(P, q, PR - .6)) sc -= 6; }
       // incoming bullets
-      const scale = d.still ? (S.burst || this.mouseDown ? 0.42 : 0.2) : 1;
+      const scale = d.still ? 0.12 : 0.35;
       for (const b of bullets) {
         let worst = 99;
         for (let s = 0; s <= 6; s++) { const t = T * s / 6, bx = b.x + b.vx * scale * t, by = b.y + b.vy * scale * t, px = P.x + d.x * PSPEED * t, py = P.y + d.y * PSPEED * t; worst = Math.min(worst, hyp(bx - px, by - py)); }
@@ -478,7 +486,7 @@ class Bot {
       }
       // melee pressure
       for (const e of reacted) if (e.melee && e.d < 230) {
-        const sp = ENEMY_TYPES[e.type].speed * (d.still ? 0.2 : 1) * T, ex = e.x + (P.x - e.x) / e.d * sp, ey = e.y + (P.y - e.y) / e.d * sp;
+        const sp = ENEMY_TYPES[e.type].speed * (d.still ? 0.12 : 0.35) * T, ex = e.x + (P.x - e.x) / e.d * sp, ey = e.y + (P.y - e.y) / e.d * sp;
         const after = hyp(ex - q.x, ey - q.y); const w = (e.wind > 0 ? 2.4 : 1.3) * (e.type === 'brute' ? 1.3 : 1);
         sc += (after - e.d) * w * (e.d < 140 ? 1 : .4) * (0.5 + this.dodgeSkill * .5);
         if (after < 26) sc -= 25;
@@ -513,6 +521,7 @@ class Bot {
     if (this.lastScrap != null) { const d = S.scrap - this.lastScrap; if (d > 0) this.stats.scrapEarned += d; else if (d < 0) this.stats.scrapSpent -= d; }
     this.lastScrap = S.scrap;
     // modals / pause
+    if (S.rm) { await this.setKeys([]); await this.setFire(false); await this.handleModals(S); return; }
     if (S.paused && !S.modal.cache && !S.modal.merchant && S.modal.gun == null && !S.modal.loadout) { this.pausedFor++; await this.setKeys([]); await this.setFire(false); if (this.pausedFor % 4 === 1) await this.press('Escape'); return; }
     this.pausedFor = 0;
     if (await this.handleModals(S)) { await this.setKeys([]); await this.setFire(false); return; }
@@ -527,10 +536,10 @@ class Bot {
 
     // idle watchdog: not moving for a long time outside combat -> go and find the nearest living enemy
     if (this.idle && S.t > this.idle.until) this.idle = null;
-    if (!this.idle && this.anchor && S.t - this.anchor.t > 8 && S.enemies.length && !S.modal.cache) {
-      const pool = S.enemies.filter(e => !((this.badRooms.get(e.room) || 0) > S.t)); if (!pool.length) { this.anchor.t = S.t; } else {
+    if (!this.idle && this.anchor && S.t - Math.max(this.anchor.t, this.wdT || 0) > 8 && S.enemies.length && !S.modal.cache) {
+      const pool = S.enemies.filter(e => !((this.badRooms.get(e.room) || 0) > S.t)); if (!pool.length) { this.wdT = S.t; } else {
       const t = pool.reduce((a, b) => hyp(a.x - S.px, a.y - S.py) < hyp(b.x - S.px, b.y - S.py) ? a : b);
-      this.idle = {until: S.t + 10, task: {kind: 'hunt', room: t.room, key: 'wd:' + t.id, x: t.x, y: t.y, tol: 60, at: S.t, since: S.t}}; this.anchor.t = S.t; res.watchdogs = (res.watchdogs || 0) + 1;
+      this.idle = {until: S.t + 10, task: {kind: 'hunt', room: t.room, key: 'wd:' + t.id, x: t.x, y: t.y, tol: 60, at: S.t, since: S.t}}; this.wdT = S.t; res.watchdogs = (res.watchdogs || 0) + 1;
       if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] watchdog -> hunt ${t.type} room ${t.room}`);
     } }
     // task
@@ -598,7 +607,7 @@ class Bot {
     } else if (S.t - this.progress.t > 1.0) this.progress = {x: S.px, y: S.py, t: S.t, want: false};
     // trapped detection
     if (!this.anchor || hyp(S.px - this.anchor.x, S.py - this.anchor.y) > 70 || inCombat) this.anchor = {x: S.px, y: S.py, t: S.t};
-    else if (S.t - this.anchor.t > 70 && task.kind !== 'idle') { if (!this.stats.trapped) { this.stats.trapped = {t: S.t, x: S.px, y: S.py, room: S.cur, task: task.kind, shot: await this.shot(S, 'trapped'), around: this.around(S)}; } if (S.t - this.anchor.t > 110) { res.forceEnd = 'stuck'; } }
+    else if (S.t - this.anchor.t > 70 && task.kind !== 'idle') { if (!this.stats.trapped) { this.stats.trapped = {t: S.t, x: S.px, y: S.py, room: S.cur, task: task.kind, shot: await this.shot(S, 'trapped'), around: this.around(S)}; } if (S.t - this.anchor.t > 110) { res.forceEnd = 'stuck'; res.softlockNote = this.gateTraps.length ? 'paid-for gate collider blocks the way (game bug)' : 'unknown'; } }
 
     const sprint = move && !inCombat && !bulletsNear && !S.enemies.some(e => e.d < 260 && e.los) && S.hp > 0;
     const keys = move ? KEYFOR(move) : []; if (sprint) keys.push('ShiftLeft');
@@ -616,7 +625,7 @@ class Bot {
       tx = P.x + Math.cos(ang) * dist; ty = P.y + Math.sin(ang) * dist;
       await this.aimWorld(S, tx, ty);
       const err = Math.abs(Math.atan2(S.aim.x * (ty - P.y) - S.aim.y * (tx - P.x), S.aim.x * (tx - P.x) + S.aim.y * (ty - P.y)));
-      firing = target.d <= gun.range * 1.02 && err < 0.35 && (target.los);
+      firing = target.d <= gun.range * 0.9 && err < Math.atan2(11, Math.max(40, target.d)) + 0.03 + 0.04 * (1 - this.k) && target.los;
     } else if (move) { await this.aimWorld(S, P.x + move.x * 160, P.y + move.y * 160); }
     // blocked by a crate/cover while stuck: shoot it
     if (!firing && this.recover?.shoot && ammoNow > 0 && !S.reloading) { await this.aimWorld(S, this.recover.shoot.x, this.recover.shoot.y); firing = true; }
@@ -707,18 +716,24 @@ async function playSeed(browser, seed, o, ctx) {
     await page.click('#start-button');
     await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player, null, {timeout: 20000});
     await bot.init();
-    let last = null, tickReal = Date.now(), lastT = 0, lastProgressWall = Date.now(), lastCleared = -1;
+    const floors = []; let prevS = null, last = null, tickReal = Date.now(), lastT = 0, lastProgressWall = Date.now(), lastCleared = -1;
     for (;;) {
       const wall = (Date.now() - startWall) / 1000;
       if (wall > o.timeout) { res.reason = 'wall-clock limit'; break; }
       let S;
       try { S = await page.evaluate(() => window.__bot.snap()); } catch (e) { res.result = 'error'; res.reason = 'evaluate failed: ' + e.message; break; }
       last = S.px != null ? S : last;
-      if (S.mode === 'dead' || S.mode === 'won') { res.result = S.mode === 'won' ? 'win' : 'death'; for (const e of S.ev) if (e.k === 'hurt') bot.stats.hurt.push(e); for (const e of S.ev) if (e.k === 'kill') bot.stats.kills.push(e); break; }
+      if (S.mode === 'dead' || S.mode === 'won') { res.result = S.mode === 'dead' ? 'death' : S.outcome === 'extract' ? 'extract' : 'win'; res.floorReached = S.floor; for (const e of S.ev) if (e.k === 'hurt') bot.stats.hurt.push(e); for (const e of S.ev) if (e.k === 'kill') bot.stats.kills.push(e); break; }
       if (S.t > o.maxGameTime) { res.reason = 'game-clock limit'; break; }
       if (S.px == null) { await page.waitForTimeout(50); continue; }
+      if (S.floor !== bot.floorNo) {
+        if (bot.floorNo != null && prevS) floors.push({floor: bot.floorNo, cleared: prevS.cleared, rooms: bot.rooms.length, route: bot.routeRooms.length, t: +prevS.t.toFixed(0)});
+        if (bot.floorNo != null) await bot.init(false);
+        bot.floorNo = S.floor; res.floorReached = S.floor;
+      }
       try { await bot.tick(S, res); } catch (e) { bot.stats.errors.push(String(e.stack || e).split('\n').slice(0, 3).join(' | ')); if (bot.stats.errors.length > 40) throw e; }
-      if (res.forceEnd) { res.result = 'stuck'; res.reason = 'no displacement for >110s'; break; }
+      prevS = S;
+      if (res.forceEnd) { res.result = 'stuck'; res.reason = 'no displacement for >110s: ' + (res.softlockNote || ''); break; }
       if (S.cleared !== lastCleared) { lastCleared = S.cleared; lastProgressWall = Date.now(); }
       const now = Date.now(), dtReal = Math.min(120, now - tickReal);
       if (o.speed > 1 && !S.paused) await page.evaluate(ms => window.advanceTime(ms), Math.max(16, (o.speed - 1) * 40)).catch(() => {});
@@ -730,7 +745,8 @@ async function playSeed(browser, seed, o, ctx) {
     const fin = await page.evaluate(() => { const S = window.__bot.snap(); return {cleared: S.cleared, kills: S.kills, scrap: S.scrap, t: S.t, st: S.st, rstate: S.rstate, hp: S.hp, ev: S.ev}; }).catch(() => null);
     if (fin) { for (const e of fin.ev) if (e.k === 'hurt') bot.stats.hurt.push(e); res.final = fin; }
     const L = last || {};
-    res.roomsCleared = fin?.cleared ?? L.cleared ?? 0; res.roomsTotal = bot.rooms.length;
+    if (last) floors.push({floor: bot.floorNo, cleared: L.cleared, rooms: bot.rooms.length, route: bot.routeRooms.length, t: +L.t.toFixed(0)}); res.floors = floors;
+    res.roomsCleared = floors.reduce((a, f) => a + (f.cleared || 0), 0); res.roomsTotal = floors.reduce((a, f) => a + f.rooms, 0);
     const rst = fin?.rstate || L.rstate || [];
     res.roomsVisited = rst.filter(x => x & 1).length;
     res.routeRooms = bot.routeRooms.length; res.routeCleared = bot.routeRooms.filter(i => (rst[i] || 0) & 2).length;
@@ -762,11 +778,13 @@ const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 function summarize(results, o) {
   const n = results.length, by = (f) => results.filter(f).length;
-  const sum = {skill: o.skill, seeds: n, wins: by(r => r.result === 'win'), deaths: by(r => r.result === 'death'), timeouts: by(r => r.result === 'timeout'), stuckRuns: by(r => r.result === 'stuck'), errors: by(r => r.result === 'error')};
+  const sum = {skill: o.skill, seeds: n, wins: by(r => r.result === 'win'), extracts: by(r => r.result === 'extract'), deaths: by(r => r.result === 'death'), timeouts: by(r => r.result === 'timeout'), stuckRuns: by(r => r.result === 'stuck'), errors: by(r => r.result === 'error')};
   sum.winRate = n ? +(sum.wins / n).toFixed(3) : 0;
   const ok = results.filter(r => r.result !== 'error');
   sum.medianRoomsCleared = median(ok.map(r => r.roomsCleared)); sum.medianRoomsVisited = median(ok.map(r => r.roomsVisited)); sum.medianRouteCleared = median(ok.map(r => r.routeCleared));
   sum.avgRoomsTotal = +mean(ok.map(r => r.roomsTotal)).toFixed(1); sum.avgRouteRooms = +mean(ok.map(r => r.routeRooms)).toFixed(1);
+  sum.medianFloorReached = median(ok.map(r => r.floorReached || 1)); sum.floorReachedDist = {}; for (const r of ok) sum.floorReachedDist[r.floorReached || 1] = (sum.floorReachedDist[r.floorReached || 1] || 0) + 1;
+  sum.deathsByFloor = {}; for (const r of results) if (r.result === 'death') sum.deathsByFloor[r.floorReached] = (sum.deathsByFloor[r.floorReached] || 0) + 1;
   sum.avgKills = +mean(ok.map(r => r.kills)).toFixed(1); sum.medianGameSec = median(ok.map(r => r.gameSec)); sum.medianWallSec = median(ok.map(r => r.wallSec));
   sum.medianGameSecWins = median(ok.filter(r => r.result === 'win').map(r => r.gameSec));
   sum.avgScrapEarned = +mean(ok.map(r => r.scrapEarned)).toFixed(0); sum.avgScrapSpent = +mean(ok.map(r => r.scrapSpent)).toFixed(0);
@@ -783,9 +801,10 @@ function summarize(results, o) {
 }
 function table(results, sum) {
   const pad = (s, n) => String(s).padEnd(n), lines = [];
-  lines.push(pad('seed', 9) + pad('result', 8) + pad('rooms', 8) + pad('route', 8) + pad('kills', 6) + pad('dmg', 6) + pad('game s', 8) + pad('wall s', 8) + pad('scrap+/-', 11) + pad('starve', 7) + pad('stuck', 6) + 'cause / note');
-  for (const r of results) lines.push(pad(r.seed, 9) + pad(r.result, 8) + pad(`${r.roomsCleared ?? '-'}/${r.roomsTotal ?? '-'}`, 8) + pad(`${r.routeCleared ?? '-'}/${r.routeRooms ?? '-'}`, 8) + pad(r.kills ?? '-', 6) + pad(r.damage?.total ?? '-', 6) + pad(r.gameSec ?? '-', 8) + pad(r.wallSec ?? '-', 8) + pad(`${r.scrapEarned ?? 0}/${r.scrapSpent ?? 0}`, 11) + pad(r.starvationEvents ?? 0, 7) + pad(r.stuck?.count ?? 0, 6) + (r.result === 'death' ? `${r.deathCause} (${r.deathRoom})` : r.result === 'error' ? r.reason.slice(0, 60) : (r.reason !== r.result ? r.reason : '') + (r.trapped ? ' TRAPPED' : '')));
+  lines.push(pad('seed', 9) + pad('result', 8) + pad('fl', 4) + pad('rooms', 8) + pad('route', 8) + pad('kills', 6) + pad('dmg', 6) + pad('game s', 8) + pad('wall s', 8) + pad('scrap+/-', 11) + pad('starve', 7) + pad('stuck', 6) + 'cause / note');
+  for (const r of results) lines.push(pad(r.seed, 9) + pad(r.result, 8) + pad(r.floorReached ?? '-', 4) + pad(`${r.roomsCleared ?? '-'}/${r.roomsTotal ?? '-'}`, 8) + pad(`${r.routeCleared ?? '-'}/${r.routeRooms ?? '-'}`, 8) + pad(r.kills ?? '-', 6) + pad(r.damage?.total ?? '-', 6) + pad(r.gameSec ?? '-', 8) + pad(r.wallSec ?? '-', 8) + pad(`${r.scrapEarned ?? 0}/${r.scrapSpent ?? 0}`, 11) + pad(r.starvationEvents ?? 0, 7) + pad(r.stuck?.count ?? 0, 6) + (r.result === 'death' ? `${r.deathCause} (${r.deathRoom})` : r.result === 'error' ? r.reason.slice(0, 60) : (r.reason !== r.result ? r.reason : '') + (r.trapped ? ' TRAPPED' : '')));
   lines.push('');
+  lines.push(`median floor reached ${sum.medianFloorReached} (dist ${JSON.stringify(sum.floorReachedDist)}), deaths by floor ${JSON.stringify(sum.deathsByFloor)}, extracts ${sum.extracts}`);
   lines.push(`skill ${sum.skill}: ${sum.wins}/${sum.seeds} wins (${(sum.winRate * 100).toFixed(0)}%), ${sum.deaths} deaths, ${sum.timeouts} timeouts, ${sum.stuckRuns} bot-stuck, ${sum.errors} errors`);
   lines.push(`median rooms cleared ${sum.medianRoomsCleared} / visited ${sum.medianRoomsVisited} (avg ${sum.avgRoomsTotal} total, ${sum.avgRouteRooms} on route; median route cleared ${sum.medianRouteCleared})`);
   lines.push(`avg kills ${sum.avgKills}, median game time ${sum.medianGameSec}s (wins ${sum.medianGameSecWins}s), median wall ${sum.medianWallSec}s, avg damage taken/run ${sum.avgDamagePerRun}`);
