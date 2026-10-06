@@ -23,6 +23,7 @@ function mixHex(a, b, t) {
 // ---- distance to the first thing that blocks sight along a ray (walls, crates, cover, smoke) -----------------
 function rayHitCircle(ox, oy, dx, dy, cx, cy, r, maxLen) {
   const fx = cx - ox, fy = cy - oy, t = fx * dx + fy * dy;
+  if (fx * fx + fy * fy < r * r) return maxLen;   // standing inside / hugging the prop: it does not hide the room
   if (t < -r) return maxLen;
   const d2 = fx * fx + fy * fy - t * t;
   if (d2 > r * r) return maxLen;

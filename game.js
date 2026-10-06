@@ -485,6 +485,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   const mods=owner==='player'?attachmentsFor(gun):new Set();
   const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'?weaponPenetration(gun,mods):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.style||null,missed:false};
   if(owner==='player'){const f=freqStats(state.freq);bullet.maxBounces=f.ricochet;bullet.bounces=0;bullet.penetration={...bullet.penetration,enemies:bullet.penetration.enemies+f.pierce};bullet.homing=f.homing;bullet.damage*=state.shotDamageMult;}
+  if(owner==='player')bullet.sneak=new Map(state.enemies.filter(e=>e.alive&&!e.aware&&e.type!=='boss').map(e=>[e,{x:e.face?.x??1,y:e.face?.y??0,asleep:e.posture==='sleep'}]));// stealth: who was unaware (and facing where) when the trigger was pulled; the shot's own noise must not cancel a sneak hit
   state.bullets.push(bullet);
 }
 function playerMoveRatio(){const ratio=Math.hypot(state.playerVel.x,state.playerVel.y)/(runStats().moveSpeed||112);return ratio>.2?clamp(ratio,0,1):0;}
@@ -704,7 +705,7 @@ function onPlayerDamaged(){
 function playerHitDamage(b,enemy){
   if(b.owner!=='player')return b.damage;
   const f=freqStats(state.freq);let dmg=b.damage;
-  {const mod=damageModifier({type:enemy.type,aware:!!enemy.aware,asleep:enemy.posture==='sleep',facing:enemy.face,bulletDir:{x:b.vx,y:b.vy},bruteRecovering:enemy.type==='brute'&&(enemy.meleeCooldown>0||enemy.ai?.brute?.phase==='recover')});
+  {const snap=b.sneak?.get(enemy),mod=damageModifier({type:enemy.type,aware:!snap&&!!enemy.aware,asleep:!!snap?.asleep,facing:snap??enemy.face,bulletDir:{x:b.vx,y:b.vy},bruteRecovering:enemy.type==='brute'&&(enemy.meleeCooldown>0||enemy.ai?.brute?.phase==='recover')});
     if(mod.mult>1){dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-22,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',13,1);}}
   if(!enemy.aware&&enemy.type!=='boss')dmg*=1+f.unawareDamage;
   if((b.bounces||0)>0)dmg*=1+f.bounceDamage;
