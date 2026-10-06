@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AUDIO_SETTINGS_KEY, DEFAULT_MASTER_VOLUME, isAudioMuted, loadAudioSettings, parseAudioSettings, serializeAudioSettings, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
+import {distanceGain, gunProfile, hashUnit, jitter, panFromOffset, spatialParams, timeScaleColor, AUDIO_SETTINGS_KEY, DEFAULT_MASTER_VOLUME, isAudioMuted, loadAudioSettings, parseAudioSettings, serializeAudioSettings, setAudioMuted, setMasterVolume, unlockAudio} from './audio.js';
 
 test('audio settings round-trip the master volume',()=>{
   const encoded=serializeAudioSettings(.42);
@@ -78,4 +78,47 @@ test('runtime mute silences the master gain and unmute restores the latest volum
     if(previousWindow===undefined)delete globalThis.window;
     else globalThis.window=previousWindow;
   }
+});
+
+test('spatial helpers clamp pan, attenuate with distance and default to full centred level',()=>{
+  assert.deepEqual(spatialParams(undefined),{pan:0,gain:1});
+  assert.equal(spatialParams({pan:3}).pan,1);
+  assert.equal(spatialParams({pan:-.4}).pan,-.4);
+  assert.equal(distanceGain(0),1);
+  assert.equal(distanceGain(1000),0);
+  assert.ok(distanceGain(200)>distanceGain(400));
+  assert.equal(panFromOffset(-9999),-1);
+  assert.equal(panFromOffset(240),.5);
+  assert.equal(spatialParams({distance:360,volume:.5}).gain,distanceGain(360)*.5);
+});
+
+test('time-scale colour is transparent at 1x and muffled and detuned when slow',()=>{
+  assert.deepEqual(timeScaleColor(1),{cutoff:20000,pitch:1});
+  const slow=timeScaleColor(.18);
+  assert.ok(slow.cutoff<3000&&slow.cutoff>1000);
+  assert.ok(slow.pitch<.9&&slow.pitch>.7);
+  assert.ok(timeScaleColor(.6).cutoff>slow.cutoff);
+  assert.deepEqual(timeScaleColor(NaN),timeScaleColor(1));
+});
+
+test('gun profiles differ by category, are stable per gun, and suppression quietens the shot',()=>{
+  const gun=(id,category,damage)=>({id,category,damage});
+  const pistol=gunProfile(gun('pistol_9','PISTOL',25)),shotgun=gunProfile(gun('shotgun','SHOTGUN',17)),am=gunProfile(gun('am','ANTI-MATERIEL',120));
+  assert.equal(pistol.family,'pistol');
+  assert.equal(shotgun.family,'shotgun');
+  assert.equal(am.family,'antimateriel');
+  assert.ok(am.tail>shotgun.tail&&shotgun.tail>pistol.tail);
+  assert.ok(am.body<shotgun.body&&shotgun.body<pistol.body);
+  assert.equal(gunProfile(gun('pistol_9','PISTOL',25)).pitch,pistol.pitch);
+  assert.notEqual(gunProfile(gun('pistol_45','PISTOL',43)).pitch,pistol.pitch);
+  const quiet=gunProfile(gun('pistol_9','PISTOL',25),{suppressed:true});
+  assert.ok(quiet.suppressed&&quiet.vol<pistol.vol&&quiet.wet<pistol.wet);
+  assert.equal(gunProfile({category:'WAT'}).family,'rifle');
+  assert.equal(gunProfile(undefined).family,'rifle');
+});
+
+test('hashUnit and jitter stay in range',()=>{
+  for(const text of ['a','shotgun','',123]){const u=hashUnit(text);assert.ok(u>=0&&u<1);}
+  assert.equal(jitter(.1,()=>0),.9);
+  assert.equal(jitter(.1,()=>.5),1);
 });

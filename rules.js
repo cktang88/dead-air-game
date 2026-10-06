@@ -124,14 +124,24 @@ export function segmentCircleHitTime(start, end, center, radius) {
   return t>=0&&t<=1?t:null;
 }
 
+// Exact grid traversal (Amanatides-Woo): every tile the segment touches, in order, with the entry fraction t.
+// Unlike point sampling this cannot skip a tile corner at any projectile speed.
 export function segmentBlockedTiles(start, end, tileMap, tileSize) {
-  const length=Math.hypot(end.x-start.x,end.y-start.y),steps=Math.max(1,Math.ceil(length/(tileSize/4)));
-  const hits=[],seen=new Set();
-  for(let i=1;i<=steps;i++){
-    const t=i/steps,x=Math.floor((start.x+(end.x-start.x)*t)/tileSize),y=Math.floor((start.y+(end.y-start.y)*t)/tileSize),key=`${x},${y}`;
-    if(seen.has(key))continue;
-    seen.add(key);
+  const hits=[];
+  const dx=end.x-start.x,dy=end.y-start.y;
+  let x=Math.floor(start.x/tileSize),y=Math.floor(start.y/tileSize);
+  const endX=Math.floor(end.x/tileSize),endY=Math.floor(end.y/tileSize);
+  const stepX=dx>0?1:-1,stepY=dy>0?1:-1;
+  const tDeltaX=dx===0?Infinity:Math.abs(tileSize/dx),tDeltaY=dy===0?Infinity:Math.abs(tileSize/dy);
+  let tMaxX=dx===0?Infinity:((dx>0?(x+1)*tileSize-start.x:start.x-x*tileSize)/Math.abs(dx));
+  let tMaxY=dy===0?Infinity:((dy>0?(y+1)*tileSize-start.y:start.y-y*tileSize)/Math.abs(dy));
+  let t=0;
+  const maxCells=Math.abs(endX-x)+Math.abs(endY-y)+2;
+  for(let i=0;i<maxCells;i++){
     if(tileMap[y]?.[x]!==0)hits.push({x,y,t});
+    if(x===endX&&y===endY)break;
+    if(tMaxX<tMaxY){t=tMaxX;tMaxX+=tDeltaX;x+=stepX;}else{t=tMaxY;tMaxY+=tDeltaY;y+=stepY;}
+    if(t>1)break;
   }
   return hits;
 }
