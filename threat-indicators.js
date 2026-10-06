@@ -48,7 +48,7 @@ export function drawDamageArcs(ctx, w, h, list) {
     const life = 1 - item.age / HIT_INDICATOR_LIFE;
     const fade = life * life * (item.age < 0.08 ? item.age / 0.08 : 1);
     // Three nested wedges (wide/faint -> narrow/strong) fake a feathered arc without per-pixel work.
-    for (const [span, alpha] of [[1.05, 0.2], [0.7, 0.28], [0.36, 0.34]]) {
+    for (const [span, alpha] of [[1.2, 0.34], [0.8, 0.45], [0.4, 0.5]]) {
       const a0 = item.ang - span / 2, a1 = item.ang + span / 2;
       const grad = ctx.createRadialGradient(w / 2, h / 2, R * 0.55, w / 2, h / 2, R * 1.02);
       grad.addColorStop(0, 'rgba(255,40,60,0)');
