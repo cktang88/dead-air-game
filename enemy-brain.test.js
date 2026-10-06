@@ -596,38 +596,61 @@ test('brute does not charge or move during its melee wind-up', () => {
 });
 
 // ---------------------------------------------------------------- dodge
-test('sidesteps an incoming player bullet, perpendicular to its path, at the type rate', () => {
-  let dodged = 0;
-  const trials = 200;
-  for (let i = 0; i < trials; i++) {
-    const world = makeWorld(open(30, 12));
-    const e = mk('chaser', at(15, 5));
-    world.enemies = [e];
-    world.player = {...at(4, 5), vx: 0, vy: 0, radius: 10};
-    const rng = rngOf(i + 1);
-    for (let k = 0; k < 10; k++) step(world, e, 0.1, rng);
-    const shot = {x: e.x - 60, y: e.y, vx: 600, vy: 0, radius: 2};
-    world.projectiles = [shot];
-    const out = stepEnemyBrain(e, world, 0.02, rng);
-    if (out.intent === 'dodge') { dodged++; assert.ok(Math.abs(out.moveY) > Math.abs(out.moveX) * 3, 'sidestep is perpendicular to the shot'); }
-  }
-  assert.ok(dodged > trials * 0.35 && dodged < trials * 0.75, `dodged ${dodged}/${trials}`);
-});
-
-test('brutes almost never dodge, and a dodge is decided once per bullet', () => {
+function dodgeSetup(type, shotFrom = -60, seed = 1) {
   const world = makeWorld(open(30, 12));
-  const e = mk('brute', at(15, 5));
+  const e = mk(type, at(15, 5));
   world.enemies = [e];
   world.player = {...at(4, 5), vx: 0, vy: 0, radius: 10};
-  const rng = rngOf(77);
+  const rng = rngOf(seed);
   for (let k = 0; k < 10; k++) step(world, e, 0.1, rng);
-  const shot = {x: e.x - 60, y: e.y, vx: 600, vy: 0, radius: 2};
+  const shot = {x: e.x + shotFrom, y: e.y, vx: shotFrom < 0 ? 600 : -600, vy: 0, radius: 2};
   world.projectiles = [shot];
+  return {world, e, rng, shot};
+}
+
+test('an aware enemy facing the shot always sidesteps it, perpendicular to its path (deterministic)', () => {
+  for (const type of ['chaser', 'gunner']) for (let seed = 1; seed <= 20; seed++) {
+    const {world, e, rng} = dodgeSetup(type, -60, seed);
+    const out = stepEnemyBrain(e, world, 0.02, rng);
+    assert.equal(out.intent, 'dodge', `${type} seed ${seed}`);
+    assert.ok(Math.abs(out.moveY) > Math.abs(out.moveX) * 3, 'sidestep is perpendicular to the shot');
+    assert.equal(out.dodging, true);
+  }
+});
+
+test('dodging has a cooldown: the next shot right after hits', () => {
+  const {world, e, rng} = dodgeSetup('gunner');
   stepEnemyBrain(e, world, 0.02, rng);
-  assert.ok(e.ai.dodgeSeen.has(shot));
-  const before = e.ai.dodgeT;
-  stepEnemyBrain(e, world, 0.02, rng);
-  assert.ok(e.ai.dodgeT <= before);
+  for (let k = 0; k < 20; k++) stepEnemyBrain(e, world, 0.02, rng);   // dodge finishes (0.3 s)
+  world.projectiles = [{x: e.x - 60, y: e.y, vx: 600, vy: 0, radius: 2}];
+  assert.ok(e.ai.dodgeCd > 0);
+  const out = stepEnemyBrain(e, world, 0.02, rng);
+  assert.notEqual(out.intent, 'dodge');
+});
+
+test('no dodge when the shot comes from behind, or while winding up, or when unaware, or for brutes', () => {
+  {
+    const {world, e, rng} = dodgeSetup('gunner', +60);   // bullet arrives from the east, enemy faces the player (west)
+    assert.notEqual(stepEnemyBrain(e, world, 0.02, rng).intent, 'dodge');
+  }
+  {
+    const {world, e, rng} = dodgeSetup('gunner');
+    e.ai.windup = 0.3;
+    assert.notEqual(stepEnemyBrain(e, world, 0.02, rng).intent, 'dodge');
+  }
+  {
+    const {world, e, rng} = dodgeSetup('chaser');
+    e.ai.aware = false; e.posture = 'guard'; e.ai.suspicion = 0;
+    assert.notEqual(stepEnemyBrain(e, world, 0.02, rng).intent, 'dodge');
+  }
+  {
+    const {world, e, rng} = dodgeSetup('brute');
+    assert.notEqual(stepEnemyBrain(e, world, 0.02, rng).intent, 'dodge');
+  }
+  {
+    const {world, e, rng} = dodgeSetup('guard');
+    assert.notEqual(stepEnemyBrain(e, world, 0.02, rng).intent, 'dodge');
+  }
 });
 
 // ---------------------------------------------------------------- determinism / robustness
