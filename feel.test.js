@@ -60,18 +60,18 @@ test('corner nudge only fires when pinned on a diagonal', () => {
 });
 
 test('time scale eases over about a tenth of a second and keeps the documented rules', () => {
-  assert.equal(timeScale({mode: 'play', paused: false, loadoutOpen: false, moving: false}), .18);
-  let s = .18;
+  assert.equal(timeScale({mode: 'play', paused: false, loadoutOpen: false, speedRatio: 0}), .08);
+  let s = .08;
   for (let i = 0; i < 4; i++) s = easeTimeScale(s, 1, 1 / 60);
   assert.ok(s > .85 && s < 1, `moving ramps up (${s})`);
-  for (let i = 0; i < 8; i++) s = easeTimeScale(s, .18, 1 / 60);
-  assert.ok(s < .3 && s >= .18, `still ramps down (${s})`);
-  for (let i = 0; i < 60; i++) s = easeTimeScale(s, .18, 1 / 60);
-  assert.equal(s, .18);
+  for (let i = 0; i < 8; i++) s = easeTimeScale(s, .08, 1 / 60);
+  assert.ok(s < .3 && s >= .08, `still ramps down (${s})`);
+  for (let i = 0; i < 60; i++) s = easeTimeScale(s, .08, 1 / 60);
+  assert.equal(s, .08);
   assert.equal(easeTimeScale(.7, 0, 1 / 60), 0, 'pause snaps');
   assert.equal(easeTimeScale(undefined, .5, 1 / 60), .5);
-  const mid = easeTimeScale(.18, 1, 1 / 60);
-  assert.ok(mid > .18 && mid < 1, 'never jumps in a single frame');
+  const mid = easeTimeScale(.08, 1, 1 / 60);
+  assert.ok(mid > .08 && mid < 1, 'never jumps in a single frame');
 });
 
 test('bloom builds with sustained fire, holds while firing, and recovers', () => {

@@ -20,3 +20,8 @@ test('STAND STILL only appears after the player has moved', () => {
 test('blocked contexts show nothing', () => {
   assert.equal(pickHint({...base, blocked: true}, keys), null);
 });
+
+test('the beat hint teaches that shots let time through', () => {
+  const seen = new Set(['basics', 'still', 'move']);
+  assert.equal(pickHint({...base, seen, shots: 1, moved: true}, keys).id, 'beat');
+});
