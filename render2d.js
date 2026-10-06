@@ -339,12 +339,6 @@ export function createRenderer(container, state) {
         }
       }
     }
-    // idle life on props: the workbench throws a stray weld spark now and then
-    const wb = state.workbench;
-    if (wb && p && Math.abs(wb.x - p.x) < 380 && Math.abs(wb.y - p.y) < 260) {
-      vis.wbT -= step;
-      if (vis.wbT <= 0) { vis.wbT = 1.8 + Math.random() * 3; fx.spark(wb.x + 8, wb.y + 4, -Math.PI / 2, 4, 0.9, [40, 120], '#ffd9a0'); fx.star(wb.x + 8, wb.y + 2, '#fff2c0', 3, 0.25); }
-    }
   }
 
   // ------------------------------------------------------------------ helpers for drawing
@@ -393,8 +387,6 @@ export function createRenderer(container, state) {
     }
     const p = state.player;
     if (p) drawBlobShadow(ctx, p.x, p.y, 10, 1.5);
-    if (state.workbench) drawBoxShadow(ctx, state.workbench.x - 22, state.workbench.y - 14, 44, 28, 10);
-    for (const room of state.rooms) if (room.role === 'merchant') { const x = (room.cx + 0.5) * TILE, y = (room.cy + 0.5) * TILE; if (inView({x, y}, b, 70)) { drawBlobShadow(ctx, x, y - 4, 12, 4); drawBoxShadow(ctx, x - 30, y + 14, 60, 18, 10); } }
     for (const t of state.thrown) { const a = grenadeAir(t); drawBlobShadow(ctx, t.x, t.y, Math.max(2, 4 - a.z * 0.12), 5, 0.8 * (1 - a.z * 0.04)); }
   }
 
@@ -438,71 +430,6 @@ export function createRenderer(container, state) {
 
   function drawProps(b) {
     const t = vis.time;
-    // workbench: screen flickers and scrolls, the hologram turns, a scan line sweeps
-    const wb = state.workbench;
-    if (wb && inView(wb, b, 60)) {
-      const x = wb.x, y = wb.y, pulse = 0.5 + 0.5 * Math.sin(t * 2.4), glitch = hashPos(Math.floor(t * 9), 5) > 0.92;
-      ctx.save(); ctx.translate(x, y);
-      ctx.strokeStyle = rgba('#ff4d6d', 0.25 + pulse * 0.2); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 30, 0, TAU); ctx.stroke();
-      ctx.setLineDash([4, 6]); ctx.strokeStyle = rgba('#ff4d6d', 0.3); ctx.lineWidth = 1; ctx.lineDashOffset = -t * 6; ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#17141d'; ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.fillRect(-20, -11, 44, 28); // lip
-      const grad = lgrad(ctx, -22, -14, 22, 14, '#6a6275', '#3e3848');
-      ctx.fillStyle = grad; ctx.fillRect(-22, -14, 44, 28); ctx.lineWidth = 1.4; ctx.strokeRect(-22, -14, 44, 28);
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-21, 13); ctx.lineTo(-21, -13); ctx.lineTo(21, -13); ctx.stroke();
-      ctx.fillStyle = '#2a2531'; ctx.fillRect(-18, -10, 36, 20); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.7; ctx.strokeRect(-18, -10, 36, 20);
-      // tools laid out on the bench
-      ctx.fillStyle = '#b9b3c4'; ctx.fillRect(-14, 3, 14, 2.4); ctx.fillRect(-14, 5.6, 9, 1.8);
-      ctx.fillStyle = '#d65a3e'; ctx.fillRect(-1, 3, 5, 2.4);
-      ctx.fillStyle = '#c9a24e'; ctx.fillRect(7, -6, 8, 3); ctx.fillStyle = '#4a4455'; ctx.fillRect(7, 0, 8, 5); ctx.strokeStyle = INK; ctx.strokeRect(7, 0, 8, 5);
-      // screen: flicker, scrolling readout bars and a scan line
-      ctx.fillStyle = INK; ctx.fillRect(-12, -13, 22, 6);
-      ctx.fillStyle = rgba('#ff5a78', glitch ? 0.35 : 0.7 + pulse * 0.3 - (hashPos(Math.floor(t * 24), 2) > 0.85 ? 0.12 : 0)); ctx.fillRect(-11, -12.2, 20, 4.4);
-      ctx.fillStyle = 'rgba(255,230,235,0.55)';
-      for (let i = 0; i < 3; i++) { const w = 3 + hashPos(Math.floor(t * 3) + i * 7, i + 1) * 12; ctx.fillRect(-9.5, -11.6 + i * 1.3, w, 0.8); }
-      const sy = -12.2 + ((t * 7) % 4.4); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-11, sy, 20, 0.7);
-      // vise
-      ctx.fillStyle = '#7a7585'; ctx.fillRect(15, -11, 6, 7); ctx.strokeStyle = INK; ctx.strokeRect(15, -11, 6, 7);
-      ctx.restore();
-      // holo gun hovering over the bench, turning about its long axis
-      ctx.save(); ctx.translate(x, y - 25 + Math.sin(t * 2) * 1.5); ctx.rotate(-0.15);
-      ctx.globalAlpha = (0.7 + pulse * 0.2) * (glitch ? 0.5 : 1); ctx.scale(0.7, 0.7 * (0.35 + 0.65 * Math.abs(Math.cos(t * 0.9))));
-      drawGun(ctx, GUNS[state.weaponIndex], {reach: -12});
-      ctx.restore(); ctx.globalAlpha = 1;
-    }
-    // merchant stalls
-    for (const room of state.rooms) {
-      if (room.role !== 'merchant') continue;
-      const x = (room.cx + 0.5) * TILE, y = (room.cy + 0.5) * TILE;
-      if (!inView({x, y}, b, 80)) continue;
-      const pulse = 0.5 + 0.5 * Math.sin(t * 2), breath = 1 + 0.028 * Math.sin(t * 1.8), blink = (t + x * 0.01) % 3.6 < 0.12;
-      ctx.save(); ctx.translate(x, y);
-      ctx.setLineDash([5, 7]); ctx.lineDashOffset = t * 7; ctx.strokeStyle = rgba('#ffc46b', 0.3 + pulse * 0.2); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 44, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      // counter in front of the vendor
-      ctx.fillStyle = '#1d140f'; ctx.fillRect(-29, 16, 62, 18);
-      const wood = lgrad(ctx, 0, 14, 0, 32, '#9a6b46', '#6c4a33');
-      ctx.fillStyle = wood; ctx.fillRect(-30, 14, 60, 18); ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.strokeRect(-30, 14, 60, 18);
-      ctx.strokeStyle = 'rgba(255,230,190,0.4)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-29, 15); ctx.lineTo(29, 15); ctx.stroke();
-      ctx.fillStyle = '#e8bb62'; for (const gx of [-22, -8, 6, 20]) { ctx.fillRect(gx, 17.5, 6, 6); } ctx.fillStyle = '#6fd6b2'; ctx.fillRect(-20, 25, 4, 4); ctx.fillStyle = '#d85a6a'; ctx.fillRect(8, 25, 4, 4); ctx.fillStyle = '#74c9ed'; ctx.fillRect(21, 25, 4, 4);
-      // vendor: cloak, hood (breathing), blinking eyes
-      ctx.save(); ctx.translate(0, -1); ctx.scale(breath, 1 / breath); ctx.translate(0, 1);
-      ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, -1, 12.5, 11.5, 0, 0, TAU); ctx.fill();
-      const cloak = lgrad(ctx, -10, -10, 10, 10, '#b7794f', '#6d4430');
-      ctx.fillStyle = cloak; ctx.beginPath(); ctx.ellipse(0, -1, 11, 10, 0, 0, TAU); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,230,190,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, -1, 9, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
-      ctx.fillStyle = '#3b2a22'; ctx.beginPath(); ctx.arc(0, 2, 6.2, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
-      ctx.fillStyle = '#ffd27a'; if (blink) { ctx.fillRect(-3, 5.1, 2, 0.6); ctx.fillRect(1, 5.1, 2, 0.6); } else { ctx.beginPath(); ctx.arc(-2, 5.3, 0.9, 0, TAU); ctx.arc(2, 5.3, 0.9, 0, TAU); ctx.fill(); }
-      ctx.restore();
-      // sign (neon flickers now and then) with a hanging lantern that sways
-      const dim = hashPos(Math.floor(t * 8) + Math.floor(x), 9) > 0.9;
-      ctx.fillStyle = '#17110e'; ctx.fillRect(-28, -38, 56, 13); ctx.strokeStyle = rgba('#ffc46b', dim ? 0.4 : 0.9); ctx.lineWidth = 1.1; ctx.strokeRect(-28, -38, 56, 13);
-      ctx.fillStyle = rgba('#ffd27a', dim ? 0.3 : 0.85 + pulse * 0.15); ctx.font = `700 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MARKET', 0, -31.5);
-      const sw = 0.24 * Math.sin(t * 1.7 + x) + 0.06 * Math.sin(t * 3.3), lx = 33 + Math.sin(sw) * 13, ly = -38 + Math.cos(sw) * 13;
-      ctx.strokeStyle = '#6b5a4a'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(33, -38); ctx.lineTo(lx, ly); ctx.stroke();
-      ctx.fillStyle = INK; ctx.fillRect(lx - 3.2, ly - 0.5, 6.4, 7.4); ctx.fillStyle = '#ffd27a'; ctx.fillRect(lx - 2.2, ly + 0.6, 4.4, 5.2);
-      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(lx - 1.6, ly + 1, 1.2, 4);
-      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 + 0.12 * Math.sin(t * 11 + x); ctx.drawImage(glowSprite('#ffb85a'), lx - 16, ly - 12, 32, 32); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
-    }
   }
 
   function drawGates(b) {

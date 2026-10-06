@@ -29,7 +29,7 @@ export function assignRoomRoles(rooms,seed,gateableCacheIndexes=[]){
 }
 
 export function roomEnemyCount(role,roll=0.5,combatIndex=Infinity){
-  if(role==='entry'||role==='clinic'||role==='merchant')return 0;
+  if(role==='entry'||role==='clinic')return 0;
   if(role==='cache')return 2;
   if(role==='armory')return 3;
   if(role==='elite')return 2;
