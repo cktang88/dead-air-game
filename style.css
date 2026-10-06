@@ -807,6 +807,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #how-to.compact { padding: var(--s-3) var(--s-4); align-self: start; cursor: pointer; }
 #how-to.compact > :not(.eyebrow) { display: none; }
 #how-to.compact .eyebrow { margin: 0; cursor: pointer; }
+#how-to.compact:not(.open) .eyebrow:not(:first-child) { display: none; }
+#how-to.compact .eyebrow:not(:first-child)::after { content: none; }
 #how-to.compact .eyebrow::after { content: '+ EXPAND'; margin-left: var(--s-3); color: var(--text-low); }
 #how-to.compact.open > :not(.eyebrow) { display: revert; }
 #how-to.compact.open { cursor: default; }

@@ -688,7 +688,7 @@ function playerHitDamage(b,enemy){
   if(b.owner!=='player')return b.damage;
   const f=freqStats(state.freq);let dmg=b.damage;
   {const snap=b.sneak?.get(enemy),mod=damageModifier({type:enemy.type,aware:!snap&&!!enemy.aware,asleep:!!snap?.asleep,facing:snap??enemy.face,bulletDir:{x:b.vx,y:b.vy},bruteRecovering:enemy.type==='brute'&&(enemy.meleeCooldown>0||enemy.ai?.brute?.phase==='recover')});
-    if(mod.mult>1){dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-22,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',13,1);}}
+    if(mod.mult>1){dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-30,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',mod.label==='SILENT'?26:22,1.2);}}
   if(!enemy.aware&&enemy.type!=='boss')dmg*=1+f.unawareDamage;
   if((b.bounces||0)>0)dmg*=1+f.bounceDamage;
   return bossDamageFor(enemy,dmg);
