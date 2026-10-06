@@ -61,7 +61,7 @@ export class WorldLayer {
     const h = tileMap.length, w = tileMap[0].length;
     const kind = new Uint8Array(w * h).fill(2);
     const tileRoom = new Int16Array(w * h).fill(-1);
-    const isFloor = (x, y) => x >= 0 && y >= 0 && x < w && y < h && tileMap[y][x] === 0;
+    const isFloor = (x, y) => x >= 0 && y >= 0 && x < w && y < h && (tileMap[y][x] === 0 || tileMap[y][x] === 4); // 4 = glass, drawn live over the floor
     // hard cover stamped by room templates: solid in the tile map, but drawn as a prop standing on the room floor
     const cover = new Map();
     rooms.forEach((room, index) => {

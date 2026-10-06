@@ -312,7 +312,7 @@ function wireTitleUi() {
   toggle.addEventListener('click', () => set(settings.hidden));
   $('close-settings')?.addEventListener('click', () => set(false));
   $('meta-button')?.addEventListener('click', () => set(false));
-  $('resume-button')?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' })));
+  for (const id of ['resume-button', 'resume-button-2']) $(id)?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' })));
 }
 if (typeof document !== 'undefined') {
   wireTitleUi();

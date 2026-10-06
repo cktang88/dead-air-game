@@ -56,6 +56,12 @@
         <div id="minimap-wrap" class="panel"><canvas id="minimap" width="156" height="117"></canvas><div class="mm-legend"><span style="--c:var(--slow)">EXIT</span><span style="--c:var(--coin)">CACHE</span><span style="--c:var(--scrap)">SHOP</span><span style="--c:var(--armor)">CLINIC</span><span style="--c:var(--tier-rare)">BENCH</span><span style="--c:var(--sprint)">GATE</span></div></div>
       </div>
       <div id="tutor-hint" role="status" aria-live="polite"></div>
+      <div id="name-card" role="status" aria-live="polite"></div>
+      <div id="manual-chip" role="status" aria-live="polite"></div>
+      <div id="sig-hint" role="status" aria-live="polite"></div>
+      <div id="sig-cause" role="status" aria-live="assertive"></div>
+      <div id="sig-complete" role="status" aria-live="polite"></div>
+      <div id="peek-frame" aria-hidden="true"><i class="bar t"></i><i class="bar b"></i><div class="peek-chip"><span class="peek-eye" data-icon="status-info"></span><b>PEEKING</b><span>FROZEN · RELEASE <kbd data-action="interact">E</kbd> TO RETURN</span></div></div>
       <div id="toast" role="status"></div>
       <section id="pause-screen" class="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
         <div class="dlg-card dlg-sm pause-card">
@@ -65,14 +71,25 @@
               <h2 id="pause-title">PAUSED</h2>
             </div>
           </header>
-          <div class="pause-stats">
-            <div><small><span class="ico sm" data-icon="door"></span>LOCATION</small><b id="pause-room">—</b></div>
-            <div><small><span class="ico sm" data-icon="status-clock"></span>TIME</small><b id="pause-time">00:00</b></div>
-            <div><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="pause-kills">0</b></div>
-            <div><small><span class="ico sm" data-icon="status-seed"></span>SEED</small><b id="pause-seed">—</b></div>
+          <div class="pause-tabs" role="tablist">
+            <button type="button" class="on" role="tab" aria-selected="true" data-pause-tab="pause">PAUSED</button>
+            <button type="button" role="tab" aria-selected="false" data-pause-tab="manual">FIELD MANUAL <small id="manual-count">0/0</small></button>
           </div>
-          <button id="resume-button" class="btn primary block" type="button"><span>RESUME</span><kbd>ESC</kbd></button>
-          <footer class="dlg-foot center"><span class="keyhints"><span class="keyhint"><kbd>TAB</kbd>Loadout</span><span class="keyhint"><kbd data-action="reload">R</kbd>Reload</span><span class="keyhint"><kbd>F</kbd>Fullscreen</span></span></footer>
+          <div id="pause-main">
+            <div class="pause-stats">
+              <div><small><span class="ico sm" data-icon="door"></span>LOCATION</small><b id="pause-room">—</b></div>
+              <div><small><span class="ico sm" data-icon="status-clock"></span>TIME</small><b id="pause-time">00:00</b></div>
+              <div><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="pause-kills">0</b></div>
+              <div><small><span class="ico sm" data-icon="status-seed"></span>SEED</small><b id="pause-seed">—</b></div>
+            </div>
+            <button id="resume-button" class="btn primary block" type="button"><span>RESUME</span><kbd>ESC</kbd></button>
+            <button id="skip-signal" class="btn ghost block sm" type="button" hidden>SKIP SIGNAL CHECK</button>
+          </div>
+          <div id="manual-panel" hidden>
+            <div id="manual-list"></div>
+            <button id="resume-button-2" class="btn primary block" type="button" data-resume><span>RESUME</span><kbd>ESC</kbd></button>
+          </div>
+          <footer class="dlg-foot center"><span class="keyhints"><span class="keyhint"><kbd>TAB</kbd>Loadout</span><span class="keyhint"><kbd>M</kbd>Manual</span><span class="keyhint"><kbd data-action="reload">R</kbd>Reload</span><span class="keyhint"><kbd>F</kbd>Fullscreen</span></span></footer>
         </div>
       </section>
       <section id="overlay" class="show">
@@ -110,6 +127,10 @@
             <div class="eyebrow">COMFORT</div>
             <label class="audio-volume visual-volume" for="shake-strength"><span>Screen shake <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
             <label class="audio-volume visual-volume" for="flash-strength"><span>Flash brightness <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
+          </div>
+          <div class="set-group">
+            <div class="eyebrow">ONBOARDING</div>
+            <button id="replay-signal" class="btn secondary block sm" type="button"><span class="ico sm" data-icon="status-slowmo"></span><span class="grow">REPLAY SIGNAL CHECK</span></button>
           </div>
           <details id="controls-settings">
             <summary><span class="ico sm" data-icon="status-keyboard"></span>REMAP CONTROLS</summary>

@@ -36,7 +36,8 @@ export function sightDistance(state, ox, oy, ang, maxLen, step = 10) {
   let len = maxLen;
   const solid = state.solidMap;
   for (let d = step; d <= maxLen; d += step) {
-    if (solid[Math.floor((oy + dy * d) / TILE)]?.[Math.floor((ox + dx * d) / TILE)] !== 0) { len = d - step * 0.5; break; }
+    const v = solid[Math.floor((oy + dy * d) / TILE)]?.[Math.floor((ox + dx * d) / TILE)];
+    if (v !== 0 && v !== 4) { len = d - step * 0.5; break; }   // 4 = glass: cones see through it
   }
   for (const c of state.crates ?? []) if (Math.abs(c.x - ox) < len + 20 && Math.abs(c.y - oy) < len + 20) len = Math.min(len, rayHitCircle(ox, oy, dx, dy, c.x, c.y, 17, len));
   for (const c of state.cover ?? []) { if (c.crate) continue; if (Math.abs(c.x - ox) < len + 30 && Math.abs(c.y - oy) < len + 30) len = Math.min(len, rayHitCircle(ox, oy, dx, dy, c.x, c.y, c.radius, len)); }
@@ -114,7 +115,7 @@ export function createStealthLayer() {
       const r = rings[i]; r.age += dt;
       if (r.age >= RING_LIFE) { rings.splice(i, 1); continue; }
       const t = r.age / RING_LIFE, k = 1 - (1 - t) * (1 - t), fade = 1 - t;
-      const col = r.kind === 'sprint' ? COLORS.sprint : r.kind === 'suppressed' ? COLORS.slow : COLORS.ammo;
+      const col = r.kind === 'sprint' || r.kind === 'kick' ? COLORS.sprint : r.kind === 'suppressed' || r.kind === 'door' ? COLORS.slow : COLORS.ammo;
       const n = r.radii.length;
       ctx.beginPath();
       for (let j = 0; j <= n; j++) { const a = (j % n) / n * TAU, rr = r.radii[j % n] * k; ctx.lineTo(r.x + Math.cos(a) * rr, r.y + Math.sin(a) * rr); }

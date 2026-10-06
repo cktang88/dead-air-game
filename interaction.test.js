@@ -57,13 +57,11 @@ test('popup text and hostile room finder', () => {
 test('hints: one at a time, once, gated on context', () => {
   const keys = {reload: 'R', throwableCycle: 'Q', throwableUse: 'G', loadout: 'TAB'};
   const ctx = {blocked: false, seen: new Set(['basics']), moved: true, runTime: 5, moving: false, stillFor: 1, magEmpty: false, reserve: 10, otherHasAmmo: true, hostilesNear: 0, grenades: 2, hasMod: true, scrap: 0};
-  assert.equal(pickHint(ctx, keys).id, 'still');
-  ctx.seen.add('still'); assert.equal(pickHint(ctx, keys), null);
-  assert.equal(pickHint({...ctx, moving: true}, keys).id, 'move');
+  assert.equal(pickHint(ctx, keys), null, 'movement and time hints moved to the Signal Check');
   assert.equal(pickHint({...ctx, magEmpty: true}, keys).text, '[R] RELOAD');
   assert.equal(pickHint({...ctx, magEmpty: true, reserve: 0}, keys).id, 'swap');
   assert.equal(pickHint({...ctx, blocked: true, magEmpty: true}, keys), null);
-  assert.ok(HINT_DEFS.length >= 6);
+  assert.ok(HINT_DEFS.length >= 5);
 });
 test('hint storage tolerates failures', () => {
   assert.equal(loadSeen({getItem() { throw new Error('x'); }}).size, 0);

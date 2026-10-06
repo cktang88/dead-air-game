@@ -37,7 +37,7 @@ export class Lighting {
   setLevel({tileMap, rooms}) {
     const h = tileMap.length, w = tileMap[0].length;
     const room = new Int16Array(w * h).fill(-1), floor = new Uint8Array(w * h);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (tileMap[y][x] === 0) floor[y * w + x] = 1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (tileMap[y][x] === 0 || tileMap[y][x] === 4) floor[y * w + x] = 1;
     rooms.forEach((r, i) => { for (let y = r.y1; y <= r.y2; y++) for (let x = r.x1; x <= r.x2; x++) if (floor[y * w + x]) room[y * w + x] = i; });
     // for every solid tile, the floor tiles around it
     const around = Array.from({length: w * h}, () => null);
@@ -58,10 +58,11 @@ export class Lighting {
   update(dt, state) {
     const L = this.level;
     if (!L) return;
-    const key = state.currentRoom + '|' + state.rooms.map((r) => (r.visited ? 1 : 0)).join('');
+    const peekRoom = state.peek ? state.peek.room : -1;   // a peek lifts the fog off the room beyond the door
+    const key = state.currentRoom + '|' + peekRoom + '|' + state.rooms.map((r) => (r.visited ? 1 : 0)).join('');
     if (key !== this.key) {
       this.key = key;
-      const roomAlpha = state.rooms.map((r, i) => (i === state.currentRoom ? FOG.current : r.visited ? FOG.visited : FOG.unseen));
+      const roomAlpha = state.rooms.map((r, i) => (i === state.currentRoom || i === peekRoom ? FOG.current : r.visited ? FOG.visited : FOG.unseen));
       for (let i = 0; i < L.w * L.h; i++) {
         if (L.floor[i]) { const r = L.room[i]; L.tgt[i] = r >= 0 ? roomAlpha[r] : FOG.corridor; }
       }

@@ -126,6 +126,8 @@ export function segmentCircleHitTime(start, end, center, radius) {
 
 // Exact grid traversal (Amanatides-Woo): every tile the segment touches, in order, with the entry fraction t.
 // Unlike point sampling this cannot skip a tile corner at any projectile speed.
+// Tile 4 is glass: it blocks walking but not sight or bullets (signal-check.js, game.js).
+const solidTile=value=>value!==0&&value!==4;
 export function segmentBlockedTiles(start, end, tileMap, tileSize) {
   const hits=[];
   const dx=end.x-start.x,dy=end.y-start.y;
@@ -138,7 +140,7 @@ export function segmentBlockedTiles(start, end, tileMap, tileSize) {
   let t=0;
   const maxCells=Math.abs(endX-x)+Math.abs(endY-y)+2;
   for(let i=0;i<maxCells;i++){
-    if(tileMap[y]?.[x]!==0)hits.push({x,y,t});
+    if(solidTile(tileMap[y]?.[x]))hits.push({x,y,t});
     if(x===endX&&y===endY)break;
     if(tMaxX<tMaxY){t=tMaxX;tMaxX+=tDeltaX;x+=stepX;}else{t=tMaxY;tMaxY+=tDeltaY;y+=stepY;}
     if(t>1)break;
@@ -155,7 +157,7 @@ export function segmentWallRuns(start, end, tileMap, tileSize, startsInsideWall=
     previous=cell;
   }
   const x=Math.floor(end.x/tileSize),y=Math.floor(end.y/tileSize);
-  return {runs,endsInsideWall:tileMap[y]?.[x]!==0};
+  return {runs,endsInsideWall:solidTile(tileMap[y]?.[x])};
 }
 
 export function weaponLoadoutWeight(weapons, guns) {
