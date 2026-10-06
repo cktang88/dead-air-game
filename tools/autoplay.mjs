@@ -131,7 +131,7 @@ function installHooks() {
         modal: {cache: !!s.cacheOpen, merchant: !!s.merchantOpen, gun: s.pendingGunPickup ? s.pendingGunPickup.gunIndex : null, loadout: !!s.loadoutOpen, pending: !!s.pendingLoadoutChange},
         extraction: !!s.extractionOpen, gear: s.gear, floor: s.floor, rm: s.runModal || null, runRooms: s.runRooms || 0,
         cam: {x: v.cam.x, y: v.cam.y, w: v.cam.w, h: v.cam.h, scale: v.cam.scale},
-        enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0})),
+        enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0, sf: e.shieldFacing})),
         bullets: s.bullets.filter(b => b.owner === 'enemy').map(b => ({x: b.x, y: b.y, vx: b.vx, vy: b.vy, id: b.enemyId, d: b.damage || 1})),
         cover: s.cover.map(c => ({x: c.x, y: c.y, r: c.radius, crate: !!c.crate})),
         crates: s.crates.map(c => ({x: c.x, y: c.y, hp: c.hp})),
@@ -246,6 +246,7 @@ class Nav {
 // ───────────────────────────── the bot ─────────────────────────────
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]].map(([x, y]) => { const l = hyp(x, y); return {x: x / l, y: y / l}; });
 const KEYFOR = (d) => { const k = []; if (d.x > .3) k.push('KeyD'); else if (d.x < -.3) k.push('KeyA'); if (d.y > .3) k.push('KeyS'); else if (d.y < -.3) k.push('KeyW'); return k; };
+const angDiff = (a, b) => { let d = Math.abs(a - b) % (2 * Math.PI); return d > Math.PI ? 2 * Math.PI - d : d; };
 const gunScore = gi => { const g = GUNS[gi]; return g.damage * (g.count || 1) * (g.burst ? g.burst.shots : 1) / Math.max(.1, g.rate) * (.55 + Math.min(g.range, 700) / 700) * (g.mag >= 10 ? 1 : .8) / (1 + g.weight / 14); };
 
 class Bot {
@@ -303,6 +304,7 @@ class Bot {
       const pv = this.prevEn.get(e.id);
       if (pv && S.t > pv.t) { e.vx = (e.x - pv.x) / (S.t - pv.t) * .5 + (pv.vx || 0) * .5; e.vy = (e.y - pv.y) / (S.t - pv.t) * .5 + (pv.vy || 0) * .5; } else { e.vx = 0; e.vy = 0; }
       this.prevEn.set(e.id, {x: e.x, y: e.y, t: S.t, vx: e.vx, vy: e.vy});
+      e.shielded = false; if (e.type === 'riot' && typeof e.sf === 'number' && !(e.stun > 0)) { e.shielded = angDiff(Math.atan2(S.py - e.y, S.px - e.x), e.sf) < 1.1; }
       e.melee = ['chaser', 'brute', 'riot', 'boss'].includes(e.type);
       if (e.onScreen && e.los) {
         if (!this.seen.has(e.id)) this.seen.set(e.id, {first: S.t, react: this.react * (.7 + .6 * this.rng())});
@@ -491,6 +493,7 @@ class Bot {
         sc += (after - e.d) * w * (e.d < 140 ? 1 : .4) * (0.5 + this.dodgeSkill * .5);
         if (after < 26) sc -= 25;
       }
+      for (const e of reacted) if (e.type === 'riot' && typeof e.sf === 'number' && e.d < 260) sc += (angDiff(Math.atan2(q.y - e.y, q.x - e.x), e.sf) - angDiff(Math.atan2(P.y - e.y, P.x - e.x), e.sf)) * 14;
       // sidestep telegraphed shots
       for (const e of reacted) if (!e.melee && (e.aimT > 0) && e.d > 20) {
         const ax = (P.x - e.x) / e.d, ay = (P.y - e.y) / e.d; const perp = Math.abs(d.x * -ay + d.y * ax);
@@ -549,6 +552,11 @@ class Bot {
       if (!this.task || nt.key !== this.task.key) { this.task = {...nt, at: S.t, since: S.t}; this.plan = null; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] task ${nt.kind} ${nt.key} @${Math.round(nt.x)},${Math.round(nt.y)}`); }
       else { this.task = {...nt, at: S.t, since: this.task.since}; }
     }
+    if (['ammo', 'heal', 'armor', 'scrap', 'mod', 'gun'].includes(this.task.kind) && hyp(this.task.x - S.px, this.task.y - S.py) < 22) {
+      if (!this.arrive || this.arrive.key !== this.task.key) this.arrive = {key: this.task.key, t: S.t};
+      else if (S.t - this.arrive.t > 1.2) { this.unreachable.set(this.task.key, S.t + 150); this.task.done = true; this.arrive = null; }
+    }
+    if (['ammo', 'heal', 'armor', 'scrap', 'mod', 'gun', 'cache', 'locker', 'gate', 'market', 'clear'].includes(this.task.kind) && S.t - this.task.since > 14) { this.unreachable.set(this.task.key, S.t + 150); if (this.task.room != null && this.task.kind === 'clear') this.badRooms.set(this.task.room, S.t + 150); this.task.done = true; res.taskTimeouts = (res.taskTimeouts || 0) + 1; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] task timeout ${this.task.key}`); }
     this.stats.taskTicks[this.task.kind] = (this.stats.taskTicks[this.task.kind] || 0) + 1;
     const task = this.task, P = {x: S.px, y: S.py}, gun = GUNS[S.wi];
 
@@ -556,7 +564,7 @@ class Bot {
     const reacted = en.filter(e => e.vis && e.reacted && e.d < Math.max(gun.range * 1.1, 160));
     if (this.target && !reacted.some(e => e.id === this.target.id)) this.target = null;
     let target = null, bestS = 1e9;
-    for (const e of reacted) { const s = e.d - (e.aimT > 0 || e.wind > 0 ? 60 : 0) - (this.target?.id === e.id ? 45 : 0) + (e.type === 'brute' ? 20 : 0); if (s < bestS) { bestS = s; target = e; } }
+    for (const e of reacted) { const s = e.d + (e.shielded ? 150 : 0) - (e.aimT > 0 || e.wind > 0 ? 60 : 0) - (this.target?.id === e.id ? 45 : 0) + (e.type === 'brute' ? 20 : 0); if (s < bestS) { bestS = s; target = e; } }
     this.target = target;
     const threats = en.filter(e => e.vis && e.reacted); const bulletsNear = S.bullets.some(b => hyp(b.x - P.x, b.y - P.y) < 220);
     const inCombat = threats.length > 0 || (bulletsNear && this.rng() < this.dodgeSkill + .3);
@@ -625,7 +633,7 @@ class Bot {
       tx = P.x + Math.cos(ang) * dist; ty = P.y + Math.sin(ang) * dist;
       await this.aimWorld(S, tx, ty);
       const err = Math.abs(Math.atan2(S.aim.x * (ty - P.y) - S.aim.y * (tx - P.x), S.aim.x * (tx - P.x) + S.aim.y * (ty - P.y)));
-      firing = target.d <= gun.range * 0.9 && err < Math.atan2(11, Math.max(40, target.d)) + 0.03 + 0.04 * (1 - this.k) && target.los;
+      firing = !target.shielded && target.d <= gun.range * 0.9 && err < Math.atan2(11, Math.max(40, target.d)) + 0.03 + 0.04 * (1 - this.k) && target.los;
     } else if (move) { await this.aimWorld(S, P.x + move.x * 160, P.y + move.y * 160); }
     // blocked by a crate/cover while stuck: shoot it
     if (!firing && this.recover?.shoot && ammoNow > 0 && !S.reloading) { await this.aimWorld(S, this.recover.shoot.x, this.recover.shoot.y); firing = true; }
@@ -830,16 +838,16 @@ async function main() {
   console.log(`autoplay: ${seeds.length} seeds, skill ${o.skill}, workers ${o.workers}, speed ${o.speed}x, vendor ${vendor || '(network)'}, out ${outDir}`);
   const queue = [...seeds], results = [];
   const worker = async (id) => {
-    const browser = await chromium.launch({});
-    try {
-      while (queue.length) {
-        const seed = queue.shift();
-        const r = await playSeed(browser, seed, o, {port, vendor, outDir});
-        results.push(r);
-        console.log(`seed ${seed}: ${r.result} rooms ${r.roomsCleared}/${r.roomsTotal} kills ${r.kills} dmg ${r.damage?.total ?? '-'} game ${r.gameSec}s wall ${r.wallSec}s stuck ${r.stuck?.count ?? 0}${r.deathCause ? ' killed by ' + r.deathCause : ''}${r.result === 'error' ? ' ' + r.reason : ''}`);
-        fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({options: o, results}, null, 1));
-      }
-    } finally { await browser.close().catch(() => {}); }
+    while (queue.length) {
+      const seed = queue.shift();
+      let r, browser;
+      try { browser = await chromium.launch({}); r = await playSeed(browser, seed, o, {port, vendor, outDir}); }
+      catch (e) { r = {seed, skill: o.skill, result: 'error', reason: 'browser: ' + String(e.message).slice(0, 100), wallSec: 0}; }
+      finally { await browser?.close().catch(() => {}); }
+      results.push(r);
+      console.log(`seed ${seed}: ${r.result} fl ${r.floorReached} rooms ${r.roomsCleared}/${r.roomsTotal} kills ${r.kills} dmg ${r.damage?.total ?? '-'} game ${r.gameSec}s wall ${r.wallSec}s stuck ${r.stuck?.count ?? 0}${r.deathCause ? ' killed by ' + r.deathCause : ''}${r.result === 'error' ? ' ' + r.reason : ''}`);
+      fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({options: o, results}, null, 1));
+    }
   };
   await Promise.all(Array.from({length: Math.min(o.workers, seeds.length)}, (_, i) => worker(i)));
   server.close();
