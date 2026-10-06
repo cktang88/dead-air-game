@@ -9,10 +9,20 @@ import {WorldLayer} from './world2d.js';
 import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 
+// Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
+const gradCache = new Map();
+let radialPlate = null;
+function lgrad(ctx, x0, y0, x1, y1, c0, c1) {
+  const key = `l${x0},${y0},${x1},${y1},${c0},${c1}`;
+  let g = gradCache.get(key);
+  if (!g) { g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, c0); g.addColorStop(1, c1); gradCache.set(key, g); }
+  return g;
+}
+
 export {hexStr};
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+import {clamp} from './util.js';
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
 
@@ -109,7 +119,7 @@ export function createRenderer(container, state) {
     if (p) {
       cam.x = p.x; cam.y = p.y;
       // bake what the player can see now so the first frame is complete
-      world.chunkAt(Math.floor(p.x / (TILE * 12)), Math.floor(p.y / (TILE * 12)));
+      world.prewarm(p.x, p.y, 1);
     }
   }
 
@@ -167,7 +177,7 @@ export function createRenderer(container, state) {
     if (p) {
       if (vis.px !== null) {
         const mvx = (p.x - vis.px) / Math.max(step, 1e-4), mvy = (p.y - vis.py) / Math.max(step, 1e-4), sp = Math.hypot(mvx, mvy);
-        vis.pSpeed = sp;
+        vis.pSpeed = sp; vis.mvx = mvx; vis.mvy = mvy;
         vis.dustT = (vis.dustT || 0) - step;
         if (sp > 30 && vis.dustT <= 0) { vis.dustT = sp > 100 ? 0.07 : 0.12; fx.dust(p.x - state.aim.x * 3, p.y - state.aim.y * 3, mvx, mvy); }
       }
@@ -256,7 +266,7 @@ export function createRenderer(container, state) {
       ctx.strokeStyle = rgba('#ff4d6d', 0.25 + pulse * 0.2); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 30, 0, TAU); ctx.stroke();
       ctx.setLineDash([4, 6]); ctx.strokeStyle = rgba('#ff4d6d', 0.3); ctx.lineWidth = 1; ctx.lineDashOffset = -t * 6; ctx.beginPath(); ctx.arc(0, 0, 36, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = '#17141d'; ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.fillRect(-20, -11, 44, 28); // lip
-      const grad = ctx.createLinearGradient(-22, -14, 22, 14); grad.addColorStop(0, '#6a6275'); grad.addColorStop(1, '#3e3848');
+      const grad = lgrad(ctx, -22, -14, 22, 14, '#6a6275', '#3e3848');
       ctx.fillStyle = grad; ctx.fillRect(-22, -14, 44, 28); ctx.lineWidth = 1.4; ctx.strokeRect(-22, -14, 44, 28);
       ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-21, 13); ctx.lineTo(-21, -13); ctx.lineTo(21, -13); ctx.stroke();
       ctx.fillStyle = '#2a2531'; ctx.fillRect(-18, -10, 36, 20); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.7; ctx.strokeRect(-18, -10, 36, 20);
@@ -287,13 +297,13 @@ export function createRenderer(container, state) {
       ctx.setLineDash([5, 7]); ctx.lineDashOffset = t * 7; ctx.strokeStyle = rgba('#ffc46b', 0.3 + pulse * 0.2); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 44, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       // counter in front of the vendor
       ctx.fillStyle = '#1d140f'; ctx.fillRect(-29, 16, 62, 18);
-      const wood = ctx.createLinearGradient(0, 14, 0, 32); wood.addColorStop(0, '#9a6b46'); wood.addColorStop(1, '#6c4a33');
+      const wood = lgrad(ctx, 0, 14, 0, 32, '#9a6b46', '#6c4a33');
       ctx.fillStyle = wood; ctx.fillRect(-30, 14, 60, 18); ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.strokeRect(-30, 14, 60, 18);
       ctx.strokeStyle = 'rgba(255,230,190,0.4)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-29, 15); ctx.lineTo(29, 15); ctx.stroke();
       ctx.fillStyle = '#e8bb62'; for (const gx of [-22, -8, 6, 20]) { ctx.fillRect(gx, 17.5, 6, 6); } ctx.fillStyle = '#6fd6b2'; ctx.fillRect(-20, 25, 4, 4); ctx.fillStyle = '#d85a6a'; ctx.fillRect(8, 25, 4, 4); ctx.fillStyle = '#74c9ed'; ctx.fillRect(21, 25, 4, 4);
       // vendor: cloak, hood, lantern
       ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, -1, 12.5, 11.5, 0, 0, TAU); ctx.fill();
-      const cloak = ctx.createLinearGradient(-10, -10, 10, 10); cloak.addColorStop(0, '#b7794f'); cloak.addColorStop(1, '#6d4430');
+      const cloak = lgrad(ctx, -10, -10, 10, 10, '#b7794f', '#6d4430');
       ctx.fillStyle = cloak; ctx.beginPath(); ctx.ellipse(0, -1, 11, 10, 0, 0, TAU); ctx.fill();
       ctx.strokeStyle = 'rgba(255,230,190,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, -1, 9, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
       ctx.fillStyle = '#3b2a22'; ctx.beginPath(); ctx.arc(0, 2, 6.2, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
@@ -358,7 +368,7 @@ export function createRenderer(container, state) {
       if (pk.kind === 'scrap') {
         ctx.rotate(spin + t * 0.6);
         ctx.fillStyle = INK; hexPath(ctx, 7.4); ctx.fill();
-        const g = ctx.createLinearGradient(-6, -6, 6, 6); g.addColorStop(0, tint(color, 0.45)); g.addColorStop(1, shade(color, 0.7));
+        const g = lgrad(ctx, -6, -6, 6, 6, tint(color, 0.45), shade(color, 0.7));
         ctx.fillStyle = g; hexPath(ctx, 6); ctx.fill();
         ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, TAU); ctx.fill();
         ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(0, 0, 5, Math.PI * 1.1, Math.PI * 1.55); ctx.stroke();
@@ -370,17 +380,17 @@ export function createRenderer(container, state) {
       } else if (pk.kind === 'mod') {
         ctx.rotate(Math.PI / 4 + spin);
         ctx.fillStyle = INK; ctx.fillRect(-7.4, -7.4, 14.8, 14.8);
-        const g = ctx.createLinearGradient(-6, -6, 6, 6); g.addColorStop(0, tint(color, 0.5)); g.addColorStop(1, shade(color, 0.65));
+        const g = lgrad(ctx, -6, -6, 6, 6, tint(color, 0.5), shade(color, 0.65));
         ctx.fillStyle = g; ctx.fillRect(-6, -6, 12, 12);
         ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(-3, -3, 6, 6); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(-4.5, -4.5, 3, 1);
       } else if (pk.kind === 'heal') {
         ctx.fillStyle = INK; rrectPath(ctx, -8.6, -8.6, 17.2, 17.2, 3.5); ctx.fill();
-        const g = ctx.createLinearGradient(-7, -7, 7, 7); g.addColorStop(0, '#f4fff9'); g.addColorStop(1, '#bde8d2');
+        const g = lgrad(ctx, -7, -7, 7, 7, '#f4fff9', '#bde8d2');
         ctx.fillStyle = g; rrectPath(ctx, -7.4, -7.4, 14.8, 14.8, 3); ctx.fill();
         ctx.fillStyle = '#25b673'; ctx.fillRect(-1.8, -5.5, 3.6, 11); ctx.fillRect(-5.5, -1.8, 11, 3.6);
       } else if (pk.kind === 'cache') {
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
-        const g = ctx.createLinearGradient(0, -7, 0, 7); g.addColorStop(0, '#d9a04a'); g.addColorStop(1, '#7c5528');
+        const g = lgrad(ctx, 0, -7, 0, 7, '#d9a04a', '#7c5528');
         ctx.fillStyle = g; ctx.fillRect(-8.4, -6.4, 16.8, 12.8);
         ctx.strokeStyle = '#4a3218'; ctx.lineWidth = 1.2; ctx.strokeRect(-6.4, -4.4, 12.8, 8.8);
         ctx.fillStyle = INK; ctx.fillRect(-2.2, -2, 4.4, 4.4); ctx.fillStyle = '#ffe28a'; ctx.fillRect(-1.2, -1, 2.4, 2.4);
@@ -404,7 +414,7 @@ export function createRenderer(container, state) {
     const t = vis.time, ready = vis.exitReady, col = ready ? '#6dffb0' : '#ff5969';
     ctx.save(); ctx.translate(pk.x, pk.y);
     ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(1.5, 2, 24, 0, TAU); ctx.fill();
-    const g = ctx.createRadialGradient(0, 0, 3, 0, 0, 23); g.addColorStop(0, '#2b2733'); g.addColorStop(1, '#3d3847');
+    const g = radialPlate || (radialPlate = ctx.createRadialGradient(0, 0, 3, 0, 0, 23)); if (!radialPlate._s) { radialPlate._s = 1; g.addColorStop(0, '#2b2733'); g.addColorStop(1, '#3d3847'); }
     ctx.fillStyle = g; ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, 0, 23, 0, TAU); ctx.fill(); ctx.stroke();
     ctx.save(); ctx.rotate(t * 0.25); ctx.strokeStyle = 'rgba(255,205,60,0.7)'; ctx.lineWidth = 3.4; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, 19.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
     ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(0, 0, 14, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
@@ -418,7 +428,7 @@ export function createRenderer(container, state) {
     ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col;
     ctx.restore(); ctx.save(); ctx.translate(pk.x, pk.y);
     // vertical beacon pillar so the exit is visible from across the room
-    const bw = 10 + Math.sin(t * 3) * 2, bg = ctx.createLinearGradient(0, -120, 0, -20); bg.addColorStop(0, rgba(col, 0)); bg.addColorStop(1, rgba(col, ready ? 0.45 : 0.25));
+    const bw = 10 + Math.sin(t * 3) * 2, bg = lgrad(ctx, 0, -120, 0, -20, rgba(col, 0), rgba(col, ready ? 0.45 : 0.25));
     ctx.fillStyle = bg; ctx.fillRect(-bw, -120, bw * 2, 100);
     ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `900 13px ${FONT}`; ctx.lineWidth = 3.4; const label = ready ? 'EXTRACT' : 'EXIT · LOCKED';
@@ -750,7 +760,7 @@ export function createRenderer(container, state) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     world.draw(ctx, viewCam, b, dpr);
     world.drawLive(ctx, viewCam, b, dpr, now);
-    world.idleBake(p.x, p.y, 4);
+    world.idleBake(p.x, p.y, 4, vis.mvx || 0, vis.mvy || 0);
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
 
