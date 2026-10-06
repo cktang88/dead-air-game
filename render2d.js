@@ -13,6 +13,7 @@ import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
 import {createStealthLayer, sightDistance} from './stealth2d.js';
+import {createDoorLayer} from './doors2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -85,6 +86,7 @@ export function createRenderer(container, state) {
   const cam = createCamera();
   const fx = new Fx();
   const stealth = createStealthLayer();
+  const doorLayer = createDoorLayer();
   const world = new WorldLayer();
   const lighting = new Lighting();
   const timeFx = createTimeFx();
@@ -1149,8 +1151,9 @@ export function createRenderer(container, state) {
     vis.flashHit = Math.max(0, (vis.flashHit || 0) - dt * 14); vis.hurtSat = Math.max(0, vis.hurtSat - dt * 2.4);
     // camera
     const look = vis.mouseActive && state.mode === 'play' ? lookAheadOffset(vis.mouseX, vis.mouseY, w, h, 46) : {x: 0, y: 0};
+    // a door peek pans the camera through the door; otherwise follow the player
     const cf = state.camFocus || {x: 0, y: 0};
-    followStep(cam, p.x + look.x + cf.x, p.y + look.y + cf.y, dt, 6.5);
+    if (state.peek) followStep(cam, state.peek.focus.x, state.peek.focus.y, dt, 4.2); else followStep(cam, p.x + look.x + cf.x, p.y + look.y + cf.y, dt, 6.5);
     const shake = frame.shake || 0, motion = vis.motion;
     // camera punches (kills, hits), sprint pull-out and slow-time push-in all vanish when the shake slider is 0
     if (fx.camPunch > 0) { vis.zoom.x += fx.camPunch; fx.camPunch = 0; }
@@ -1176,6 +1179,7 @@ export function createRenderer(container, state) {
     fx.drawBelow(ctx, bp);
     drawShadows(bp);
     drawGates(bp);
+    doorLayer.draw(ctx, state, bp, vis.time);
     drawProps(bp);
     drawPillars(bp);
     drawCrates(bp);
@@ -1198,7 +1202,7 @@ export function createRenderer(container, state) {
 
     // darkness + light pools
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList().concat(world.lights(b, state.currentRoom), state.stageLights || []), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
+    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList().concat(world.lights(b, state.peek ? state.peek.room : state.currentRoom), state.stageLights || []), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
 

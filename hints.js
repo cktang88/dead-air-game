@@ -4,10 +4,7 @@ export const HINTS_KEY = 'dead-air.hints.v1';
 /** id, priority (lower first), text builder given key labels. `urgent` hints may show mid-fight; the rest queue until the room is quiet.
  *  `done` names the action a hint teaches: once ctx.done has it, the hint is never shown. */
 export const HINT_DEFS = Object.freeze([
-  {id: 'basics', urgent: true, done: 'moved', text: k => `${(k.moveKeys || ['W', 'A', 'S', 'D']).map(x => `[${x}]`).join('')} MOVE · [CLICK] FIRE`, when: c => c.runTime > 0.3 && !c.moved},
-  {id: 'still', text: k => 'STAND STILL — TIME ALL BUT STOPS', when: c => c.runTime > 1.5 && c.moved && c.stillFor > 0.6 && !c.moving},
-  {id: 'move', done: 'sprinted', text: k => `WALK = SLOW TIME · [SHIFT] SPRINT = FULL SPEED, AND LOUD`, when: c => c.runTime > 4 && c.moving && c.seen.has('still')},
-  {id: 'beat', text: k => 'EVERY SHOT LETS A BEAT OF TIME THROUGH', when: c => c.shots >= 1 && c.seen.has('still') && !c.moving},
+  // MOVE / FIRE / STAND STILL / WALK vs SPRINT / EVERY SHOT are taught by the Signal Check and live in the field manual.
   {id: 'reload', urgent: true, done: 'reloaded', text: k => `[${k.reload}] RELOAD`, when: c => c.magEmpty && c.reserve > 0},
   {id: 'swap', urgent: true, text: k => `[1] / [2] SWAP GUNS — THIS ONE IS DRY`, when: c => c.magEmpty && c.reserve <= 0 && c.otherHasAmmo},
   {id: 'grenade', done: 'threw', text: k => `[${k.throwableCycle}] PICK GRENADE · [${k.throwableUse}] THROW`, when: c => c.hostilesNear > 0 && c.runTime > 20 && c.grenades > 0},

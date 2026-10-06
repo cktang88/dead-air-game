@@ -4,14 +4,15 @@
 import {roomHasLivingEnemies} from './room-roles.js';
 import {GUNS, MOD_BY_ID, modFits} from './catalog.js';
 import {gunPickupPlan} from './rules.js';
+import {DOOR_RANGE, isClosed} from './doors.js';
 
 export const TILE_PX = 32;
 /** Distances (px) at which each interactable becomes usable. Mirrors the legacy interact() thresholds. */
-export const RANGE = Object.freeze({gate: 38, supply: 40, gun: 36, mod: 34, exit: 70});
+export const RANGE = Object.freeze({gate: 38, supply: 40, gun: 36, mod: 34, exit: 70, door: DOOR_RANGE});
 /** Within this distance an out-of-range interactable shows a small name tag so you know what it is. */
 export const LABEL_RANGE = 300;
 /** Lower number wins when several targets are in range at once (same order interact() always used). */
-export const PRIORITY = Object.freeze({gate: 0, supply: 1, gun: 3, mod: 3, exit: 5, pickup: 6});
+export const PRIORITY = Object.freeze({gate: 0, door: 0.5, supply: 1, gun: 3, mod: 3, exit: 5, pickup: 6});
 const prio = k => PRIORITY[k] ?? 9;
 
 import {dist} from './util.js';
@@ -53,6 +54,13 @@ export function collectInteractables(s) {
     const ok = scrap >= g.cost;
     add({id: `gate:${g.x},${g.y}`, kind: 'gate', ref: g, x: (g.x + .5) * T, y: (g.y + .5) * T, range: RANGE.gate, keyed: true, icon: 'lock-locked',
       verb: 'UNLOCK', subject: 'GATE', cost: g.cost, enabled: ok, reason: ok ? '' : needScrapText(g.cost, scrap), color: '#ffb04a'});
+  }
+  // Closable doors (doors.js): tap E opens, hold E peeks. Scripted gates and open doors are not interactable.
+  for (const d of s.doorProps || []) {
+    if (d.gate || !isClosed(d)) continue;
+    const peeking = !!s.peeking;
+    add({id: d.id, kind: 'door', ref: d, x: d.x * T, y: d.y * T, range: RANGE.door, keyed: true, icon: 'door',
+      verb: peeking ? 'PEEKING' : 'OPEN', subject: peeking ? '' : 'DOOR', enabled: true, reason: '', note: peeking ? 'RELEASE · BACK' : 'HOLD · PEEK', color: '#cfd8e8'});
   }
   for (const pk of s.pickups || []) {
     if (!pk.available) continue;
