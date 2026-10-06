@@ -159,7 +159,7 @@ class Nav {
     for (let j = 0; j < this.gh; j++) for (let i = 0; i < this.gw; i++) this.clear[j * this.gw + i] = this.wallDist((i + .5) * CELL, (j + .5) * CELL, 30);
     this.dyn = new Uint8Array(this.gw * this.gh);
     this.g = new Float32Array(this.gw * this.gh); this.par = new Int32Array(this.gw * this.gh); this.closed = new Uint8Array(this.gw * this.gh);
-    this.obstacles = []; this.zones = [];
+    this.obstacles = []; this.zones = []; this.perm = [];
   }
   isSolid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.tw || ty >= this.th || this.solid[ty][tx] !== 0; }
   setOpen(tx, ty) { this.solid[ty][tx] = 0; for (let j = ty * 4 - 2; j < ty * 4 + 6; j++) for (let i = tx * 4 - 2; i < tx * 4 + 6; i++) if (i >= 0 && j >= 0 && i < this.gw && j < this.gh) this.clear[j * this.gw + i] = this.wallDist((i + .5) * CELL, (j + .5) * CELL, 30); }
@@ -198,6 +198,7 @@ class Nav {
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (hyp((i + .5) * CELL - x, (j + .5) * CELL - y) < r) this.dyn[j * this.gw + i] = 1;
     };
     if (!ignoreObstacles) for (const o of this.obstacles) mark(o.x, o.y, o.r + PR);
+    for (const b of this.perm) mark(b.x, b.y, b.r + PR);
     this.zones = this.zones.filter(z => z.until > now);
     for (const z of this.zones) mark(z.x, z.y, z.r);
   }
@@ -260,7 +261,7 @@ class Bot {
     this.seen = new Map(); this.prevEn = new Map(); this.aimNoise = {x: 0, y: 0, until: 0};
     this.task = null; this.plan = null; this.stillMode = false; this.stillUntil = 0; this.lastE = -9; this.lastReload = -9; this.lastThrow = -9; this.lastQ = -9;
     this.recover = null; this.progress = {x: 0, y: 0, t: 0}; this.stuckEvents = []; this.stuckCount = 0; this.recentStuck = [];
-    this.permBlocks = []; this.gateTraps = [];
+    this.permBlocks = []; this.gateTraps = []; this.badRooms = new Map();
     this.declined = new Set(); this.unreachable = new Map(); this.doneMarket = new Set(); this.pulled = new Map();
     this.stats = {scrapEarned: 0, scrapSpent: 0, starve: 0, dry: 0, hurt: [], kills: [], shotsFired: 0, stillTicks: 0, ticks: 0, throws: 0, taskTicks: {}, trapped: false, merchantBuys: [], cacheChoices: [], gunSwaps: 0, errors: []};
     this.lastScrap = null; this.wasStarved = false; this.wasDry = false; this.nextShot = opts.shots || 1e9; this.shotN = 0; this.lastSnap = null;
@@ -382,7 +383,7 @@ class Bot {
     }
     // optional: clear nearby branch rooms that hold a cache when healthy
     for (const r of this.rooms) {
-      if (!r.branch || (rs(r.i) & 2) || !aliveIn(r.i)) continue;
+      if (!r.branch || (rs(r.i) & 2) || !aliveIn(r.i) || (this.badRooms.get(r.i) || 0) > S.t) continue;
       const hasCache = S.pickups.some(k => k.room === r.i && k.kind === 'cache');
       if (!hasCache || n.hurt > S.mhp * 0.4 || n.resFrac < 0.4) continue;
       const x = (r.cx + .5) * TILE, y = (r.cy + .5) * TILE, key = `branch:${r.i}`;
@@ -397,7 +398,7 @@ class Bot {
     T.sort((a, b) => b.score - a.score);
     if (T.length && T[0].score > 0) { const sticky = this.task && T.find(t => t.key === this.task.key); return sticky && sticky.score > T[0].score - 12 ? sticky : T[0]; }
     // route: next uncleared main-route room with living enemies
-    const live = S.enemies.filter(e => this.rooms[e.room] && !this.rooms[e.room].branch);
+    const live = S.enemies.filter(e => this.rooms[e.room] && !this.rooms[e.room].branch && !((this.badRooms.get(e.room) || 0) > S.t));
     if (live.length) {
       const order = this.routeRooms.filter(i => live.some(e => e.room === i));
       const ri = order.length ? order[0] : live[0].room, inRoom = live.filter(e => e.room === ri);
@@ -521,16 +522,17 @@ class Bot {
     const dry = S.ammo[S.wi] + S.reserve[S.wi] === 0 && !starved; if (dry && !this.wasDry) this.stats.dry++; this.wasDry = dry;
 
     const en = this.visibleEnemies(S);
-    this.nav.setObstacles([...S.cover.map(c => ({x: c.x, y: c.y, r: c.r})), ...this.permBlocks]);
+    this.nav.setObstacles(S.cover.map(c => ({x: c.x, y: c.y, r: c.r}))); this.nav.perm = this.permBlocks;
     for (const g of S.gates) if (g.opened && !this.gateOpen.has(g.x + ',' + g.y)) { this.gateOpen.add(g.x + ',' + g.y); const fresh = await p.evaluate(() => window.__bot.solid()); for (let y = 0; y < fresh.length; y++) for (let x = 0; x < fresh[y].length; x++) if (fresh[y][x] === 0 && this.nav.solid[y][x] !== 0) this.nav.setOpen(x, y); }
 
     // idle watchdog: not moving for a long time outside combat -> go and find the nearest living enemy
     if (this.idle && S.t > this.idle.until) this.idle = null;
     if (!this.idle && this.anchor && S.t - this.anchor.t > 8 && S.enemies.length && !S.modal.cache) {
-      const t = S.enemies.reduce((a, b) => hyp(a.x - S.px, a.y - S.py) < hyp(b.x - S.px, b.y - S.py) ? a : b);
-      this.idle = {until: S.t + 10, task: {kind: 'hunt', key: 'wd:' + t.id, x: t.x, y: t.y, tol: 60, at: S.t, since: S.t}}; this.anchor.t = S.t; res.watchdogs = (res.watchdogs || 0) + 1;
+      const pool = S.enemies.filter(e => !((this.badRooms.get(e.room) || 0) > S.t)); if (!pool.length) { this.anchor.t = S.t; } else {
+      const t = pool.reduce((a, b) => hyp(a.x - S.px, a.y - S.py) < hyp(b.x - S.px, b.y - S.py) ? a : b);
+      this.idle = {until: S.t + 10, task: {kind: 'hunt', room: t.room, key: 'wd:' + t.id, x: t.x, y: t.y, tol: 60, at: S.t, since: S.t}}; this.anchor.t = S.t; res.watchdogs = (res.watchdogs || 0) + 1;
       if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] watchdog -> hunt ${t.type} room ${t.room}`);
-    }
+    } }
     // task
     if (this.idle) { this.task = {...this.idle.task, x: S.enemies.find(e => 'wd:' + e.id === this.idle.task.key)?.x ?? this.idle.task.x, y: S.enemies.find(e => 'wd:' + e.id === this.idle.task.key)?.y ?? this.idle.task.y, at: S.t}; }
     else if (!this.task || S.t - this.task.at > 0.8 || this.task.done) {
@@ -560,7 +562,7 @@ class Bot {
     if (!inCombat || !target || target.d > Math.min(gun.range * 0.8, 260)) {
       const tgt = (inCombat && target && target.d > Math.min(gun.range * .8, 260)) ? this.steerTo(S, {x: target.x, y: target.y}, Math.min(gun.range * 0.7, 220)) : toTask();
       steer = tgt; if (steer) goalDir = steer.dir;
-      if (!steer) { this.unreachable.set(task.key, S.t + 12); this.task.done = true; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] unreachable ${task.key}`); res.unreachable = (res.unreachable || 0) + 1; }
+      if (!steer) { this.unreachable.set(task.key, S.t + 12); if (task.room != null) this.badRooms.set(task.room, S.t + 90); this.task.done = true; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] unreachable ${task.key}`); res.unreachable = (res.unreachable || 0) + 1; }
     }
     if (task.interact && steer?.arrived) goalDir = null;
 
@@ -663,7 +665,7 @@ class Bot {
     const og = S.gates.find(g => g.opened && hyp(g.x - S.px, g.y - S.py) < 48);
     if (og && !this.permBlocks.some(b => b.gate === og.x + ',' + og.y)) {
       // GAME BUG: an opened gate whose physics collider survived (see README). Treat it as a wall from now on.
-      this.permBlocks.push({x: og.x, y: og.y, r: 34, gate: og.x + ',' + og.y, soft: true}); this.gateTraps.push({x: og.x, y: og.y, t: +S.t.toFixed(1), room: og.room});
+      this.permBlocks.push({x: og.x, y: og.y, r: 30, gate: og.x + ',' + og.y, soft: true}); this.gateTraps.push({x: og.x, y: og.y, t: +S.t.toFixed(1), room: og.room});
       ev.openGateCollider = true;
     }
     ev.crateAhead = !!shoot; ev.dir = [+move.x.toFixed(2), +move.y.toFixed(2)]; ev.vel = [Math.round(S.vx), Math.round(S.vy)]; ev.wallDist = +this.nav.wallDist(S.px, S.py, 30).toFixed(1); ev.planNext = (this.plan?.pts || []).slice(this.plan?.i || 0, (this.plan?.i || 0) + 3).map(q => [q.x, q.y]); ev.keys = [...this.keys]; ev.nearCover = this.nav.obstacles.filter(o => hyp(o.x - S.px, o.y - S.py) < o.r + 30).map(o => [Math.round(o.x), Math.round(o.y), o.r]);
