@@ -1,9 +1,10 @@
 // DEAD AIR Canvas 2D renderer. Reads the plain game `state` each frame and draws the whole scene:
 // baked world chunks, props, actors, projectiles, effects, lighting and the slow-time grade.
 import {ENEMY_TYPES, GUNS, TILE} from './catalog.js';
-import {createCamera, followStep, lookAheadOffset, resizeCamera, screenToWorld as camScreenToWorld, slowAmount, viewBounds} from './camera2d.js';
+import {createCamera, followStep, lookAheadOffset, resizeCamera, screenToWorld as camScreenToWorld, viewBounds} from './camera2d.js';
 import {Fx} from './fx2d.js';
 import {Lighting} from './lighting2d.js';
+import {createTimeFx} from './timefx.js';
 import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inOutCubic, lerp, moveAmount, newSpring, outBack, outBounce, outCubic, outQuad, reloadPose, springDamping, stepSpring, swapPose, walkPhase, walkPose} from './anim.js';
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
@@ -84,6 +85,7 @@ export function createRenderer(container, state) {
   const fx = new Fx();
   const world = new WorldLayer();
   const lighting = new Lighting();
+  const timeFx = createTimeFx();
   const trail = new Trail();
   const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24};
   const GHOST_TIME = 0.24;
@@ -1187,7 +1189,7 @@ export function createRenderer(container, state) {
     const p = state.player;
     if (!levelReady || !p) { drawAttract(w, h, dt); return; }
 
-    vis.slow += (slowAmount(frame.timeScale ?? 1, frame.idleScale ?? 0.18) - vis.slow) * (1 - Math.exp(-5 * dt));
+    vis.slow = timeFx.step(frame, dt);
     vis.deadT = state.mode === 'dead' ? vis.deadT + dt : 0;
     vis.flicker = Math.sin(now * 17) * 0.5 + Math.sin(now * 29) * 0.5;
     for (const e of state.enemies) if (e.vis) { e.vis.flash = Math.max(0, (e.vis.flash || 0) - dt * 18); e.vis.barT = Math.max(0, (e.vis.barT || 0) - dt); }
@@ -1251,16 +1253,7 @@ export function createRenderer(container, state) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     fx.drawFloaters(ctx, viewCam, dpr);
-    if (vis.slow > 0.02) {
-      // slow time drains colour (a single 'saturation' blend; skipped at full speed)
-      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.4 * vis.slow; ctx.fillStyle = '#808080';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = 'source-over';
-      // cool tint plus a faint film flicker that every shot "ticks" forward
-      ctx.globalAlpha = 0.07 * vis.slow; ctx.fillStyle = '#5a82c0'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = Math.max(0, 0.025 * vis.slow * (0.5 + 0.5 * vis.flicker) + vis.tick * 0.03 * vis.slow); ctx.fillStyle = '#cfe0ff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = 1;
-    }
+    timeFx.draw(ctx, canvas.width, canvas.height, dpr, vis.flashK ?? 1); // unified time grade + beat tick + edge meter (timefx.js)
     if (vis.hurtSat > 0.02) {
       ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.55 * vis.hurtSat * vis.flashK; ctx.fillStyle = '#808080';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1293,7 +1286,7 @@ export function createRenderer(container, state) {
 
   resize();
   window.addEventListener('resize', resize);
-  return {canvas, fx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
+  return {canvas, fx, timeFx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
 }
 
 function hexPath(ctx, r) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }

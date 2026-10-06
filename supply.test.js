@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {GUNS} from './catalog.js';
+import {shotBeat} from './time-rule.js';
 import {SIGNAL_COST, SUPPLY_MEDKIT_HP, offerCard, offerStatus, supplyOffers} from './supply.js';
 
 const seq = (...values) => { let i = 0; return () => values[i++ % values.length]; };
@@ -56,4 +57,13 @@ test('cards name exactly what you get, what it replaces, and the price of the si
   assert.equal(gun.title, GUNS[1].name); assert.match(gun.text, /SWAPS MACHINE PISTOL/);
   assert.doesNotMatch(offerCard({kind: 'gun', gunIndex: 1}, {}).text, /SWAPS/);
   assert.match(offerCard({kind: 'heal'}).text, new RegExp(`\\+${SUPPLY_MEDKIT_HP} health`));
+});
+
+test('time beats suit the new roster: sprays tick cheaply, launch/breach/punch cost real time', () => {
+  const beat = id => { const g = GUNS.find(x => x.id === id); return shotBeat({damage: g.damage, fireInterval: g.rate, pellets: g.count || 1}); };
+  assert.ok(beat('launcher') > beat('machine') * 2, 'a shell is a big beat');
+  assert.ok(beat('sniper_mule') > beat('pistol_9'));
+  assert.ok(beat('pistol_45') > beat('smg_vector'));
+  assert.ok(beat('smg_vector') <= beat('machine'), 'the faster spray variant stays cheap per shot');
+  for (const g of GUNS) assert.ok(Number.isFinite(beat(g.id)) && beat(g.id) > 0, g.id);
 });

@@ -14,7 +14,7 @@ const ROOM_SENSE_RANGE_TILES = [15,25,35];
 
 export const META_UPGRADES = [
   {id:'runner',name:'RUNNER’S LEGS',description:'+6% movement speed per level',costs:[25,50,80]},
-  {id:'stillmind',name:'STILL MIND',description:'Idle time slows by 0.015× per level',costs:[30,55,85]},
+  {id:'stillmind',name:'STILL MIND',description:'Standing-still time drops 0.01× per level (0.08× → 0.05×)',costs:[30,55,85]},
   {id:'thirdslot',name:'THIRD SLOT',description:'Carry a third gun (key 3) · every gun swap takes 0.4 s longer',costs:[95]},
   {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance and +2 room-clear scrap per level',costs:[20,45,75]},
   {id:'luckyfind',name:'LUCKY FIND',description:'Rare gun variants and mod drops turn up more often',costs:[30,60,90]},
@@ -111,7 +111,7 @@ export function progressionStats(progress) {
   const {runner,stillmind,thirdslot=0,salvager,luckyfind,roomsense,vitalreserve,highroller=0,adrenal=0,stockpile=0}=progress.upgrades;
   return {
     moveSpeed:112*(1+.06*runner-.06*stockpile),
-    idleScale:Math.max(.06,.18-.015*stillmind),
+    idleScale:Math.max(.03,.08-.01*stillmind),
     maxHealth:Math.max(1,5+vitalreserve-adrenal),
     maxWeaponSlots:thirdslot>=1?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),

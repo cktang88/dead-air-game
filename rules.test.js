@@ -4,15 +4,12 @@ import {BASE_GUN_IDS, ENEMY_TYPES, GEAR, GUNS, MODS, MOD_BY_ID, SHOTGUN_SHELLS, 
 import {absorbArmorDamage, chooseEncounterTypes, consumePenetration, crateDamageStage, damageDurability, distanceToRect, eligibleRecipes, gunPickupPlan, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, swapSeconds, timeScale, unlockRewardGate, weaponPenetration, weaponStats, withinWorldView} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
-test('world time depends on movement, not firing, and menus pause',()=>{
-  const base={mode:'play',paused:false,loadoutOpen:false,moving:false,firing:false};
-  assert.equal(timeScale(base),0.18);
-  assert.equal(timeScale({...base,moving:true}),1);
-  assert.equal(timeScale({...base,firing:true}),0.18);
-  assert.equal(timeScale({...base,moving:true,firing:true}),1);
-  assert.equal(timeScale({...base,idleScale:0.15,firing:true}),0.15);
-  assert.equal(timeScale({...base,idleScale:0.15,moving:true,firing:true}),1);
-  assert.equal(timeScale({...base,idleScale:.12,firing:true}),.12);
+test('world time follows actual speed (see time-rule.test.js for the full rule), and menus pause',()=>{
+  const base={mode:'play',paused:false,loadoutOpen:false,speedRatio:0};
+  assert.equal(timeScale(base),0.08);
+  assert.ok(Math.abs(timeScale({...base,speedRatio:1})-0.35)<1e-9);
+  assert.equal(timeScale({...base,speedRatio:1.45}),1);
+  assert.equal(timeScale({...base,idleScale:.05}),.05);
   assert.equal(timeScale({...base,paused:true}),0);
   assert.equal(timeScale({...base,loadoutOpen:true}),0);
   assert.equal(timeScale({...base,mode:'dead'}),0);
@@ -24,10 +21,11 @@ test('ranged enemy shots leave time for a sidestep at each player tempo',()=>{
   for(const enemy of ranged){
     assert.ok(enemy.minRange>0&&enemy.minRange<enemy.range,`${enemy.name} needs a useful minimum and maximum firing range`);
     assert.ok(enemy.projectileSpeed<playerSpeed*2,`${enemy.name} rounds should stay below twice player speed`);
-    for(const scale of [.18,1]){
+    for(const scale of [.08,.35,1]){
+      // enemy rounds fly on world time; the player moves on the real clock, so slower worlds are more generous
       const projectileTravel=65-13-10;
       const flightSeconds=projectileTravel/(enemy.projectileSpeed*scale);
-      const sidestep=playerSpeed*scale*flightSeconds;
+      const sidestep=playerSpeed*flightSeconds;
       assert.ok(sidestep>=18,`${enemy.name} should allow an 18-unit sidestep at ${scale}×`);
     }
   }
@@ -296,12 +294,12 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.18,maxHealth:5,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:5,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,thirdslot:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.thirdslot,1);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.18,maxHealth:5,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:5,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,thirdslot:0}}).maxWeaponSlots,2);
 });
 

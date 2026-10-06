@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {compareStat,feedTone,formatClock,gunIcon,gunStatRows,statMaxima,tempoView,weaponCycleRpm} from './hud-ui.js';
 import {GUNS} from './catalog.js';
 
-test('tempoView maps movement and sprint to still, move and sprint states', () => {
-  assert.equal(tempoView({scale:.18}).state,'still');
-  assert.equal(tempoView({moving:true,scale:1}).state,'move');
-  assert.equal(tempoView({moving:true,sprinting:true,scale:1}).label,'SPRINT');
-  assert.equal(tempoView({scale:.18}).speed,'0.18×');
+test('tempoView maps speed to still, walk and sprint bands', () => {
+  assert.equal(tempoView({scale:.08}).state,'still');
+  assert.equal(tempoView({speedRatio:1,scale:.35}).label,'WALK');
+  assert.equal(tempoView({speedRatio:1.45,scale:1}).label,'SPRINT');
+  assert.equal(tempoView({scale:.08}).speed,'0.08×');
   assert.equal(tempoView({scale:2}).fraction,1);
-  assert.match(tempoView({firing:true}).hint,/FIRING/);
 });
+
 
 test('compareStat respects stats where lower is better', () => {
   assert.equal(compareStat(40,50),'up');

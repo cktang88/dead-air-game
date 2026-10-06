@@ -160,11 +160,8 @@ export function gunPickupPlan(weapons, candidate, maxSlots, activeSlot) {
   return {slot, replaces: weapons[slot]};
 }
 
-export function timeScale({mode, paused, loadoutOpen, moving, idleScale = 0.18}) {
-  if (mode !== 'play' || paused || loadoutOpen) return 0;
-  if (moving) return 1;
-  return Math.max(0, Math.min(1, idleScale));
-}
+// The time rule lives in time-rule.js (continuous, speed-driven). Re-exported so older imports keep working.
+export {timeScale} from './time-rule.js';
 
 // Encounter recipes: each is an ordered squad list; a room of N enemies takes the first N, so every recipe
 // is a mix by construction (rusher pack + gunner support, brute + gunners, warden + rushers, ...).
