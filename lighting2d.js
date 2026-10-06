@@ -4,7 +4,7 @@ import {TILE} from './catalog.js';
 import {makeCanvas} from './sprites2d.js';
 
 const FOG_SS = 4;
-const FOG = {current: 0.16, visited: 0.4, unseen: 0.62, corridor: 0.42, rock: 0.9};
+const FOG = {current: 0.06, visited: 0.28, unseen: 0.68, corridor: 0.3, rock: 0.84};
 
 let lightSprite = null, vignetteSprite = null;
 function vignette() {
@@ -155,11 +155,11 @@ export class Lighting {
     for (const l of lights) pool(l.x, l.y, l.r * 1.2, l.a * 0.9);
     // grade (vignette, warm/cool tint) lives in the same buffer so a frame needs only one full-screen blend
     g.globalCompositeOperation = 'destination-over';
-    g.globalAlpha = 0.1 + 0.24 * slow + dead * 0.2; g.drawImage(vignette(), 0, 0, lw, lh);
+    g.globalAlpha = 0.1 + 0.08 * slow + dead * 0.2; g.drawImage(vignette(), 0, 0, lw, lh);
     g.globalAlpha = 1;
     if (dead > 0) { g.fillStyle = `rgba(70,8,20,${0.28 * dead})`; g.fillRect(0, 0, lw, lh); }
     if (won) { g.fillStyle = 'rgba(120,255,190,0.07)'; g.fillRect(0, 0, lw, lh); }
-    g.fillStyle = slow > 0.01 ? `rgba(34,64,140,${0.13 * slow})` : 'rgba(0,0,0,0)'; g.fillRect(0, 0, lw, lh);
+    g.fillStyle = slow > 0.01 ? `rgba(34,64,140,${0.05 * slow})` : 'rgba(0,0,0,0)'; g.fillRect(0, 0, lw, lh);
     g.fillStyle = `rgba(255,150,70,${0.05 * (1 - slow)})`; g.fillRect(0, 0, lw, lh);
     g.globalCompositeOperation = 'source-over';
     ctx.save();

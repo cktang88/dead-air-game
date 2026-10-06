@@ -12,7 +12,7 @@ import {SUSPICION, noiseRingRadius, visionFor} from './stealth.js';
 const TAU = Math.PI * 2;
 const TILE = 32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const RING_LIFE = 0.75, ALERT_LIFE = 0.8;
+const RING_LIFE = 0.4, ALERT_LIFE = 0.8;
 
 const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 function mixHex(a, b, t) {
@@ -69,18 +69,22 @@ export function createStealthLayer() {
       const len = sightDistance(state, e.x, e.y, a, vis.range);
       pts.push([e.x + Math.cos(a) * len, e.y + Math.sin(a) * len]);
     }
+    // clean read: a crisp edge line (the thing that matters) over a very faint fill; both fade out once the enemy is aware
+    const fade = e.coneA ?? 1;
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
     const g = ctx.createRadialGradient(e.x, e.y, 6, e.x, e.y, vis.range);
-    const a0 = 0.10 + 0.32 * s, a1 = 0.015 + 0.10 * s;
-    g.addColorStop(0, withAlpha(tint, a0)); g.addColorStop(1, withAlpha(tint, a1));
+    g.addColorStop(0, withAlpha(tint, (0.09 + 0.12 * s) * fade)); g.addColorStop(1, withAlpha(tint, (0.008 + 0.03 * s) * fade));
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.moveTo(e.x, e.y); for (const p of pts) ctx.lineTo(p[0], p[1]); ctx.closePath(); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = withAlpha(tint, 0.14 + 0.4 * s); ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(pts[0][0], pts[0][1]);
-    for (const p of pts) ctx.lineTo(p[0], p[1]);
-    ctx.lineTo(e.x, e.y); ctx.stroke();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = fade;
+    for (const pt of [pts[0], pts[N]]) { // the two edges: bright at the enemy, fading with distance (readable, never a wall of lines)
+      const eg = ctx.createLinearGradient(e.x, e.y, pt[0], pt[1]);
+      eg.addColorStop(0, withAlpha(tint, 0.85)); eg.addColorStop(1, withAlpha(tint, 0.24 + 0.3 * s));
+      ctx.strokeStyle = 'rgba(10,8,16,0.35)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(pt[0], pt[1]); ctx.stroke();
+      ctx.strokeStyle = eg; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(pt[0], pt[1]); ctx.stroke();
+    }
+    ctx.strokeStyle = withAlpha(tint, 0.14 + 0.2 * s); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts) ctx.lineTo(p[0], p[1]); ctx.stroke(); // far contour: a whisper
     ctx.restore();
     void time;
   }
@@ -108,20 +112,28 @@ export function createStealthLayer() {
     ctx.restore();
   }
 
+  // ONE crisp ring pulse per player-made noise (shots, sprint, doors), ~0.4s, shaped by the walls that trim the real hearing
+  // radius. Rapid fire merges into the ring already on screen instead of stacking concentric echoes.
   function drawRings(ctx, state, dt) {
     const rings = state.noiseRings;
     if (!rings) return;
     for (let i = rings.length - 1; i >= 0; i--) {
       const r = rings[i]; r.age += dt;
       if (r.age >= RING_LIFE) { rings.splice(i, 1); continue; }
-      const t = r.age / RING_LIFE, k = 1 - (1 - t) * (1 - t), fade = 1 - t;
+      if (r.skip) continue;
+      if (r.skip === undefined) {
+        r.skip = false;
+        for (let j = 0; j < i; j++) { const o = rings[j]; if (!o.skip && o.age < 0.3 && Math.hypot(o.x - r.x, o.y - r.y) < 90) { r.skip = true; break; } }
+        if (r.skip) continue;
+      }
+      const t = r.age / RING_LIFE, k = 1 - (1 - t) * (1 - t) * (1 - t), fade = 1 - t * t;
       const col = r.kind === 'sprint' || r.kind === 'kick' ? COLORS.sprint : r.kind === 'suppressed' || r.kind === 'door' ? COLORS.slow : COLORS.ammo;
       const n = r.radii.length;
       ctx.beginPath();
       for (let j = 0; j <= n; j++) { const a = (j % n) / n * TAU, rr = r.radii[j % n] * k; ctx.lineTo(r.x + Math.cos(a) * rr, r.y + Math.sin(a) * rr); }
       ctx.closePath();
-      ctx.fillStyle = withAlpha(col, 0.05 * fade); ctx.fill();
-      ctx.strokeStyle = withAlpha(col, 0.55 * fade); ctx.lineWidth = 1.5 + 1.5 * fade; ctx.stroke();
+      ctx.strokeStyle = 'rgba(10,8,16,' + 0.4 * fade + ')'; ctx.lineWidth = 3.6; ctx.stroke();
+      ctx.strokeStyle = withAlpha(col, 0.8 * fade); ctx.lineWidth = 1.6; ctx.stroke();
     }
   }
 
@@ -189,8 +201,10 @@ export function createStealthLayer() {
     const inView = e => e.x > b.x0 - 450 && e.x < b.x1 + 450 && e.y > b.y0 - 450 && e.y < b.y1 + 450;
     ctx.save(); ctx.lineJoin = 'round';
     for (const e of state.enemies) {
-      if (!e.alive || e.type === 'boss' || e.aware || e.posture === undefined || e.posture === 'sleep' || !inView(e)) continue;
-      if ((e.stun || 0) > 0.3) continue;
+      if (!e.alive || e.type === 'boss' || e.posture === undefined || e.posture === 'sleep' || !inView(e)) continue;
+      // sleepers show no cone (just zZ); an aware enemy is fighting now, so its cone fades out instead of cluttering the fight
+      e.coneA = clamp((e.coneA ?? 1) + (e.aware ? -dt * 3.5 : dt * 3.5), 0, 1);
+      if (e.coneA < 0.02 || (e.stun || 0) > 0.3) continue;
       drawCone(ctx, state, e, time);
     }
     drawFrag(ctx, state, time);
