@@ -56,5 +56,6 @@ export const ENEMY_TYPES = {
   brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush'},
   sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:36, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
   riot:{name:'RIOT', color:0x8aa0b4, hp:78, speed:30, damage:1, range:23, brain:'rush', shield:true, shieldHalfArc:1.15},
+  boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:1100, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
   guard:{name:'WARDEN', color:0x58aeca, hp:65, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
 };

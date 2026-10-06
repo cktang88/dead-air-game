@@ -3,7 +3,8 @@ export const HINTS_KEY = 'dead-air.hints.v1';
 
 /** id, priority (lower first), text builder given key labels. */
 export const HINT_DEFS = Object.freeze([
-  {id: 'still', text: k => 'STAND STILL — TIME SLOWS', when: c => c.runTime > 1.5 && c.stillFor > 0.6 && !c.moving},
+  {id: 'basics', text: k => `${(k.moveKeys || ['W', 'A', 'S', 'D']).map(x => `[${x}]`).join('')} MOVE · [CLICK] FIRE`, when: c => c.runTime > 0.3 && !c.moved},
+  {id: 'still', text: k => 'STAND STILL — TIME SLOWS', when: c => c.runTime > 1.5 && c.moved && c.stillFor > 0.6 && !c.moving},
   {id: 'move', text: k => 'MOVE — TIME RUNS AT FULL SPEED', when: c => c.runTime > 4 && c.moving && c.seen.has('still')},
   {id: 'reload', text: k => `[${k.reload}] RELOAD`, when: c => c.magEmpty && c.reserve > 0},
   {id: 'swap', text: k => `[1] / [2] SWAP GUNS — THIS ONE IS DRY`, when: c => c.magEmpty && c.reserve <= 0 && c.otherHasAmmo},

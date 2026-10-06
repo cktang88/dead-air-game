@@ -24,7 +24,7 @@ for its individual author.
 
 ### Material Design Icons - Apache 2.0
 
-A few glyphs (`status-heart`, `status-warning`, `status-search`, `mod-suppressor`) come from
+A few glyphs (`status-heart`, `status-warning`, `status-search`, `mod-suppressor`, `status-info`, `status-close`, `status-keyboard`) come from
 [Material Design Icons](https://pictogrammers.com/library/mdi/) by Pictogrammers (`@iconify-json/mdi`),
 licensed under the [Apache License 2.0](https://github.com/Templarian/MaterialDesign/blob/master/LICENSE).
 
@@ -75,6 +75,17 @@ licensed under the [Apache License 2.0](https://github.com/Templarian/MaterialDe
 | `status-sprint` | game-icons / sprint |
 | `status-warning` | mdi / alert |
 | `status-search` | mdi / help |
+| `status-skull` | game-icons / death-skull |
+| `status-trophy` | game-icons / trophy |
+| `status-weight` | game-icons / weight |
+| `status-clock` | game-icons / stopwatch |
+| `status-kills` | game-icons / crosshair |
+| `status-seed` | game-icons / dice-fire |
+| `status-rarity` | game-icons / star-medal |
+| `status-coins` | game-icons / two-coins |
+| `status-info` | mdi / information-variant |
+| `status-close` | mdi / close |
+| `status-keyboard` | mdi / keyboard |
 | `mod-extended` | game-icons / machine-gun-magazine |
 | `mod-suppressor` | mdi / volume-off |
 | `mod-hollow` | game-icons / bullets |

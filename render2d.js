@@ -9,6 +9,8 @@ import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobSh
 import {WorldLayer} from './world2d.js';
 import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
+import {drawBoss, drawBossTelegraph} from './boss2d.js';
+import {drawMetaWorld} from './meta-overlay2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -83,7 +85,7 @@ export function createRenderer(container, state) {
   const world = new WorldLayer();
   const lighting = new Lighting();
   const trail = new Trail();
-  const _wp = {}, _rp = {}, _sw = {};
+  const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24};
   const GHOST_TIME = 0.24;
   const vis = {ghosts: Array.from({length: 24}, () => ({on: false, pk: null, t: 0, x0: 0, y0: 0, side: 1})), fl: {x: 0, y: 0, vx: 0, vy: 0}, camX: newSpring(0), camY: newSpring(0), zoom: newSpring(0), zbase: 1, bodyAng: 0, mvAng: 0, pPhase: 0, pMv: 0, swapT: 1, lastGun: -1, prevGun: 0, fresh: true, motion: 1, flashK: 1, tick: 0, wbT: 2, hurtSat: 0, killFlash: 0, seated: false, seatFx: false, angInit: false, slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
   const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0};
@@ -182,6 +184,7 @@ export function createRenderer(container, state) {
 
   function updateEnemy(e, step) {
     const v = e.vis ??= {}, kind = kindOf(e);
+    if (e.type === 'boss') { v.flash = v.flash || 0; return; } // the Conductor animates itself (boss2d.js)
     v.ang ??= 0; v.prevX ??= e.x; v.prevY ??= e.y; v.dustT ??= 0;
     v.fpx ??= 0; v.fpy ??= 0; v.fvx ??= 0; v.fvy ??= 0;
     const mvx = (e.x - v.prevX) / Math.max(step, 1e-4), mvy = (e.y - v.prevY) / Math.max(step, 1e-4);
@@ -381,7 +384,7 @@ export function createRenderer(container, state) {
     }
     for (const e of state.enemies) {
       if (!inView(e, b, 40)) continue;
-      const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type];
+      const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
       if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y, look.r * 0.95, 1.5, dying ? 0.6 : 1);
     }
     const p = state.player;
@@ -743,6 +746,7 @@ export function createRenderer(container, state) {
   }
 
   function drawEnemy(e, now) {
+    if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
     const v = e.vis ??= {}, kind = kindOf(e), spr = actorSprite(kind), look = ACTOR_LOOK[kind];
     if (!e.alive) { drawCorpse(e, v, kind, spr, look); return; }
     const scale = e.elite ? 0.9 : 1, ang = v.ang || 0, mvAng = v.mvAng ?? ang;
@@ -923,6 +927,7 @@ export function createRenderer(container, state) {
   function drawTelegraphs(b) {
     for (const e of state.enemies) {
       if (!e.alive) continue;
+      if (e.type === 'boss') { drawBossTelegraph(ctx, e, performance.now() / 1000); continue; }
       if (e.type === 'sniper' && e.aimTimer > 0) { drawSniperLaser(e); continue; }
       if (!inView(e, b, 320)) continue;
       if (e.meleeWindup > 0) {
@@ -1233,6 +1238,7 @@ export function createRenderer(container, state) {
     ctx.lineJoin = 'round';
 
     drawPickupGlows(bp);
+    drawMetaWorld(ctx, state, performance.now() / 1000, TILE);
     drawTelegraphs(bp);
     drawBullets(bp);
     fx.drawAdditive(ctx, bp);
