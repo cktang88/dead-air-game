@@ -182,31 +182,40 @@ export function chooseWeaponReplacementSlot(weapons,candidate,maxSlots,activeSlo
   return preferred.find(slot=>slot<weapons.length&&weaponReplacement(weapons,slot,candidate,guns,capacity,gearWeight).canCarry);
 }
 
-export function timeScale({mode, paused, loadoutOpen, moving, idleScale = 0.18}) {
-  if (mode !== 'play' || paused || loadoutOpen) return 0;
-  if (moving) return 1;
-  return Math.max(0, Math.min(1, idleScale));
+// The time rule lives in time-rule.js (continuous, speed-driven). Re-exported so older imports keep working.
+export {timeScale} from './time-rule.js';
+
+// Encounter recipes: each is an ordered squad list; a room of N enemies takes the first N, so every recipe
+// is a mix by construction (rusher pack + gunner support, brute + gunners, warden + rushers, ...).
+// `minDepth` (0..1 along the floor) gates the stop-and-go specialists: MARKSMAN and RIOT show up later.
+export const ENCOUNTER_RECIPES = [
+  {id:'rush-support', minDepth:0, squad:['chaser','gunner','chaser','gunner','chaser']},
+  {id:'brute-guns', minDepth:0, squad:['brute','gunner','guard','gunner','chaser']},
+  {id:'warden-rush', minDepth:0, squad:['guard','chaser','chaser','gunner','chaser']},
+  {id:'crossfire', minDepth:0, squad:['gunner','guard','chaser','gunner','guard']},
+  {id:'riot-guns', minDepth:.25, squad:['riot','gunner','gunner','guard','chaser']},
+  {id:'marksman-rush', minDepth:.4, squad:['sniper','chaser','chaser','gunner','chaser']},
+  {id:'brute-marksman', minDepth:.5, squad:['brute','sniper','gunner','chaser','guard']},
+  {id:'riot-marksman', minDepth:.6, squad:['riot','sniper','chaser','gunner','riot']},
+];
+export const SPECIALIST_TYPES = ['sniper','riot'];
+
+export function eligibleRecipes(depth) {
+  const d=Number.isFinite(depth)?depth:0;
+  return ENCOUNTER_RECIPES.filter(recipe=>d>=recipe.minDepth);
 }
 
-export function chooseEncounterTypes(count, seed) {
-  const types=['chaser','gunner','guard','brute'];
-  const rushers=new Set(['chaser','brute']);
-  let value=seed>>>0;
+export function chooseEncounterTypes(count, seed, depth=0) {
+  // Scramble first: consecutive seeds would otherwise draw near-identical first values from the LCG.
+  let value=Math.imul((seed>>>0)^0x9e3779b9,2654435761)>>>0;value^=value>>>15;value=Math.imul(value,2246822519)>>>0;value^=value>>>13;
   const random=()=>{value=(Math.imul(value,1664525)+1013904223)>>>0;return value/0x100000000;};
-  const result=[];
-  for(let i=0;i<count;i++)result.push(types[Math.floor(random()*types.length)]);
-  if(count>=3&&!result.includes('brute')&&seed%4===0)result[result.length-1]='brute';
-  if(count>=2){
-    let rushCount=result.filter(type=>rushers.has(type)).length;
-    let bruteCount=result.filter(type=>type==='brute').length;
-    const maxRushers=Math.floor(count/2);
-    for(let i=result.length-1;i>=0&&rushCount>maxRushers;i--){
-      if(!rushers.has(result[i]))continue;
-      if(result[i]==='brute'&&bruteCount<=1)continue;
-      if(result[i]==='brute')bruteCount--;
-      result[i]=random()<.5?'gunner':'guard';
-      rushCount--;
-    }
-  }
-  return result;
+  const recipes=eligibleRecipes(depth);
+  // Specialists are the headline of later rooms: weight them x2 once unlocked.
+  const weighted=recipes.flatMap(recipe=>recipe.squad.some(type=>SPECIALIST_TYPES.includes(type))?[recipe,recipe]:[recipe]);
+  const recipe=weighted[Math.floor(random()*weighted.length)];
+  const squad=recipe.squad.slice(0,Math.max(0,count));
+  while(squad.length<count)squad.push(recipe.squad[squad.length%recipe.squad.length]);
+  // Shuffle so the specialist is not always the first spawn.
+  for(let i=squad.length-1;i>0;i--){const k=Math.floor(random()*(i+1));[squad[i],squad[k]]=[squad[k],squad[i]];}
+  return squad;
 }

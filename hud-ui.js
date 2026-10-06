@@ -18,13 +18,14 @@ export function strokeIcon(name, cls = 'ico') {
 }
 
 // ---------------------------------------------------------------- tiers
-export const TIER_COLORS = { common: '#d38ff5', uncommon: '#71d49b', rare: '#66b9f2', prototype: '#f4c66d' };
+import { TIER_COLORS as THEME_TIERS, COLORS } from './theme.js';
+export const TIER_COLORS = THEME_TIERS;
 export const tierColor = id => TIER_COLORS[id] || TIER_COLORS.common;
 
 const CATEGORY_COLORS = {
-  PISTOL: '#e8c58c', SMG: '#ffc66d', SHOTGUN: '#ff9a72', 'ASSAULT RIFLE': '#7ee0b8', SNIPER: '#8bc8ff', 'ANTI-MATERIEL': '#b0a2ff',
+  PISTOL: COLORS.scrap, SMG: '#ffc66d', SHOTGUN: '#ff9a72', 'ASSAULT RIFLE': '#7ee0b8', SNIPER: '#8bc8ff', 'ANTI-MATERIEL': '#b0a2ff',
 };
-export const categoryColor = category => CATEGORY_COLORS[category] || '#e8c58c';
+export const categoryColor = category => CATEGORY_COLORS[category] || COLORS.scrap;
 
 // ---------------------------------------------------------------- stats
 export function weaponCycleRpm(gun) {
@@ -69,23 +70,22 @@ const fmtStat = (id, v) => (id === 'weight' ? v.toFixed(1) : String(v));
 
 export function statBarsHtml(gun, versus, guns, { compact = false } = {}) {
   return `<div class="stat-bars${compact ? ' compact' : ''}">${gunStatRows(gun, versus, guns).map(row => {
+    const diff = row.other != null ? row.value - row.other : 0;
     const delta = row.other != null && row.verdict !== 'same'
-      ? `<em class="delta ${row.verdict}">${row.verdict === 'up' ? '▲' : '▼'}</em>` : '';
+      ? `<em class="delta ${row.verdict}" title="${row.verdict === 'up' ? 'Better' : 'Worse'} than the compared gun">${row.verdict === 'up' ? '▲' : '▼'} ${diff > 0 ? '+' : '−'}${fmtStat(row.id, Math.abs(diff))}</em>` : '';
     const marker = row.marker != null && row.verdict !== 'same' ? `<u style="left:${(row.marker * 100).toFixed(1)}%"></u>` : '';
     return `<div class="stat-row ${row.verdict}"><span>${row.label}</span><div class="stat-track"><i style="width:${(row.fill * 100).toFixed(1)}%"></i>${marker}</div><b>${fmtStat(row.id, row.value)}${delta}</b></div>`;
   }).join('')}</div>`;
 }
 
+import { timeBand, rateLabel } from './time-rule.js';
+
 // ---------------------------------------------------------------- tempo
-export function tempoView({ moving = false, firing = false, sprinting = false, scale = 0.18 } = {}) {
-  const state = moving ? (sprinting ? 'sprint' : 'move') : 'still';
-  const label = { still: 'STILL', move: 'MOVE', sprint: 'SPRINT' }[state];
-  const hint = firing ? 'FIRING · TIME HOLDS ITS SPEED'
-    : state === 'still' ? 'MOVE TO RUN TIME · WORLD CRAWLS'
-    : state === 'move' ? 'STOP TO SLOW THE WORLD · SHIFT TO SPRINT'
-    : 'SPRINTING · TIME AT 1×';
+export function tempoView({ speedRatio = 0, scale = 0.08 } = {}) {
+  const state = timeBand(speedRatio);
+  const label = { still: 'STILL', walk: 'WALK', sprint: 'SPRINT' }[state];
   const clamped = Math.max(0, Math.min(1, scale));
-  return { state, label, hint, firing, speed: `${scale.toFixed(2)}×`, fraction: clamped, percent: Math.round(clamped * 100) };
+  return { state, label, speed: rateLabel(scale), fraction: clamped, percent: Math.round(clamped * 100) };
 }
 
 // ---------------------------------------------------------------- feed tone
@@ -110,6 +110,7 @@ const esc = text => String(text).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 export const keycap = label => `<kbd>${esc(label)}</kbd>`;
 
 const FEED_MAX = 5, FEED_LIFE_MS = 3600;
+const FEED_ICON = { good: 'pickup-heal', bad: 'status-warning', warn: 'status-warning', loot: 'pickup-scrap', kill: 'status-kills', info: 'status-info' };
 
 /** Push a line into the corner feed. tone: info | good | bad | warn | loot | kill (inferred when omitted). */
 export function pushFeed(text, tone) {
@@ -128,7 +129,7 @@ export function pushFeed(text, tone) {
   const item = document.createElement('div');
   item.className = `feed-item ${tone}`;
   item.dataset.text = text; item.dataset.t = String(performance.now());
-  item.innerHTML = `<i></i><span>${esc(text)}</span><b></b>`;
+  item.innerHTML = `${iconSvg(FEED_ICON[tone] || FEED_ICON.info, { size: 0 })}<span>${esc(text)}</span><b></b>`;
   host.prepend(item);
   while (host.children.length > FEED_MAX) host.lastElementChild.remove();
   item._timer = setTimeout(() => { item.classList.add('out'); setTimeout(() => item.remove(), 260); }, FEED_LIFE_MS);
@@ -178,11 +179,125 @@ export function setPauseScreen(visible, info = {}) {
   el.hidden = !visible;
 }
 
-export function runEndHtml({ won, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance }) {
-  const cell = (label, value, cls = '') => `<div class="end-stat ${cls}"><small>${label}</small><b>${esc(value)}</b></div>`;
-  return `<div class="end-banner ${won ? 'won' : 'dead'}"><small>${won ? 'SECTOR EXTRACTED' : 'SIGNAL LOST'}</small><strong>${won ? 'EXTRACTION COMPLETE' : 'RUN OVER'}</strong></div>
-<div class="end-grid">${cell('ROOMS CLEARED', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`)}${cell('KILLS', kills)}${cell('RUN TIME', formatClock(seconds))}${cell('SCRAP', scrap)}${cell('COINS EARNED', `+${payout}`, 'coins')}${cell('SEED', seed)}</div>
-<div class="end-foot">SAFEHOUSE BALANCE · ${balance} COINS</div>`;
+export function runEndHtml({ won, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '' }) {
+  const icon = id => iconSvg(id, { size: 0 });
+  const cell = (label, value, i, ico, count = null) => `<div class="end-stat" style="--i:${i}"><small>${icon(ico)}${label}</small><b${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</b></div>`;
+  const bestLine = best
+    ? `<div class="end-best">${icon('status-trophy')}<span>${isNewBest ? 'New best run' : 'Best run'} · <b>${best.won ? 'EXTRACTED' : `${best.rooms} ROOMS`}</b> · <b>${best.kills} KILLS</b> · <b>${formatClock(best.seconds)}</b></span></div>` : '';
+  return `<div class="end-banner ${won ? 'won' : 'dead'}"><span class="end-ico">${icon(won ? 'exit-extraction' : 'status-skull')}</span><div><small>${won ? 'SECTOR EXTRACTED' : 'SIGNAL LOST'}</small><strong>${won ? 'EXTRACTION COMPLETE' : 'RUN OVER'}</strong>${cause && !won ? `<span class="end-cause">${esc(cause)}</span>` : ''}</div>${isNewBest ? '<span class="badge">NEW BEST</span>' : ''}</div>
+<div class="end-grid">${cell('Rooms cleared', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, 0, 'door', rooms)}${cell('Kills', kills, 1, 'status-kills', kills)}${cell('Run time', formatClock(seconds), 2, 'status-clock')}</div>
+<div class="end-coins">${icon('pickup-coin')}<div><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span><small>Coins earned · <span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></small></div><div class="bal"><small>Safehouse balance</small><b data-count="${balance}">${balance}</b></div></div>
+${bestLine}`;
+}
+
+/** Count `[data-count]` numbers up from 0 (real time; instant under prefers-reduced-motion). Keeps data-prefix. */
+export function animateCounts(root, { duration = 900, delay = 350 } = {}) {
+  if (!root || typeof requestAnimationFrame === 'undefined') return;
+  for (const el of root.querySelectorAll('[data-count]')) {
+    const target = Number(el.dataset.count) || 0, prefix = el.dataset.prefix || '';
+    const suffix = el.textContent.includes(' / ') ? el.textContent.slice(el.textContent.indexOf(' / ')) : '';
+    if (reducedMotion() || target === 0) { el.textContent = `${prefix}${target}${suffix}`; continue; }
+    el.textContent = `${prefix}0${suffix}`;
+    const start = performance.now() + delay;
+    const step = now => {
+      const t = Math.max(0, Math.min(1, (now - start) / duration)), eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = `${prefix}${Math.round(target * eased)}${suffix}`;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+}
+
+// True when any world point (screen px) lies inside `rect` grown by `pad`. Used to ghost the bottom-left HUD
+// when the player, a pickup or a corpse would otherwise be hidden behind it.
+export function hudOccludes(rect, points, pad = 18) {
+  if (!rect) return false;
+  return points.some(p => p.x >= rect.left - pad && p.x <= rect.right + pad && p.y >= rect.top - pad && p.y <= rect.bottom + pad);
+}
+
+// ---------------------------------------------------------------- motion + small UI helpers
+export const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Show `[R]`-style tokens in a hint string as keycaps. */
+export function hintHtml(text) {
+  return esc(text).replace(/\[([^\]]{1,8})\]/g, (_, key) => keycap(key));
+}
+
+/** Cost / balance chip with a currency icon. currency: scrap | coin */
+export function costHtml(amount, currency = 'scrap') {
+  return `<span class="cost">${iconSvg(currency === 'coin' ? 'pickup-coin' : 'pickup-scrap', { size: 0 })}<b>${amount}</b></span>`;
+}
+
+/**
+ * Keep a row of pips in sync without rebuilding it, so changes can animate:
+ * lit -> empty plays `breakCls` (shards fall away), empty -> lit plays `fillCls` (pop back in).
+ */
+export function syncPips(host, value, max, { tag = 'span', cls = '', emptyCls = 'empty', breakCls = 'break', fillCls = 'fill' } = {}) {
+  if (!host) return;
+  if (host._max !== max) {
+    host._max = max; host._val = null;
+    host.innerHTML = Array.from({ length: max }, () => `<${tag} class="${cls}"></${tag}>`).join('');
+  }
+  const prev = host._val;
+  [...host.children].forEach((pip, i) => {
+    const lit = i < value, was = prev == null ? lit : i < prev;
+    pip.classList.toggle(emptyCls, !lit);
+    pip.classList.remove(breakCls, fillCls);
+    if (prev != null && was && !lit) { void pip.offsetWidth; if (!reducedMotion()) pip.classList.add(breakCls); }
+    else if (prev != null && !was && lit) { void pip.offsetWidth; if (!reducedMotion()) pip.classList.add(fillCls); }
+  });
+  host._val = value;
+}
+
+/** Write a padded counter and flash it when it changes (scrap / kills tick-up). */
+export function tickNumber(el, value, pad = 2) {
+  if (!el) return;
+  const text = String(value).padStart(pad, '0');
+  if (el._t === text) return;
+  const first = el._t == null;
+  el._t = text; el.textContent = text;
+  if (!first && !reducedMotion()) { el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick'); }
+}
+
+/** Flash an element (objective line etc.) by retriggering a CSS class. */
+export function flashEl(el, cls = 'flash') {
+  if (!el || reducedMotion()) return;
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+}
+
+/** Replace `<kbd data-action>` labels with the player's real bindings. resolve(action) -> label | undefined. */
+export function syncKeycaps(resolve, root = typeof document === 'undefined' ? null : document) {
+  if (!root) return;
+  for (const el of root.querySelectorAll('kbd[data-action]')) { const label = resolve(el.dataset.action); if (label) el.textContent = label; }
+}
+
+/** Fill `[data-icon]` placeholders from icons.js (static markup in index.html). */
+export function hydrateIcons(root = typeof document === 'undefined' ? null : document) {
+  if (!root) return;
+  for (const el of root.querySelectorAll('[data-icon]:not([data-icon-done])')) {
+    el.innerHTML = iconSvg(el.dataset.icon, { size: 0 });
+    el.dataset.iconDone = '1';
+  }
+}
+
+/** One shared tooltip for every `[data-tip]` (hover or keyboard focus). */
+function wireTooltips() {
+  const tip = $('tip');
+  if (!tip) return;
+  let current = null;
+  const show = el => {
+    current = el; tip.textContent = el.dataset.tip; tip.hidden = false;
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    const y = r.top - h - 10 < 8 ? r.bottom + 10 : r.top - h - 10;
+    tip.style.transform = ''; tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+    requestAnimationFrame(() => tip.classList.add('show'));
+  };
+  const hide = () => { current = null; tip.classList.remove('show'); setTimeout(() => { if (!current) tip.hidden = true; }, 140); };
+  document.addEventListener('pointerover', e => { const el = e.target.closest?.('[data-tip]'); if (el && el !== current) show(el); else if (!el && current) hide(); });
+  document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-tip]'); if (el) show(el); });
+  document.addEventListener('focusout', hide);
+  for (const el of document.querySelectorAll('.term[data-tip]')) if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
 }
 
 // Settings / controls toggles on the title screen.
@@ -199,4 +314,8 @@ function wireTitleUi() {
   $('meta-button')?.addEventListener('click', () => set(false));
   $('resume-button')?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape' })));
 }
-if (typeof document !== 'undefined') wireTitleUi();
+if (typeof document !== 'undefined') {
+  wireTitleUi();
+  hydrateIcons();
+  wireTooltips();
+}

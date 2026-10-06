@@ -3,30 +3,37 @@
 import {drawIcon, ENEMY_ICON} from './icons.js';
 import {nearestHostileRoom, promptParts} from './interaction.js';
 
-const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
-const MONO = "'DM Mono',ui-monospace,monospace";
+import {COLORS, FONTS, RADII} from './theme.js';
+// Canvas prompts share the DOM design tokens (theme.js mirrors style.css): same fonts, panel fill, keycap and corner radii.
+const FONT = FONTS.display;
+const MONO = FONTS.mono;
+const PANEL = COLORS.panel, PANEL_SOLID = COLORS['panel-solid'], TEXT_HI = COLORS['text-hi'], TEXT_MID = COLORS['text-mid'];
 const TAU = Math.PI * 2;
 import {clamp} from './util.js';
 const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
-const BAD = '#ff6a78', GREY = '#8d8a96';
+const BAD = COLORS.danger, GREY = COLORS['text-low'];
 
+const bannerShowing = () => typeof document !== 'undefined' && !!document.querySelector('#room-banner.show');
 function hex(ctx, x, y, r, color) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const an = i * TAU / 6; ctx.lineTo(x + Math.cos(an) * r, y + Math.sin(an) * r); } ctx.closePath(); ctx.fillStyle = color; ctx.fill(); ctx.fillStyle = 'rgba(12,9,18,.9)'; ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, TAU); ctx.fill(); }
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); }
 function outlinedText(ctx, text, x, y, fill, size, align = 'left', font = FONT, weight = 800) {
   ctx.font = `${weight} ${size}px ${font}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(12,9,18,0.92)'; ctx.strokeText(text, x, y);
+  ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(13,11,20,0.92)'; ctx.strokeText(text, x, y);
   ctx.fillStyle = fill; ctx.fillText(text, x, y);
 }
 function textW(ctx, text, size, font = FONT, weight = 800) { ctx.font = `${weight} ${size}px ${font}`; return ctx.measureText(text).width; }
 
 function keycap(ctx, label, x, y, size, enabled, pulse) {
-  const w = Math.max(size + 6, textW(ctx, label, size - 2, MONO, 800) + 10), h = size + 6;
+  const w = Math.max(size + 6, textW(ctx, label, size - 2, MONO, 500) + 12), h = size + 6, press = 1.5 * (1 - pulse);
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rr(ctx, x - w / 2, y - h / 2 + 3, w, h, 5); ctx.fill();
-  ctx.fillStyle = enabled ? '#f3e9d3' : '#5a5662'; rr(ctx, x - w / 2, y - h / 2 + 1.5 * (1 - pulse), w, h, 5); ctx.fill();
-  ctx.strokeStyle = enabled ? '#fff7e2' : '#77737f'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = enabled ? '#1c1624' : '#aaa6b2'; ctx.font = `800 ${size - 2}px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(label, x, y + 1 + 1.5 * (1 - pulse));
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; rr(ctx, x - w / 2, y - h / 2 + 2, w, h, RADII.sm); ctx.fill();
+  const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
+  g.addColorStop(0, enabled ? COLORS['key-top'] : '#26222e'); g.addColorStop(1, enabled ? COLORS['key-bottom'] : '#1d1a24');
+  ctx.fillStyle = g; rr(ctx, x - w / 2, y - h / 2 + press, w, h, RADII.sm); ctx.fill();
+  ctx.strokeStyle = enabled ? COLORS['key-edge'] : '#3a3542'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = enabled ? COLORS['key-edge'] : '#3a3542'; ctx.fillRect(x - w / 2 + 2, y + h / 2 - 2 + press, w - 4, 1.5);
+  ctx.fillStyle = enabled ? TEXT_HI : COLORS['text-low']; ctx.font = `500 ${size - 2}px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label.toUpperCase(), x, y + 0.5 + press);
   ctx.restore();
   return w;
 }
@@ -34,6 +41,7 @@ function keycap(ctx, label, x, y, size, enabled, pulse) {
 /** Create the layer. `anim` keeps per-target fade state. */
 export function createAffordances() {
   const anim = new Map();
+  let curKey = 'E';
   let t = 0;
 
   function toScreen(cam, x, y) { return {x: (x - cam.x) * cam.scale + cam.w / 2, y: (y - cam.y) * cam.scale + cam.h / 2}; }
@@ -43,7 +51,7 @@ export function createAffordances() {
     const parts = promptParts(target, key), ok = parts.enabled, pulse = 0.5 + 0.5 * Math.sin(t * 6);
     const accent = ok ? target.color : BAD, size = 15;
     const iconSz = 20, gap = 8;
-    const kw = parts.key ? Math.max(size + 6, textW(ctx, parts.key, size - 2, MONO, 800) + 10) : 0;
+    const kw = parts.key ? Math.max(size + 6, textW(ctx, parts.key, size - 2, MONO, 500) + 12) : 0;
     const headW = textW(ctx, parts.head, size + 1);
     const costW = parts.cost ? textW(ctx, parts.cost, size - 1) + 16 : 0;
     const subText = parts.reason || target.note || '';
@@ -54,34 +62,34 @@ export function createAffordances() {
     ctx.save();
     ctx.globalAlpha = a; ctx.translate(cx, top + h / 2); ctx.scale(0.8 + 0.2 * scaleIn, 0.8 + 0.2 * scaleIn); ctx.translate(-cx, -(top + h / 2));
     // pointer tail
-    ctx.fillStyle = 'rgba(16,12,24,0.92)'; ctx.beginPath(); ctx.moveTo(cx - 6, top + h - 1); ctx.lineTo(cx + 6, top + h - 1); ctx.lineTo(cx, top + h + 7); ctx.closePath(); ctx.fill();
-    rr(ctx, cx - w / 2, top, w, h, 8); ctx.fillStyle = 'rgba(16,12,24,0.92)'; ctx.fill();
-    ctx.lineWidth = 1.6; ctx.strokeStyle = accent; ctx.globalAlpha = a * (0.7 + pulse * 0.3); ctx.stroke(); ctx.globalAlpha = a;
+    ctx.fillStyle = PANEL; ctx.beginPath(); ctx.moveTo(cx - 6, top + h - 1); ctx.lineTo(cx + 6, top + h - 1); ctx.lineTo(cx, top + h + 7); ctx.closePath(); ctx.fill();
+    rr(ctx, cx - w / 2, top, w, h, RADII.md); ctx.fillStyle = PANEL; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = accent; ctx.globalAlpha = a * (0.7 + pulse * 0.3); ctx.stroke(); ctx.globalAlpha = a;
     let x = cx - w / 2 + 11; const y1 = top + 8 + 9;
     if (kw) { keycap(ctx, parts.key, x + kw / 2, y1, size, ok, pulse); x += kw + gap; }
     drawIcon(ctx, target.icon, x + iconSz / 2, y1, iconSz, accent); x += iconSz + gap;
-    outlinedText(ctx, parts.head, x, y1, ok ? '#fff6e6' : '#cfc9d4', size + 1); x += headW;
+    outlinedText(ctx, parts.head, x, y1, ok ? TEXT_HI : TEXT_MID, size + 1); x += headW;
     if (costW) {
-      x += gap; rr(ctx, x, y1 - 10, costW, 20, 5); ctx.fillStyle = ok ? 'rgba(255,176,74,0.22)' : 'rgba(255,90,105,0.22)'; ctx.fill();
+      x += gap; rr(ctx, x, y1 - 10, costW, 20, RADII.sm); ctx.fillStyle = ok ? 'rgba(228,178,103,0.2)' : 'rgba(255,106,120,0.2)'; ctx.fill();
       ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.stroke();
       hex(ctx, x + 9, y1, 5, accent);
-      ctx.fillStyle = ok ? '#ffd27a' : BAD; ctx.font = `800 ${size - 1}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(parts.cost.replace(' SCRAP', ''), x + 16, y1 + 0.5);
+      ctx.fillStyle = ok ? COLORS.scrap : BAD; ctx.font = `800 ${size - 1}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(parts.cost.replace(' SCRAP', ''), x + 16, y1 + 0.5);
     }
-    if (subText) outlinedText(ctx, subText, cx, top + h - 13, ok ? '#a9a3b4' : BAD, 11, 'center', MONO, 700);
+    if (subText) outlinedText(ctx, subText, cx, top + h - 13, ok ? TEXT_MID : BAD, 11, 'center', MONO, 500);
     ctx.restore();
     void cam;
   }
 
   function drawTag(ctx, target, sp, alpha, withKey) {
     const label = target.kind === 'gate' ? `${target.cost} SCRAP` : target.kind === 'exit' ? (target.enabled ? 'EXTRACT' : 'EXIT · LOCKED') : target.subject;
-    const size = 12, iconSz = 14, tw = textW(ctx, label, size), w = tw + iconSz + 18 + (withKey ? 16 : 0), h = 20;
+    const size = 13, iconSz = 14, tw = textW(ctx, label, size), w = tw + iconSz + 18 + (withKey ? 25 : 0), h = 23;
     const x = sp.x - w / 2, y = sp.y - 34;
     ctx.save(); ctx.globalAlpha = alpha;
-    rr(ctx, x, y, w, h, 6); ctx.fillStyle = 'rgba(16,12,24,0.8)'; ctx.fill(); ctx.strokeStyle = target.kind === 'exit' && !target.enabled ? BAD : target.color; ctx.lineWidth = 1; ctx.stroke();
+    rr(ctx, x, y, w, h, RADII.md); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = target.kind === 'exit' && !target.enabled ? BAD : target.color; ctx.lineWidth = 1; ctx.stroke();
     let cx = x + 6;
-    if (withKey) { ctx.fillStyle = target.color; ctx.font = `800 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('E', cx + 4, y + h / 2 + 0.5); cx += 11; }
+    if (withKey) { keycap(ctx, curKey, cx + 10, y + h / 2 - 1, 13, true, 1); cx += 25; }
     drawIcon(ctx, target.icon, cx + iconSz / 2, y + h / 2, iconSz, target.color); cx += iconSz + 4;
-    ctx.fillStyle = '#f3ead8'; ctx.font = `800 ${size}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, cx, y + h / 2 + 0.5);
+    ctx.fillStyle = TEXT_HI; ctx.font = `800 ${size}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, cx, y + h / 2 + 0.5);
     ctx.restore();
   }
 
@@ -91,16 +99,39 @@ export function createAffordances() {
     ctx.beginPath(); ctx.arc(sp.x, sp.y, r, 0, TAU); ctx.stroke(); ctx.restore();
   }
 
+  // Screen rectangles the DOM HUD occupies (bottom-left gun panel, bottom-right stats/minimap, top-centre tempo + objective, feed);
+  // arrows are pushed out of them so they never hide behind the HUD. Cached ~4x a second.
+  let safe = [], safeAt = -1;
+  function safeRects() {
+    if (typeof document === 'undefined') return safe;
+    if (t - safeAt < 0.25) return safe;
+    safeAt = t; safe = [];
+    for (const id of ['hud', 'hud-right', 'top-center', 'feed']) {
+      const el = document.getElementById(id); if (!el) continue;
+      const r = el.getBoundingClientRect(); if (r.width > 0) safe.push({x0: r.left - 18, y0: r.top - 18, x1: r.right + 18, y1: r.bottom + 18});
+    }
+    return safe;
+  }
   function edgeArrow(ctx, cam, from, to, color, label, alpha = 1, strong = false) {
     const dx = to.x - from.x, dy = to.y - from.y, ang = Math.atan2(dy, dx);
-    const hx = cam.w / 2 - 60, hy = cam.h / 2 - 125, k = Math.min(Math.abs(hx / (Math.cos(ang) || 1e-6)), Math.abs(hy / (Math.sin(ang) || 1e-6)));
-    const ax = cam.w / 2 + Math.cos(ang) * k, ay = cam.h / 2 + Math.sin(ang) * k, pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    const M = 30;   // marker radius + breathing room: the arrow hugs the real viewport edge
+    const hx = cam.w / 2 - M, hy = cam.h / 2 - M, k = Math.min(Math.abs(hx / (Math.cos(ang) || 1e-6)), Math.abs(hy / (Math.sin(ang) || 1e-6)));
+    let ax = cam.w / 2 + Math.cos(ang) * k, ay = cam.h / 2 + Math.sin(ang) * k;
+    for (const r of safeRects()) {
+      if (ax > r.x0 && ax < r.x1 && ay > r.y0 && ay < r.y1) {
+        // slide along the viewport edge to the nearest clear side of the rect
+        const onSide = Math.abs(ax - M) < 2 || Math.abs(ax - (cam.w - M)) < 2;
+        if (onSide) ay = ay < (r.y0 + r.y1) / 2 ? Math.max(M, r.y0 - 2) : Math.min(cam.h - M, r.y1 + 2);
+        else ax = ax < (r.x0 + r.x1) / 2 ? Math.max(M, r.x0 - 2) : Math.min(cam.w - M, r.x1 + 2);
+      }
+    }
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4);
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(ax, ay);
     if (strong) { ctx.strokeStyle = color; ctx.globalAlpha = alpha * 0.6; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 21 + pulse * 7, 0, TAU); ctx.stroke(); ctx.globalAlpha = alpha; }
-    ctx.fillStyle = 'rgba(16,12,24,0.85)'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.rotate(ang); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(9 + pulse * 2, 0); ctx.lineTo(-4, -7); ctx.lineTo(-1, 0); ctx.lineTo(-4, 7); ctx.closePath(); ctx.fill(); ctx.rotate(-ang);
     const right = ax > cam.w / 2;
-    outlinedText(ctx, label, right ? -25 : 25, 0, color, 12, right ? 'right' : 'left');
+    outlinedText(ctx, label, right ? -25 : 25, 0, color, 13, right ? 'right' : 'left');
     ctx.restore();
   }
 
@@ -108,12 +139,12 @@ export function createAffordances() {
     for (const e of state.enemies) {
       if (!e.alive) continue;
       const sp = toScreen(cam, e.x, e.y); if (!onScreen(sp, cam, -10)) continue;
-      const r = (e.elite ? 17 : 12) * cam.scale, icon = ENEMY_ICON[e.type], col = e.elite ? '#ffb27a' : '#ff8d99';
+      const r = (e.elite ? 17 : 12) * cam.scale, icon = ENEMY_ICON[e.type], col = e.elite ? COLORS.sprint : COLORS.danger;
       const bx = sp.x + r * 0.9, by = sp.y - r * 0.9;
       ctx.save(); ctx.globalAlpha = e.elite ? 1 : 0.85;
-      ctx.fillStyle = 'rgba(16,12,24,0.82)'; ctx.beginPath(); ctx.arc(bx, by, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(bx, by, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
       if (icon) drawIcon(ctx, icon, bx, by, 11, col);
-      if (e.elite) outlinedText(ctx, `ELITE ${e.def?.name || ''}`.trim(), sp.x, sp.y + r + 11, '#ffb27a', 11, 'center');
+      if (e.elite) outlinedText(ctx, `ELITE ${e.def?.name || ''}`.trim(), sp.x, sp.y + r + 12, COLORS.sprint, 12, 'center');
       ctx.restore();
     }
   }
@@ -122,6 +153,7 @@ export function createAffordances() {
     draw(ctx, state, cam, dpr, dt, ready) {
       t += dt;
       const ui = state.interact; if (!ui || !state.player || state.mode !== 'play') return;
+      curKey = ui.key || 'E';
       ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const active = ui.active, ambient = ui.ambient, seen = new Set();
       for (const tg of ui.targets) {
@@ -131,7 +163,9 @@ export function createAffordances() {
           if (tg.distance < 150) { drawAutoTag(ctx, tg, sp, clamp(1 - (tg.distance - 90) / 60, 0, 1) * 0.95); }
           continue;
         }
-        if (isActive) { seen.add(tg.id); const an = anim.get(tg.id) ?? 0; anim.set(tg.id, Math.min(1, an + dt * 6)); drawHighlight(ctx, tg, sp, cam.scale, ease(an)); drawPrompt(ctx, tg, sp, ui.key, ease(an), ease(an), cam); }
+        if (isActive) { seen.add(tg.id); const an = anim.get(tg.id) ?? 0; anim.set(tg.id, Math.min(1, an + dt * 6)); drawHighlight(ctx, tg, sp, cam.scale, ease(an));
+          const hot = tg.kind === 'station' && state.enemies.some(e => e.alive && Math.hypot(e.x - state.player.x, e.y - state.player.y) < 520);
+          if (hot) drawTag(ctx, {...tg, keyed: true}, sp, ease(an), true); else drawPrompt(ctx, tg, sp, ui.key, ease(an), ease(an), cam); }
         else { const a = clamp(1 - (tg.distance - 160) / 140, 0.35, 0.95); drawTag(ctx, tg, sp, a, tg.keyed); }
       }
       for (const id of [...anim.keys()]) if (!seen.has(id)) anim.delete(id);
@@ -144,7 +178,7 @@ export function createAffordances() {
         if (ready) { const m = Math.round(Math.hypot(pk.x - state.player.x, pk.y - state.player.y) / 32); edgeArrow(ctx, cam, p, sp, '#6dffb0', `EXTRACT · ${m} M`, 0.75 + 0.25 * Math.sin(t * 5), true); }
         else {
           const h = nearestHostileRoom({player: state.player, rooms: state.rooms, enemies: state.enemies});
-          if (h) { const hs = toScreen(cam, h.x, h.y); if (!onScreen(hs, cam, 20)) edgeArrow(ctx, cam, p, hs, '#ff8a6a', `CLEAR ROOM · ${h.hostiles}`, 0.8); }
+          if (h && !bannerShowing()) { const hs = toScreen(cam, h.x, h.y); if (!onScreen(hs, cam, 20)) edgeArrow(ctx, cam, p, hs, '#ff8a6a', `CLEAR ROOM · ${h.hostiles}`, 0.8); }
         }
       }
       drawEnemyTags(ctx, state, cam);
@@ -156,9 +190,9 @@ export function createAffordances() {
     if (a <= 0.02) return;
     const label = tg.subject, size = 11, iconSz = 12, w = textW(ctx, label, size) + iconSz + 14, h = 17, x = sp.x - w / 2, y = sp.y - 28;
     ctx.save(); ctx.globalAlpha = a;
-    rr(ctx, x, y, w, h, 5); ctx.fillStyle = 'rgba(16,12,24,0.72)'; ctx.fill(); ctx.strokeStyle = tg.color; ctx.lineWidth = 1; ctx.globalAlpha = a * 0.7; ctx.stroke(); ctx.globalAlpha = a;
+    rr(ctx, x, y, w, h, RADII.sm); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = tg.color; ctx.lineWidth = 1; ctx.globalAlpha = a * 0.7; ctx.stroke(); ctx.globalAlpha = a;
     if (tg.pickupKind === 'scrap') hex(ctx, x + 8, y + h / 2, 5, tg.color); else drawIcon(ctx, tg.icon, x + 8, y + h / 2, iconSz, tg.color);
-    ctx.fillStyle = '#f3ead8'; ctx.font = `800 ${size}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + iconSz + 11, y + h / 2 + 0.5);
+    ctx.fillStyle = TEXT_HI; ctx.font = `800 ${size}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + iconSz + 11, y + h / 2 + 0.5);
     ctx.restore();
   }
 }

@@ -10,7 +10,7 @@ Then open `http://localhost:8000`. The game loads Three.js, Rapier 2D, and ROT.j
 
 ## Controls
 
-- **WASD / arrows:** move at 1×. Firing blends slow and normal time (about 0.42× at the default idle rate), including while moving; stopping lets time settle to 0.18×.
+- **WASD / arrows + Shift:** world time follows your actual speed (not key-down): about 0.08x standing still, 0.35x walking, 1x at full sprint (STILL MIND lowers the still rate). Every shot lets a short beat of time through (heavier or slower guns cost more; an SMG spray costs a sliver), and sprinting is loud. Your movement, aim, fire rate, reload and i-frames run on the real clock; enemies, their bullets, telegraphs and the boss run on world time. Time is shown by the screen itself (colour drains, cold grain and vignette as it slows) plus a thin top-edge meter while it changes. Tunables live in `time-rule.js`.
 - **Mouse:** aim; hold the left button to fire.
 - **E:** use the entry loadout station or nearby pickup.
 - **Tab:** open the loadout screen anywhere.
@@ -28,7 +28,7 @@ Generated runs use ROT.js's Digger room and corridor generator. Walls are indest
 npm test
 ```
 
-Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement at 1×, blended firing tempo, rarity-tagged loot, bullet damage to a crate, reload, a common extended-magazine purchase, a frag throw and detonation, focus-loss and manual pause, the two-slot loadout, and safehouse upgrades surviving a reload. It also starts a run after buying Vital Reserve and confirms the added health is granted. The progression check restores the browser's original save afterward.
+Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement and the speed-driven time rate, shot beats, rarity-tagged loot, bullet damage to a crate, reload, a common extended-magazine purchase, a frag throw and detonation, focus-loss and manual pause, the two-slot loadout, and safehouse upgrades surviving a reload. It also starts a run after buying Vital Reserve and confirms the added health is granted. The progression check restores the browser's original save afterward.
 
 For a seeded encounter check, open `http://localhost:8000/tests/full-floor-browser-harness.html`. It equips armor, clears the first combat room, checks a fresh ranged-shot dodge, tries an affordable scrap gate, then pauses the run and restores the original save. It is a focused probe, not a full-floor playthrough.
 

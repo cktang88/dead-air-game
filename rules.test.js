@@ -4,15 +4,12 @@ import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS, TILE} from
 import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
-test('world time depends on movement, not firing, and menus pause',()=>{
-  const base={mode:'play',paused:false,loadoutOpen:false,moving:false,firing:false};
-  assert.equal(timeScale(base),0.18);
-  assert.equal(timeScale({...base,moving:true}),1);
-  assert.equal(timeScale({...base,firing:true}),0.18);
-  assert.equal(timeScale({...base,moving:true,firing:true}),1);
-  assert.equal(timeScale({...base,idleScale:0.15,firing:true}),0.15);
-  assert.equal(timeScale({...base,idleScale:0.15,moving:true,firing:true}),1);
-  assert.equal(timeScale({...base,idleScale:.12,firing:true}),.12);
+test('world time follows actual speed (see time-rule.test.js for the full rule), and menus pause',()=>{
+  const base={mode:'play',paused:false,loadoutOpen:false,speedRatio:0};
+  assert.equal(timeScale(base),0.08);
+  assert.ok(Math.abs(timeScale({...base,speedRatio:1})-0.35)<1e-9);
+  assert.equal(timeScale({...base,speedRatio:1.45}),1);
+  assert.equal(timeScale({...base,idleScale:.05}),.05);
   assert.equal(timeScale({...base,paused:true}),0);
   assert.equal(timeScale({...base,loadoutOpen:true}),0);
   assert.equal(timeScale({...base,mode:'dead'}),0);
@@ -24,10 +21,11 @@ test('ranged enemy shots leave time for a sidestep at each player tempo',()=>{
   for(const enemy of ranged){
     assert.ok(enemy.minRange>0&&enemy.minRange<enemy.range,`${enemy.name} needs a useful minimum and maximum firing range`);
     assert.ok(enemy.projectileSpeed<playerSpeed*2,`${enemy.name} rounds should stay below twice player speed`);
-    for(const scale of [.18,1]){
+    for(const scale of [.08,.35,1]){
+      // enemy rounds fly on world time; the player moves on the real clock, so slower worlds are more generous
       const projectileTravel=65-13-10;
       const flightSeconds=projectileTravel/(enemy.projectileSpeed*scale);
-      const sidestep=playerSpeed*scale*flightSeconds;
+      const sidestep=playerSpeed*flightSeconds;
       assert.ok(sidestep>=18,`${enemy.name} should allow an 18-unit sidestep at ${scale}×`);
     }
   }
@@ -178,15 +176,37 @@ test('locked reward gates require the full price and cannot be charged twice',()
 });
 
 test('room encounter rolls vary by seed and stay bounded by room capacity',()=>{
-  const first=chooseEncounterTypes(4,301);
-  assert.deepEqual(chooseEncounterTypes(4,301),first);
-  assert.notDeepEqual(chooseEncounterTypes(4,302),first);
+  const first=chooseEncounterTypes(4,301,.8);
+  assert.deepEqual(chooseEncounterTypes(4,301,.8),first);
+  assert.notDeepEqual(chooseEncounterTypes(4,302,.8),first);
   assert.equal(first.length,4);
-  assert.ok(first.every(type=>['chaser','gunner','guard','brute'].includes(type)));
-  for(let count=2;count<=4;count++)for(let seed=1;seed<=256;seed++){
-    const encounter=chooseEncounterTypes(count,seed),rushers=encounter.filter(type=>type==='chaser'||type==='brute').length;
-    assert.ok(rushers<=Math.floor(count/2),`${count} enemies at seed ${seed} should include ranged support`);
+  assert.ok(first.every(type=>Object.keys(ENEMY_TYPES).includes(type)));
+});
+
+test('encounters are mixed by design: never all one type, always a shooter present',()=>{
+  const rushers=new Set(['chaser','brute','riot']);
+  for(const depth of [0,.3,.5,.9])for(let count=2;count<=5;count++)for(let seed=1;seed<=400;seed++){
+    const encounter=chooseEncounterTypes(count,seed,depth);
+    assert.equal(encounter.length,count);
+    assert.ok(new Set(encounter).size>=2,`${count} enemies at seed ${seed} depth ${depth} must mix types: ${encounter}`);
+    assert.ok(encounter.some(type=>!rushers.has(type)),`seed ${seed} needs at least one shooter: ${encounter}`);
   }
+});
+
+test('marksman and riot are introduced later in the floor and respect their caps',()=>{
+  const specialists=['sniper','riot'];
+  for(let seed=1;seed<=300;seed++)for(let count=2;count<=5;count++){
+    assert.ok(!chooseEncounterTypes(count,seed,.1).some(type=>specialists.includes(type)),'no specialists in the opening rooms');
+    assert.ok(!chooseEncounterTypes(count,seed,.3).includes('sniper'),'no marksman before mid-floor');
+  }
+  let sawSniper=false,sawRiot=false;
+  for(let seed=1;seed<=300;seed++){
+    const late=chooseEncounterTypes(4,seed,.9);
+    sawSniper||=late.includes('sniper');sawRiot||=late.includes('riot');
+    assert.ok(late.filter(type=>type==='sniper').length<=1,'at most one marksman per room');
+    assert.ok(late.filter(type=>type==='riot').length<=2);
+  }
+  assert.ok(sawSniper&&sawRiot,'late rooms should actually roll the new types');
 });
 
 test('crate durability loses health per hit and never drops below zero',()=>{
@@ -303,6 +323,7 @@ test('an unlocked third slot appends a distinct gun only when weapon and gear we
   assert.deepEqual(current,[0,1]);
 });
 
+const legacyStats=({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange})=>({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange});
 test('run coins reward death and extraction while upgrades persist as capped levels',()=>{
   const deathPayout=runCoinPayout({won:false,roomsCleared:2,kills:4});
   const winPayout=runCoinPayout({won:true,roomsCleared:2,kills:4});
@@ -332,12 +353,12 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
 });
 

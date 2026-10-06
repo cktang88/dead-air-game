@@ -1,6 +1,6 @@
 // Particles, flashes, rings, floaters and light events for the Canvas 2D renderer.
 // World-space effects age with the (time-scaled) simulation step; UI feedback ages in real time.
-import {TAU, glowSprite, hexStr, puffSprite, rgba, shade, tint} from './sprites2d.js';
+import {INK, TAU, glowSprite, hexStr, puffSprite, rgba, shade, tint} from './sprites2d.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -19,15 +19,16 @@ export class Fx {
     this.hitMark = 0; this.hitKill = false;
     this.hurt = 0;
     this.killPop = 0;
+    this.camPunch = 0;
     this.isSolid = () => false;
     this.cap = 650;
   }
 
-  clear() { this.parts.length = this.flashes.length = this.rings.length = this.lights.length = this.floaters.length = this.decals.length = 0; this.hitMark = 0; this.hurt = 0; }
+  clear() { this.parts.length = this.flashes.length = this.rings.length = this.lights.length = this.floaters.length = this.decals.length = 0; this.hitMark = 0; this.hurt = 0; this.camPunch = 0; }
 
   add(p) {
     if (this.parts.length >= this.cap) this.parts.shift();
-    p.age = 0; p.drag ??= 4; p.grow ??= 0; p.rot ??= 0; p.vr ??= 0;
+    p.age = 0; p.drag ??= 4; p.grow ??= 0; p.rot ??= 0; p.vr ??= 0; p.z ??= 0; p.vz ??= 0; p.g ??= 0; p.bounce ??= 0.4; p.tm ??= 0;
     this.parts.push(p);
   }
 
@@ -68,14 +69,35 @@ export class Fx {
   }
   casing(x, y, angle) {
     const a = angle + Math.PI / 2 + rand(-0.5, 0.4), s = rand(70, 150);
-    this.add({kind: 'casing', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, drag: 5, life: rand(0.9, 1.4), size: 2, rot: rand(0, TAU), vr: rand(-30, 30)});
+    this.add({kind: 'casing', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, drag: 2.6, life: rand(1.1, 1.6), size: 2, rot: rand(0, TAU), vr: rand(-30, 30), z: 5, vz: rand(55, 95), g: 330, bounce: 0.42});
   }
+  // A spent magazine dropping from the gun: falls, bounces twice and lies on the floor for a while.
+  mag(x, y, angle, side = 1) {
+    const a = angle + side * Math.PI / 2 + rand(-0.3, 0.3), s = rand(26, 52);
+    this.add({kind: 'mag', x, y, vx: Math.cos(a) * s + Math.cos(angle) * 8, vy: Math.sin(a) * s + Math.sin(angle) * 8, drag: 2.4, life: 9, size: 1, rot: angle + rand(-0.4, 0.4), vr: rand(-9, 9), z: 7, vz: rand(18, 40), g: 300, bounce: 0.34});
+  }
+  star(x, y, color, size = 3, life = 0.4) { this.add({kind: 'star', x, y, vx: 0, vy: -rand(8, 22), drag: 2, life, size, color, rot: rand(0, 1), vr: rand(-3, 3)}); }
 
+  // Impacts read the wall's normal: sparks leave on the mirrored ray, grit and dust fan out of the surface, a flat
+  // splat flashes along the wall, and grazing hits ricochet with long streaks.
   wallImpact(x, y, vx, vy, owner = 'player') {
-    const back = Math.atan2(-vy, -vx), hot = owner === 'player';
-    this.spark(x, y, back, hot ? 6 : 4, 0.85, [120, 340], hot ? undefined : '#ff9a8a');
-    this.chips(x, y, back, ['#7d7886', '#5d5868', '#9a95a4'], 3, 0.9, [30, 110], [1, 2], [0.3, 0.6]);
-    this.smoke(x, y, 4, 1, '#9b96a2', 10, [0.4, 0.7], 0.3);
+    const sp = Math.hypot(vx, vy) || 1, dx = vx / sp, dy = vy / sp, hot = owner === 'player', d = 4;
+    let nx = 0, ny = 0;
+    if (this.isSolid(x + d, y)) nx -= 1; if (this.isSolid(x - d, y)) nx += 1;
+    if (this.isSolid(x, y + d)) ny -= 1; if (this.isSolid(x, y - d)) ny += 1;
+    let nl = Math.hypot(nx, ny);
+    if (nl < 0.01 || nx * dx + ny * dy > 0) { nx = -dx; ny = -dy; nl = 1; } else { nx /= nl; ny /= nl; }
+    const dot = dx * nx + dy * ny, rx = dx - 2 * dot * nx, ry = dy - 2 * dot * ny, graze = 1 + dot; // 0 head-on, 1 grazing
+    const na = Math.atan2(ny, nx), ra = Math.atan2(ry, rx), col = hot ? undefined : '#ff9a8a';
+    this.spark(x, y, ra, hot ? 5 : 3, 0.3 + (1 - graze) * 0.5, [140, 380], col);
+    this.spark(x, y, na, 2, 0.7, [60, 160], col);
+    this.chips(x, y, na, ['#7d7886', '#5d5868', '#9a95a4'], 3, 0.8, [30, 110], [1, 2], [0.3, 0.6]);
+    for (let i = 0; i < 2; i++) this.add({kind: 'smoke', x: x + nx * 1.5, y: y + ny * 1.5, vx: nx * rand(14, 34) + rand(-8, 8), vy: ny * rand(14, 34) + rand(-8, 8), drag: 3, life: rand(0.35, 0.6), size: rand(2.4, 4), grow: 1.8, color: '#9b96a2', alpha: 0.32});
+    this.flashes.push({x, y, a: na, age: 0, life: 0.09, size: 0.6, color: hot ? '#ffe2a0' : '#ff9a8a', splat: true});
+    if (graze > 0.62) {
+      for (let i = 0; i < 2; i++) this.add({kind: 'spark', x, y, vx: rx * rand(380, 560) + rand(-30, 30), vy: ry * rand(380, 560) + rand(-30, 30), drag: 2.2, life: rand(0.14, 0.26), size: 1.3, color: hot ? '#fff3c4' : '#ffb0a0', long: true});
+      this.rings.push({x, y, r0: 1, r1: 7, age: 0, life: 0.14, color: hot ? '#ffe9b0' : '#ff9a8a', width: 1.4});
+    }
     this.lights.push({x, y, r: 36, age: 0, life: 0.09, strength: 0.4, color: hot ? '#ffd58a' : '#ff8a7a'});
   }
   hitCrate(crate, vx, vy) {
@@ -83,15 +105,21 @@ export class Fx {
     this.chips(crate.x, crate.y, a, WOOD, 7, 1.1, [50, 200], [1.6, 3.6], [0.35, 0.8]);
     this.spark(crate.x, crate.y, a, 2, 0.8);
     crate.flash = 1;
+    const w = crate.wob ??= {x: 0, y: 0, vx: 0, vy: 0, r: 0, vr: 0}, sp = Math.hypot(vx, vy) || 1;
+    w.vx += vx / sp * 110; w.vy += vy / sp * 110; w.vr += rand(-8, 8);
     crate.chips ??= [];
     crate.chips.push({x: rand(-9, 9), y: rand(-9, 9), r: rand(1.2, 2.6), a: rand(0, TAU)});
     if (crate.chips.length > 14) crate.chips.shift();
   }
   breakCrate(crate) {
-    this.chips(crate.x, crate.y, 0, WOOD, 26, Math.PI, [60, 280], [2, 5], [0.5, 1.2]);
+    // planks fly off, tumbling (their width scales with a fake flip) and bounce before settling as floor decals
+    for (let i = 0; i < 6; i++) {
+      const a = rand(0, TAU), sp = rand(60, 190);
+      this.add({kind: 'plank', x: crate.x + Math.cos(a) * 5, y: crate.y + Math.sin(a) * 5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 2.2, life: rand(0.9, 1.3), size: rand(3.2, 5.2), color: pick(WOOD), rot: rand(0, TAU), vr: rand(-16, 16), z: rand(4, 9), vz: rand(70, 130), g: 360, bounce: 0.38});
+    }
+    this.chips(crate.x, crate.y, 0, WOOD, 12, Math.PI, [60, 240], [1.6, 3.6], [0.45, 1.0]);
     this.smoke(crate.x, crate.y, 11, 4, '#8f8174', 26, [0.7, 1.2], 0.4);
-    this.spark(crate.x, crate.y, 0, 5, Math.PI, [80, 220], '#ffd9a0');
-    for (let i = 0; i < 3; i++) this.decals.push({kind: 'plank', x: crate.x + rand(-14, 14), y: crate.y + rand(-14, 14), r: rand(4, 8), a: rand(0, TAU)});
+    this.spark(crate.x, crate.y, 0, 4, Math.PI, [80, 220], '#ffd9a0');
     this.decals.push({kind: 'chip', x: crate.x + rand(-10, 10), y: crate.y + rand(-10, 10), r: 1.6, a: rand(0, TAU), color: '#6d4c36'});
     this.rings.push({x: crate.x, y: crate.y, r0: 8, r1: 34, age: 0, life: 0.28, color: '#e0c49a', width: 2});
   }
@@ -101,7 +129,8 @@ export class Fx {
     this.spark(e.x, e.y, a + Math.PI, 3, 0.9, [90, 240], '#ffe9d0');
     e.vis ??= {};
     e.vis.flash = 1; e.vis.hitAngle = a; e.vis.barT = 2;
-    e.vis.kick = 1;
+    e.vis.kick = 1; e.vis.punch = 1;
+    e.vis.fvx = (e.vis.fvx || 0) + Math.cos(a) * (killed ? 170 : 100); e.vis.fvy = (e.vis.fvy || 0) + Math.sin(a) * (killed ? 170 : 100);
     this.damageNumber(e, damage, killed);
     this.hitMark = 0.22; this.hitKill = killed;
     this.lights.push({x: e.x, y: e.y, r: 44, age: 0, life: 0.08, strength: 0.3, color: '#ffe0c0'});
@@ -124,7 +153,8 @@ export class Fx {
     this.decals.push({kind: 'blood', x: e.x, y: e.y, r: e.radius * 1.15, dir: a, seed: Math.floor(Math.random() * 1e6)});
     this.lights.push({x: e.x, y: e.y, r: 70, age: 0, life: 0.18, strength: 0.5, color: hexStr(e.def.color)});
     this.killPop = 0.3;
-    e.vis ??= {}; e.vis.flash = 1; e.vis.deathT = 0; e.vis.spin = (Math.random() < 0.5 ? -1 : 1) * rand(2.2, 4.2); e.vis.deathAngle = a;
+    this.camPunch = Math.min(0.07, this.camPunch + (e.elite || e.type === 'brute' ? 0.05 : 0.03));
+    e.vis ??= {}; e.vis.deathFx = 0; e.vis.flash = 1; e.vis.deathT = 0; e.vis.spin = (Math.random() < 0.5 ? -1 : 1) * rand(2.2, 4.2); e.vis.deathAngle = a;
   }
   playerHit(x, y, armorOnly) {
     this.blood(x, y, rand(0, TAU), armorOnly ? 0 : 10, Math.PI, [80, 240]);
@@ -136,6 +166,7 @@ export class Fx {
     const c = typeof color === 'number' ? hexStr(color) : color;
     this.rings.push({x, y, r0: 4, r1: 28, age: 0, life: 0.35, color: c, width: 2});
     this.spark(x, y, 0, 9, Math.PI, [60, 200], c);
+    for (let i = 0; i < 3; i++) this.star(x + rand(-7, 7), y + rand(-7, 7), c, rand(2.4, 4), rand(0.3, 0.5));
     this.lights.push({x, y, r: 60, age: 0, life: 0.2, strength: 0.4, color: c});
   }
   burst(x, y, color, count = 8, power = 1) {
@@ -146,6 +177,7 @@ export class Fx {
   explode(id, x, y, radius) {
     if (id === 'frag') {
       this.flashes.push({x, y, a: 0, age: 0, life: 0.22, size: 5.2, color: '#ffb066', round: true});
+      this.flashes.push({x, y, a: 0, age: 0, life: 0.5, size: 10, color: '#ff8a3c', round: true, alpha: 0.35});
       this.rings.push({x, y, r0: 8, r1: radius * 1.05, age: 0, life: 0.42, color: '#ffb877', width: 5});
       this.rings.push({x, y, r0: 4, r1: radius * 0.7, age: 0, life: 0.3, color: '#fff0d0', width: 3});
       for (let i = 0; i < 16; i++) { const a = rand(0, TAU), s = rand(20, 120); this.add({kind: 'flame', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, drag: 3.5, life: rand(0.35, 0.7), size: rand(12, 24), grow: 0.8, color: pick(['#ff8a3c', '#ffb25a', '#ff5a2a'])}); }
@@ -156,6 +188,7 @@ export class Fx {
       this.decals.push({kind: 'scorch', x, y, r: radius * 0.5, seed: Math.floor(Math.random() * 1e6)});
     } else if (id === 'flash') {
       this.flashes.push({x, y, a: 0, age: 0, life: 0.34, size: 9, color: '#fffbe8', round: true});
+      this.flashes.push({x, y, a: 0, age: 0, life: 0.7, size: 17, color: '#fff6c8', round: true, alpha: 0.4});
       this.rings.push({x, y, r0: 8, r1: radius, age: 0, life: 0.4, color: '#fff6c8', width: 4});
       this.spark(x, y, 0, 26, Math.PI, [140, 460], '#fffbe0');
       this.lights.push({x, y, r: radius * 2.4, age: 0, life: 0.5, strength: 1, color: '#fffbe8'});
@@ -190,8 +223,18 @@ export class Fx {
       if (this.isSolid(nx, p.y)) { p.vx *= -0.35; nx = p.x; }
       if (this.isSolid(p.x, ny)) { p.vy *= -0.35; ny = p.y; }
       p.x = nx; p.y = ny; p.rot += p.vr * dt;
-      if (p.age >= p.life || ((p.kind === 'casing' || p.kind === 'drop') && Math.hypot(p.vx, p.vy) < 9)) {
-        if (p.kind === 'casing') this.decals.push({kind: 'casing', x: p.x, y: p.y, a: p.rot});
+      if (p.g) {
+        p.vz -= p.g * dt; p.z += p.vz * dt; p.tm += p.vr * 0.7 * dt;
+        if (p.z <= 0) {
+          p.z = 0;
+          if (p.vz < -24) { p.vz = -p.vz * p.bounce; p.vr *= 0.55; p.vx *= 0.7; p.vy *= 0.7; }
+          else { p.vz = 0; p.vr *= Math.exp(-16 * dt); p.drag = 11; }
+        }
+      }
+      const slow = Math.hypot(p.vx, p.vy) < 9 && p.z < 0.3;
+      if (p.age >= p.life || ((p.kind === 'casing' || p.kind === 'drop') && slow)) {
+        if (p.kind === 'plank') this.decals.push({kind: 'plank', x: p.x, y: p.y, r: p.size, a: p.rot});
+        else if (p.kind === 'casing') this.decals.push({kind: 'casing', x: p.x, y: p.y, a: p.rot});
         else if (p.kind === 'drop' && p.age < p.life + 1) this.decals.push({kind: 'drop', x: p.x, y: p.y, r: p.size * (0.8 + Math.random() * 0.6), color: p.color, a: p.rot});
         else if (p.kind === 'chip' && p.size > 2.2 && Math.random() < 0.5) this.decals.push({kind: 'chip', x: p.x, y: p.y, r: p.size * 0.5, a: p.rot, color: p.color});
         parts.splice(i, 1);
@@ -214,7 +257,22 @@ export class Fx {
       if (p.x < b.x0 || p.x > b.x1 || p.y < b.y0 || p.y > b.y1) continue;
       const k = p.age / p.life;
       if (p.kind === 'casing') {
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = '#d3ac55'; ctx.fillRect(-2, -0.9, 4, 1.8); ctx.fillStyle = '#fff1a8'; ctx.fillRect(-2, -0.9, 1, 1.8); ctx.restore();
+        if (p.z > 0.4) { ctx.globalAlpha = 0.35; ctx.fillStyle = INK; ctx.fillRect(p.x - 1.5, p.y - 0.5, 3, 1.1); ctx.globalAlpha = 1; }
+        ctx.save(); ctx.translate(p.x, p.y - p.z); ctx.rotate(p.rot); const w = 0.45 + 0.55 * Math.abs(Math.cos(p.tm)); ctx.scale(1, w); ctx.fillStyle = '#d3ac55'; ctx.fillRect(-2, -0.9, 4, 1.8); ctx.fillStyle = '#fff1a8'; ctx.fillRect(-2, -0.9, 1, 1.8); ctx.restore();
+      } else if (p.kind === 'plank') {
+        const fade = Math.min(1, (p.life - p.age) * 4);
+        ctx.globalAlpha = 0.3 * fade; ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(p.x + 1, p.y + 1.5, p.size * (0.8 - Math.min(0.3, p.z * 0.02)), p.size * 0.32, 0, 0, TAU); ctx.fill();
+        ctx.globalAlpha = fade; ctx.save(); ctx.translate(p.x, p.y - p.z); ctx.rotate(p.rot); ctx.scale(1, 0.45 + 0.55 * Math.abs(Math.cos(p.tm)));
+        ctx.fillStyle = INK; ctx.fillRect(-p.size - 0.8, -p.size * 0.32 - 0.8, p.size * 2 + 1.6, p.size * 0.64 + 1.6);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.size, -p.size * 0.32, p.size * 2, p.size * 0.64);
+        ctx.fillStyle = 'rgba(255,230,190,0.35)'; ctx.fillRect(-p.size, -p.size * 0.32, p.size * 2, 0.8);
+        ctx.restore(); ctx.globalAlpha = 1;
+      } else if (p.kind === 'mag') {
+        const fade = Math.min(1, (p.life - p.age) * 1.2);
+        if (p.z > 0.4) { ctx.globalAlpha = 0.3 * fade; ctx.fillStyle = INK; ctx.fillRect(p.x - 1.5, p.y, 3, 1.4); }
+        ctx.globalAlpha = fade; ctx.save(); ctx.translate(p.x, p.y - p.z); ctx.rotate(p.rot); ctx.scale(1, 0.55 + 0.45 * Math.abs(Math.cos(p.tm)));
+        ctx.fillStyle = INK; ctx.fillRect(-2.9, -1.9, 5.8, 3.8); ctx.fillStyle = '#3a3e48'; ctx.fillRect(-2.2, -1.2, 4.4, 2.4); ctx.fillStyle = '#d3ac55'; ctx.fillRect(1.4, -1.2, 0.9, 2.4);
+        ctx.restore(); ctx.globalAlpha = 1;
       } else if (p.kind === 'drop') {
         ctx.globalAlpha = 1 - k * 0.5; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 - k * 0.3), 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
       } else if (p.kind === 'chip') {
@@ -241,9 +299,12 @@ export class Fx {
       if (p.x < b.x0 - 30 || p.x > b.x1 + 30 || p.y < b.y0 - 30 || p.y > b.y1 + 30) continue;
       const k = p.age / p.life;
       if (p.kind === 'spark') {
-        const sp = Math.hypot(p.vx, p.vy) || 1, len = Math.min(14, 1.5 + sp * 0.03);
+        const sp = Math.hypot(p.vx, p.vy) || 1, len = Math.min(p.long ? 26 : 14, 1.5 + sp * (p.long ? 0.055 : 0.03));
         ctx.strokeStyle = p.color; ctx.globalAlpha = Math.min(1, (1 - k) * 1.6); ctx.lineWidth = p.size;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx / sp * len, p.y - p.vy / sp * len); ctx.stroke();
+      } else if (p.kind === 'star') {
+        const r = p.size * (1 - k * 0.7) * (0.7 + 0.3 * Math.sin(k * 20)); ctx.globalAlpha = Math.min(1, (1 - k) * 2); ctx.fillStyle = p.color;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(r * 0.22, -r * 0.22); ctx.lineTo(r, 0); ctx.lineTo(r * 0.22, r * 0.22); ctx.lineTo(0, r); ctx.lineTo(-r * 0.22, r * 0.22); ctx.lineTo(-r, 0); ctx.lineTo(-r * 0.22, -r * 0.22); ctx.closePath(); ctx.fill(); ctx.restore();
       } else if (p.kind === 'flame') {
         const r = Math.max(1, p.size * (1 + p.grow * k) * (1 - k * 0.5));
         ctx.globalAlpha = (1 - k) * 0.8; ctx.drawImage(glowSprite(p.color), p.x - r, p.y - r, r * 2, r * 2);
@@ -252,9 +313,17 @@ export class Fx {
     ctx.globalAlpha = 1;
     for (const f of this.flashes) {
       const k = f.age / f.life;
+      if (f.splat) {
+        // flat flash spreading along the wall surface (a = wall normal)
+        ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.a); ctx.globalAlpha = (1 - k) * 0.9; ctx.fillStyle = f.color;
+        ctx.beginPath(); ctx.ellipse(1, 0, 2.2 * (1 - k * 0.4), (5 + 5 * k) * f.size, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fffdf0'; ctx.beginPath(); ctx.ellipse(0.6, 0, 1.2 * (1 - k), (2.6 + 3 * k) * f.size, 0, 0, TAU); ctx.fill();
+        ctx.restore(); ctx.globalAlpha = 1;
+        continue;
+      }
       if (f.round) {
         const r = f.size * 14 * (0.6 + k * 0.6);
-        ctx.globalAlpha = (1 - k) * 0.95; ctx.drawImage(glowSprite(f.color), f.x - r, f.y - r, r * 2, r * 2); ctx.globalAlpha = 1;
+        ctx.globalAlpha = (1 - k) * 0.95 * (f.alpha ?? 1); ctx.drawImage(glowSprite(f.color), f.x - r, f.y - r, r * 2, r * 2); ctx.globalAlpha = 1;
         continue;
       }
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.a); ctx.globalAlpha = 1 - k * 0.7;

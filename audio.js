@@ -161,6 +161,12 @@ function getAudioContext(){
   }catch{return null;}
 }
 
+/** Shared runtime for music.js / ambience.js: the live context, the master gain (mute/volume) and the SFX bus (slow-mo filtered). Null before a context exists. */
+export function getAudioRuntime(create=true){
+  const context=create?getAudioContext():audioContext;
+  return context&&masterGain?{context,master:masterGain,sfxBus,limiter,noiseWhite,forceRunning}:null;
+}
+
 /** Test/offline hook: render the real synth into an OfflineAudioContext. */
 export function attachAudioContextForRender(context){
   audioContext=context;masterGain=context.createGain();masterGain.gain.value=1;masterGain.connect(context.destination);
@@ -273,6 +279,7 @@ export function playEnemyShot(opts){
     noise(context,out,{filter:'bandpass',f0:1700*pm,f1:650,q:1.4,dur:.07,vol:v*1.1});
     tone(context,out,{type:'square',f0:520*pm,f1:170*pm,dur:.09,vol:v*.5});
     tone(context,out,{type:'sine',f0:150,f1:70,dur:.11,vol:v*.7});
+    if(opts?.heavy){noise(context,out,{filter:'lowpass',f0:900,f1:140,dur:.3,vol:v*1.2});tone(context,out,{type:'sine',f0:95,f1:32,dur:.34,vol:v*1.1});}
   });
 }
 
@@ -441,6 +448,34 @@ export function playEnemyTell(opts){
     const out=makeOut(context,opts,{wet:.1});
     tone(context,out,{type:'square',f0:260,f1:210,dur:.13,vol:.11});
     tone(context,out,{type:'triangle',f0:390,f1:310,dur:.1,vol:.07});
+  });
+}
+
+// Enemy round whips past the player: short band-passed "whoosh" with a downward pitch bend (a pass-by).
+export function playNearMiss(opts){if(throttled('miss',90))return;
+  withAudioContext(context=>{
+    const out=makeOut(context,opts,{wet:.1});
+    noise(context,out,{filter:'bandpass',f0:2600,f1:900,q:2.2,dur:.16,vol:.16,attack:.02});
+    tone(context,out,{type:'sine',f0:1500*jitter(.1),f1:520,dur:.13,vol:.05});
+  });
+}
+
+// Player round stopped by a RIOT shield: dull metallic clank.
+export function playShieldBlock(opts){if(throttled('shield',40))return;
+  withAudioContext(context=>{
+    const out=makeOut(context,opts,{wet:.12}),f=900*jitter(.12);
+    tone(context,out,{type:'square',f0:f,f1:f*.6,dur:.07,vol:.12});
+    tone(context,out,{type:'triangle',f0:f*2.7,f1:f*1.9,dur:.12,vol:.09,delay:.005});
+    noise(context,out,{filter:'highpass',f0:3000,f1:5000,dur:.04,vol:.1});
+  });
+}
+
+// MARKSMAN laser lock: a rising two-note chirp so the commit point is audible even off-screen.
+export function playSniperLock(opts){if(throttled('lock',300))return;
+  withAudioContext(context=>{
+    const out=makeOut(context,opts,{wet:.15});
+    tone(context,out,{type:'sine',f0:1100,f1:1700,dur:.1,vol:.14});
+    tone(context,out,{type:'sine',f0:1700,f1:2100,dur:.12,vol:.12,delay:.1});
   });
 }
 

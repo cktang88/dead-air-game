@@ -83,7 +83,10 @@ export class Lighting {
       if (Math.abs(d) > 0.004) { L.cur[i] += d * k; moving = true; } else L.cur[i] = L.tgt[i];
     }
     // smooth (bilinear) supersampled fog so room boundaries fade instead of stepping tile by tile
-    const W = L.w * FOG_SS, H = L.h * FOG_SS, cur = L.cur;
+    // Feather the per-tile map (two separable [1 2 1] passes, ~2 tiles of falloff) so room/wall boundaries dissolve
+    // instead of reading as hard rectangles. Runs only while the fog is changing (cached otherwise).
+    const cur = this.blurFog(L);
+    const W = L.w * FOG_SS, H = L.h * FOG_SS;
     for (let Y = 0; Y < H; Y++) {
       const v = (Y + 0.5) / FOG_SS - 0.5, y0 = Math.floor(v), fy = v - y0, ya = Math.max(0, y0), yb = Math.min(L.h - 1, y0 + 1);
       for (let X = 0; X < W; X++) {
@@ -94,6 +97,24 @@ export class Lighting {
     }
     this.fog.getContext('2d').putImageData(this.fogData, 0, 0);
     this.dirty = moving;
+  }
+
+  blurFog(L) {
+    const n = L.w * L.h;
+    if (!this.bufA || this.bufA.length !== n) { this.bufA = new Float32Array(n); this.bufB = new Float32Array(n); }
+    let src = L.cur, a = this.bufA, b = this.bufB;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+        const i = y * L.w + x, l = src[y * L.w + Math.max(0, x - 1)], r = src[y * L.w + Math.min(L.w - 1, x + 1)];
+        a[i] = (l + 2 * src[i] + r) * 0.25;
+      }
+      for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+        const i = y * L.w + x, u = a[Math.max(0, y - 1) * L.w + x], d = a[Math.min(L.h - 1, y + 1) * L.w + x];
+        b[i] = (u + 2 * a[i] + d) * 0.25;
+      }
+      src = b; if (pass === 0) { const t = a; a = this.bufA; void t; }
+    }
+    return b;
   }
 
   // Jump straight to the target fog (new level) instead of fading in from black.

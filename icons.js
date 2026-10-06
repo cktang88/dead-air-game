@@ -21,7 +21,7 @@ export const THROWABLE_ICON = {
 };
 /** Enemy type ids from ENEMY_TYPES (chaser = RUSHER, guard = WARDEN). */
 export const ENEMY_ICON = {
-  chaser: 'enemy-rusher', gunner: 'enemy-gunner', brute: 'enemy-brute', guard: 'enemy-warden',
+  chaser: 'enemy-rusher', gunner: 'enemy-gunner', brute: 'enemy-brute', guard: 'enemy-warden', sniper: 'gun-sniper', riot: 'status-shield', boss: 'enemy-brute',
 };
 /** Weapon attachment ids from MODS in catalog.js. */
 export const MOD_ICON = {

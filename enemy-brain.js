@@ -36,6 +36,8 @@ export const PROFILES = {
   chaser: {dodge: 0.55, react: [0.18, 0.34], alertRadius: 240},
   gunner: {dodge: 0.5, react: [0.28, 0.5], windup: 0.48, fireGap: [1.0, 2.0], duck: [0.8, 1.7], burst: [1, 2], aimMul: 1, alertRadius: 280},
   guard: {dodge: 0.3, react: [0.35, 0.6], windup: 0.62, fireGap: [1.6, 2.6], duck: [1.2, 2.4], burst: [1, 1], aimMul: 0.85, alertRadius: 280},
+  sniper: {dodge: 0.35, react: [0.4, 0.7], windup: 1.6, lockTime: 0.5, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
+  riot: {dodge: 0.02, react: [0.3, 0.5], alertRadius: 240},
   brute: {dodge: 0.08, react: [0.3, 0.55], alertRadius: 220, chargeWindup: 0.55, chargeTime: 0.7, chargeSpeed: 2.3, chargeCooldown: [2.2, 3.4], recover: 0.9},
 };
 const SIGHT_RANGE = 440;
@@ -523,6 +525,13 @@ function rusherStep(c) {
   if (ai.role === 'flank' && c.suppressor && d > 150) { flankOrAdvance(c, false); return; }
   if (direct) {
     const to = norm(p.x - e.x, p.y - e.y);
+    if (c.def.shield) {
+      // RIOT: a slow, straight, shield-first advance. No circling or zig-zag: the player has to out-flank it.
+      out.intent = d <= 40 ? 'attack' : 'approach';
+      if (!slide(c, to, 1)) go(c, p, 1, 12);
+      ai.ambush = 0;
+      return;
+    }
     if (d <= 58) {
       out.intent = 'attack';
       slide(c, to, 1.15);
@@ -637,14 +646,14 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
   const p = world.player;
   const out = {
     moveX: 0, moveY: 0, speed: 1, aimX: ai.face.x, aimY: ai.face.y, fire: false, intent: 'idle',
-    windup: 0, windupTotal: 0, aiming: false, aware: ai.aware, sees: false, role: ai.role, goal: null, faceOverride: null,
+    windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, role: ai.role, goal: null, faceOverride: null,
   };
   for (const key of ['clock']) ai[key] += dt;
   for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT']) ai[key] = Math.max(0, ai[key] - dt);
   ai.sinceFire += dt; ai.sinceStart += dt;
   const d = Math.hypot(p.x - e.x, p.y - e.y);
   const prof = ai.prof = PROFILES[e.type] ?? ai.prof;
-  const c = {e, ai, world, dt, rng, out, p, d, def, prof, ranged: def.brain === 'shoot' || def.brain === 'guard', suppressor: null};
+  const c = {e, ai, world, dt, rng, out, p, d, def, prof, ranged: def.brain === 'shoot' || def.brain === 'guard' || def.brain === 'sniper', suppressor: null};
 
   if (e.stun > 0) {
     ai.windup = 0; ai.dodgeT = 0; if (ai.brute.phase === 'windup' || ai.brute.phase === 'dash') ai.brute.phase = 'recover';
@@ -661,6 +670,17 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
   if (ai.windup > 0) {
     ai.windup -= dt;
     out.intent = 'aim'; out.aiming = true; out.windupTotal = ai.windupTotal;
+    if (def.brain === 'sniper') {
+      // The laser tracks the player (rate-limited) until the lock point, then freezes: stand in the lane and you eat it.
+      out.locked = ai.windup <= prof.lockTime;
+      if (!out.locked && ai.sees) {
+        const lead = leadAim(e, p, p.vx ?? 0, p.vy ?? 0, def.projectileSpeed ?? 300, 0.55);
+        const want = Math.atan2(lead.y - e.y, lead.x - e.x), cur = Math.atan2(ai.aim.y, ai.aim.x);
+        let diff = want - cur; while (diff > Math.PI) diff -= TAU; while (diff < -Math.PI) diff += TAU;
+        const step = prof.trackRate * dt, a = Math.abs(diff) <= step ? want : cur + Math.sign(diff) * step;
+        ai.aim = {x: Math.cos(a), y: Math.sin(a)};
+      }
+    }
     out.faceOverride = ai.aim;
     const lostSight = !ai.sees;
     if (ai.windup <= 0 || (lostSight && (ai.lost > 0.3))) {

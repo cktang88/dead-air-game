@@ -56,7 +56,7 @@ test('popup text and hostile room finder', () => {
 });
 test('hints: one at a time, once, gated on context', () => {
   const keys = {reload: 'R', throwableCycle: 'Q', throwableUse: 'G', loadout: 'TAB'};
-  const ctx = {blocked: false, seen: new Set(), runTime: 5, moving: false, stillFor: 1, magEmpty: false, reserve: 10, otherHasAmmo: true, hostilesNear: 0, grenades: 2, hasMod: true, scrap: 0};
+  const ctx = {blocked: false, seen: new Set(['basics']), moved: true, runTime: 5, moving: false, stillFor: 1, magEmpty: false, reserve: 10, otherHasAmmo: true, hostilesNear: 0, grenades: 2, hasMod: true, scrap: 0};
   assert.equal(pickHint(ctx, keys).id, 'still');
   ctx.seen.add('still'); assert.equal(pickHint(ctx, keys), null);
   assert.equal(pickHint({...ctx, moving: true}, keys).id, 'move');
