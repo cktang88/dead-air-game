@@ -1,6 +1,7 @@
 // Screen-space threat feedback: directional damage arcs (where did that hit come from?) and edge chevrons for
 // enemies that are telegraphing a shot while off-screen. The geometry helpers are pure and unit-tested; the draw
 // functions only need a 2D context and a camera {x, y, w, h, scale}.
+import {COLORS, withAlpha} from './theme.js';
 const TAU = Math.PI * 2;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
@@ -59,7 +60,7 @@ export function drawDamageArcs(ctx, w, h, list) {
     // Crisp chevron right at the edge so the direction reads at a glance.
     const p = edgeAnchor(w, h, item.ang, 26);
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(item.ang); ctx.globalAlpha = clamp(fade * 1.3, 0, 1);
-    ctx.fillStyle = '#ff4558'; ctx.strokeStyle = 'rgba(20,6,12,0.9)'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.fillStyle = COLORS.health; ctx.strokeStyle = 'rgba(13,11,20,0.9)'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-6, -10); ctx.lineTo(-2, 0); ctx.lineTo(-6, 10); ctx.closePath(); ctx.stroke(); ctx.fill();
     ctx.restore();
   }
@@ -81,10 +82,10 @@ export function drawOffscreenThreats(ctx, cam, threats, time) {
     const pulse = 0.5 + 0.5 * Math.sin(time * (t.locked ? 18 : 9)), p = clamp(t.p ?? 0, 0, 1);
     ctx.save(); ctx.translate(a.x, a.y);
     ctx.globalAlpha = 0.65 + 0.35 * pulse;
-    ctx.fillStyle = 'rgba(20,8,16,0.8)'; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = t.locked ? '#ff2a48' : '#ff8a5a'; ctx.beginPath(); ctx.arc(0, 0, 15, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke();
-    ctx.rotate(ang); ctx.fillStyle = t.locked ? '#ff2a48' : '#ff5a68'; ctx.strokeStyle = 'rgba(20,6,12,0.9)'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+    ctx.fillStyle = COLORS.panel; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill();
+    ctx.strokeStyle = COLORS['border-2']; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = t.locked ? COLORS.health : COLORS.sprint; ctx.beginPath(); ctx.arc(0, 0, 15, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke();
+    ctx.rotate(ang); ctx.fillStyle = t.locked ? COLORS.health : COLORS.danger; ctx.strokeStyle = 'rgba(13,11,20,0.9)'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(8 + pulse * 2, 0); ctx.lineTo(-4, -6.5); ctx.lineTo(-1, 0); ctx.lineTo(-4, 6.5); ctx.closePath(); ctx.stroke(); ctx.fill();
     ctx.restore();
   }
