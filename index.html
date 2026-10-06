@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#100e19" />
+    <meta name="theme-color" content="#0d0b14" />
     <title>DEAD AIR — Slowmo Dungeon</title>
-    <link rel="stylesheet" href="./style.css?v=3" />
+    <link rel="stylesheet" href="./style.css?v=4" />
   </head>
   <body>
     <main id="game-shell">
@@ -14,25 +14,34 @@
       <div id="hurt-edge" aria-hidden="true"></div>
       <div id="flash-overlay" aria-hidden="true"></div>
       <header id="topbar">
-        <div class="brand"><span class="brand-mark">✳</span> DEAD AIR <small>SEED <span id="seed-display">—</span></small></div>
+        <div class="brand"><span class="brand-mark" data-icon="status-slowmo"></span><span class="brand-word">DEAD AIR</span><small>SEED <span id="seed-display">—</span></small></div>
         <div id="room-name">FLOOR 01 · ENTRY</div>
         <div id="run-clock" title="Real run time. The world clock runs slower while you stand still.">RUN 00:00</div>
       </header>
-      <div id="objective" data-tone="seek" role="status" aria-live="polite">CLEAR THE ROUTE</div>
-      <div id="tempo" data-state="still" title="Standing still slows time. Moving runs at 1×. Hold Shift to sprint. Firing does not change the current time speed.">
-        <div class="tempo-top"><span class="tempo-dot"></span><span class="tempo-cap">TEMPO</span><span id="tempo-label">STILL</span><span id="tempo-speed">0.18×</span></div>
-        <div class="tempo-meter"><i id="tempo-fill"></i><span class="tempo-ticks"></span></div>
-        <div class="tempo-states"><b data-s="still">STILL</b><b data-s="move">MOVE</b><b data-s="sprint">SPRINT</b></div>
-        <small id="tempo-hint">MOVE TO RUN TIME · WORLD CRAWLS</small>
+      <div id="top-center">
+        <div id="tempo" data-state="still" title="Standing still slows time. Moving runs at 1×. Hold Shift to sprint. Firing does not change the current time speed.">
+          <div class="tempo-top"><span class="tempo-dot"></span><span class="tempo-cap">TEMPO</span><span id="tempo-label">STILL</span><span id="tempo-speed">0.18×</span></div>
+          <div class="tempo-meter"><i id="tempo-fill"></i><span class="tempo-ticks"></span></div>
+          <div class="tempo-extra"><div class="tempo-extra-in">
+            <div class="tempo-states"><b data-s="still">STILL</b><b data-s="move">MOVE</b><b data-s="sprint">SPRINT</b></div>
+            <small id="tempo-hint">MOVE TO RUN TIME · WORLD CRAWLS</small>
+          </div></div>
+        </div>
+        <div id="objective" data-tone="seek" role="status" aria-live="polite">CLEAR THE ROUTE</div>
       </div>
       <div id="room-banner" aria-live="polite"></div>
       <div id="feed" aria-live="polite"></div>
       <section id="hud" aria-live="polite">
         <div class="hud-row">
-          <div class="vitals panel"><div class="eyebrow">VITALS</div><div id="health-num" class="hp-num"></div><div id="health" class="hearts"></div><div id="armor-meter" class="armor-meter" hidden><span class="armor-pips" id="armor-pips"></span><span class="armor-text">PLATE <b id="armor-value">0 / 0</b></span></div></div>
+          <div class="vitals panel">
+            <div class="eyebrow"><span class="ico sm" data-icon="status-heart"></span>HEALTH</div>
+            <div id="health-num" class="hp-num"></div>
+            <div id="health" class="hearts"></div>
+            <div id="armor-meter" class="armor-meter" hidden><span class="ico sm" data-icon="status-shield"></span><span class="armor-pips" id="armor-pips"></span><span class="armor-text">PLATE <b id="armor-value">0 / 0</b></span></div>
+          </div>
           <div class="gun-readout panel">
             <div id="slot-strip" class="slot-strip"></div>
-            <div class="gun-id"><div id="gun-icon" class="gun-icon"></div><div class="gun-title"><div id="gun-name">MACHINE PISTOL</div><div class="eyebrow"><span id="gun-mods">BARE BONES</span></div></div></div>
+            <div class="gun-id"><div id="gun-icon" class="gun-icon"></div><div class="gun-title"><div id="gun-name">MACHINE PISTOL</div><div class="gun-mods"><span id="gun-mods">BARE BONES</span></div></div></div>
             <div class="gun-main"><div class="ammo"><span id="ammo"><b>18</b><i>/ 18</i></span></div><div id="ammo-pips" class="ammo-pips"></div></div>
             <div class="reload-track" id="reload-track"><i id="reload-fill"></i></div>
             <div class="weapon-foot"><span id="weapon-note">FAST · CLOSE</span><span id="ammo-reserve">RES 72</span></div>
@@ -40,26 +49,32 @@
         </div>
         <div id="throwable-wrap"><div id="throwable-readout" aria-live="polite" aria-label="Selected throwable"></div><div id="throwable-hint">Q SELECT &nbsp;·&nbsp; G THROW</div></div>
       </section>
-      <section id="run-stats" class="run-stats panel" aria-label="Run stats">
-        <div class="stat"><small>KILLS</small><b id="kills">00</b></div>
-        <div class="stat scrap" title="Scrap: spend it to unlock vault gates and buy gear at the Black Market. Lost if you die."><small>SCRAP · SPEND</small><b id="scrap">000</b></div>
-        <div class="stat" title="Rooms cleared out of total rooms on this floor."><small>ROOMS CLEARED</small><b id="sector-count">01 / 10</b></div>
-      </section>
-      <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas><div class="mm-legend"><span style="--c:#6dffb0">EXIT</span><span style="--c:#f4c66d">CACHE</span><span style="--c:#ffd27a">SHOP</span><span style="--c:#74dfab">CLINIC</span><span style="--c:#8fe0ff">BENCH</span><span style="--c:#ffb04a">GATE</span></div></div>
+      <div id="hud-right">
+        <section id="run-stats" class="run-stats panel" aria-label="Run stats">
+          <div class="stat" title="Hostiles downed this run."><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="kills">00</b></div>
+          <div class="stat scrap" data-tip="Scrap: run currency. Spend it on vault gates, mods and gear at the Black Market. Lost when you die."><small><span class="ico sm" data-icon="pickup-scrap"></span>SCRAP</small><b id="scrap">000</b></div>
+          <div class="stat" title="Rooms cleared out of total rooms on this floor."><small><span class="ico sm" data-icon="door"></span>ROOMS</small><b id="sector-count">01 / 10</b></div>
+        </section>
+        <div id="minimap-wrap" class="panel"><canvas id="minimap" width="156" height="117"></canvas><div class="mm-legend"><span style="--c:var(--slow)">EXIT</span><span style="--c:var(--coin)">CACHE</span><span style="--c:var(--scrap)">SHOP</span><span style="--c:var(--armor)">CLINIC</span><span style="--c:var(--tier-rare)">BENCH</span><span style="--c:var(--sprint)">GATE</span></div></div>
+      </div>
       <div id="tutor-hint" role="status" aria-live="polite"></div>
       <div id="toast" role="status"></div>
-      <section id="pause-screen" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
-        <div class="pause-card">
-          <div class="eyebrow">THE WORLD HOLDS ITS BREATH</div>
-          <h2 id="pause-title">PAUSED</h2>
+      <section id="pause-screen" class="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="dlg-card dlg-sm pause-card">
+          <header class="dlg-head center">
+            <div>
+              <div class="eyebrow">THE WORLD HOLDS ITS BREATH</div>
+              <h2 id="pause-title">PAUSED</h2>
+            </div>
+          </header>
           <div class="pause-stats">
-            <div><small>LOCATION</small><b id="pause-room">—</b></div>
-            <div><small>TIME</small><b id="pause-time">00:00</b></div>
-            <div><small>KILLS</small><b id="pause-kills">0</b></div>
-            <div><small>SEED</small><b id="pause-seed">—</b></div>
+            <div><small><span class="ico sm" data-icon="door"></span>LOCATION</small><b id="pause-room">—</b></div>
+            <div><small><span class="ico sm" data-icon="status-clock"></span>TIME</small><b id="pause-time">00:00</b></div>
+            <div><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="pause-kills">0</b></div>
+            <div><small><span class="ico sm" data-icon="status-seed"></span>SEED</small><b id="pause-seed">—</b></div>
           </div>
-          <button id="resume-button" type="button">RESUME <kbd>ESC</kbd></button>
-          <div class="pause-keys"><span><kbd>TAB</kbd> LOADOUT</span><span><kbd>R</kbd> RELOAD</span><span><kbd>F</kbd> FULLSCREEN</span></div>
+          <button id="resume-button" class="btn primary block" type="button"><span>RESUME</span><kbd>ESC</kbd></button>
+          <footer class="dlg-foot center"><span class="keyhints"><span class="keyhint"><kbd>TAB</kbd>Loadout</span><span class="keyhint"><kbd data-action="reload">R</kbd>Reload</span><span class="keyhint"><kbd>F</kbd>Fullscreen</span></span></footer>
         </div>
       </section>
       <section id="overlay" class="show">
@@ -68,12 +83,12 @@
           <h1>DEAD<br /><em>AIR</em></h1>
           <p class="tagline">The world holds its breath when you do.<br />Move with purpose. Make every shot count.</p>
           <div id="run-result" hidden></div>
-          <button id="start-button" disabled>LOADING THE SECTOR…</button>
+          <button id="start-button" class="btn primary xl block" disabled>LOADING THE SECTOR…</button>
           <div class="title-actions">
-            <button id="meta-button" class="meta-button" type="button">SAFEHOUSE UPGRADES <span class="coin-chip"><span id="meta-balance">…</span> COINS</span></button>
-            <button id="settings-button" class="meta-button" type="button" aria-expanded="false" aria-controls="settings-panel">SETTINGS</button>
+            <button id="meta-button" class="btn secondary block" type="button"><span class="ico" data-icon="pickup-coin"></span><span class="grow">SAFEHOUSE UPGRADES</span><span class="coin-chip"><span id="meta-balance">…</span> COINS</span></button>
+            <button id="settings-button" class="btn secondary block" type="button" aria-expanded="false" aria-controls="settings-panel"><span class="ico" data-icon="settings"></span><span class="grow">SETTINGS</span></button>
           </div>
-          <label class="seed-control" for="seed-input"><span>RUN SEED</span><input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="RANDOM EACH RUN" /></label>
+          <label class="seed-control" for="seed-input"><span class="term" data-tip="A seed makes the floor layout repeatable. Leave blank for a fresh random floor each run.">RUN SEED</span><input id="seed-input" type="number" min="1" max="2147483647" step="1" placeholder="Random each run" /></label>
         </div>
         <aside id="how-to" class="side-card">
           <div class="eyebrow">THE RULE</div>
@@ -82,86 +97,112 @@
           <div class="eyebrow">CONTROLS</div>
           <div id="key-guide" class="key-guide"></div>
         </aside>
-        <section id="settings-panel" class="side-card" hidden role="dialog" aria-labelledby="settings-title">
-          <button id="close-settings" class="close" type="button" aria-label="Close settings">×</button>
+        <section id="settings-panel" class="side-card dlg-inline" hidden role="dialog" aria-labelledby="settings-title">
+          <button id="close-settings" class="close" type="button" aria-label="Close settings"><span data-icon="status-close"></span></button>
           <div class="eyebrow">PREFERENCES</div>
           <h2 id="settings-title">SETTINGS</h2>
-          <div class="audio-control-row"><label class="audio-volume" for="master-volume"><span>MASTER VOLUME <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label><button id="mute-audio" type="button" aria-pressed="false">MUTE</button></div>
-          <label class="audio-volume visual-volume" for="shake-strength"><span>SCREEN SHAKE <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
-          <label class="audio-volume visual-volume" for="flash-strength"><span>FLASH BRIGHTNESS <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
+          <div class="set-group">
+            <div class="eyebrow">AUDIO</div>
+            <div class="audio-control-row"><label class="audio-volume" for="master-volume"><span>Master volume <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label><button id="mute-audio" class="btn secondary sm" type="button" aria-pressed="false">MUTE</button></div>
+          </div>
+          <div class="set-group">
+            <div class="eyebrow">COMFORT</div>
+            <label class="audio-volume visual-volume" for="shake-strength"><span>Screen shake <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
+            <label class="audio-volume visual-volume" for="flash-strength"><span>Flash brightness <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
+          </div>
           <details id="controls-settings">
-            <summary>REMAP CONTROLS</summary>
-            <p>Choose an action, then press a free key. Escape cancels. Escape pauses, Tab opens loadout, F toggles fullscreen, and R restarts after a run.</p>
+            <summary><span class="ico sm" data-icon="status-keyboard"></span>REMAP CONTROLS</summary>
+            <p>Pick an action, then press a free key. <kbd>ESC</kbd> cancels. <kbd>ESC</kbd> pauses, <kbd>TAB</kbd> opens loadout, <kbd>F</kbd> toggles fullscreen and <kbd>R</kbd> restarts after a run.</p>
             <div id="key-bindings"></div>
             <div id="binding-status" role="status" aria-live="polite">Click a key to change it.</div>
           </details>
         </section>
-        <section id="meta-panel" class="side-card" hidden role="dialog" aria-modal="true" aria-labelledby="meta-title">
-          <button id="close-meta" class="close" aria-label="Close safehouse upgrades">×</button>
+        <section id="meta-panel" class="side-card dlg-inline" hidden role="dialog" aria-modal="true" aria-labelledby="meta-title">
+          <button id="close-meta" class="close" aria-label="Close safehouse upgrades"><span data-icon="status-close"></span></button>
           <div class="eyebrow">BETWEEN RUNS · PERMANENT</div>
           <h2 id="meta-title">BUILD YOUR <em>EDGE.</em></h2>
-          <p>Coins stay with you when a run ends. Upgrades apply to the next run.</p>
+          <p class="dlg-sub">Coins stay with you when a run ends. Upgrades apply to the next run.</p>
           <div id="meta-coins" class="meta-coins"></div>
           <div id="meta-list"></div>
-          <button id="reset-save" class="reset-save" type="button">RESET SAVE…</button>
+          <button id="reset-save" class="btn ghost danger sm" type="button">RESET SAVE…</button>
         </section>
-        <div class="title-foot"><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span><kbd>ESC</kbd> PAUSE &nbsp; <kbd>F</kbd> FULLSCREEN</span></div>
+        <div class="title-foot"><span>PROCEDURAL RUN · NO TWO FLOORS ALIKE</span><span class="keyhints"><span class="keyhint"><kbd>ESC</kbd>Pause</span><span class="keyhint"><kbd>F</kbd>Fullscreen</span></span></div>
       </section>
-      <section id="loadout" role="dialog" aria-modal="true" aria-labelledby="loadout-title" aria-hidden="true">
-        <div class="loadout-card">
-          <button id="close-loadout" class="close" aria-label="Close workbench">×</button>
-          <div class="eyebrow">FIELD MODIFICATION STATION</div>
-          <h2 id="loadout-title">MAKE IT <em>YOURS.</em></h2>
-          <p class="loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
-          <div id="carry-readout" class="eyebrow"></div>
-          <div class="loadout-columns"><div><div class="eyebrow">WEAPON SLOTS · CHOOSE A GUN TO ADD OR REPLACE</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow">AVAILABLE MODS</div><div id="mod-list" class="mod-list"></div></div></div>
-          <div class="loadout-footer"><span id="loadout-scrap">000 SCRAP</span><span><kbd>1</kbd> <kbd>2</kbd> SLOTS · RIG III ADDS <kbd>3</kbd> &nbsp;·&nbsp; <kbd>ESC</kbd> TO RETURN</span></div>
+      <section id="loadout" class="dlg" role="dialog" aria-modal="true" aria-labelledby="loadout-title" aria-hidden="true">
+        <div class="dlg-card dlg-xl loadout-card">
+          <button id="close-loadout" class="close" aria-label="Close workbench"><span data-icon="status-close"></span></button>
+          <header class="dlg-head">
+            <span class="dlg-icon" data-icon="station-workbench"></span>
+            <div>
+              <div class="eyebrow">FIELD MODIFICATION STATION</div>
+              <h2 id="loadout-title">MAKE IT <em>YOURS.</em></h2>
+              <p class="dlg-sub loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
+            </div>
+            <div id="carry-readout" class="carry-readout"></div>
+          </header>
+          <div class="loadout-columns"><div><div class="eyebrow sec">WEAPON SLOTS · CHOOSE A GUN TO ADD OR REPLACE</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow sec">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow sec">AVAILABLE MODS <span class="term" data-tip="Rarity tiers, weakest to strongest: Common, Uncommon, Rare, Prototype. Higher tiers roll stronger bonuses.">RARITY ?</span></div><div id="mod-list" class="mod-list"></div></div></div>
+          <footer class="dlg-foot"><span id="loadout-scrap" class="dlg-balance" data-tip="Scrap is run currency. It is lost if you die, so spend it.">000 SCRAP</span><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd><kbd data-action="weaponTwo">2</kbd>Slots</span><span class="keyhint dim">Rig III adds <kbd data-action="weaponThree">3</kbd></span><span class="keyhint"><kbd>ESC</kbd>Return</span></span></footer>
           <section id="loadout-confirm" class="loadout-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="loadout-change-title">
             <div class="loadout-confirm-card">
               <div class="eyebrow">CHECK YOUR FIELD LOADOUT</div>
               <h3 id="loadout-change-title"></h3>
               <p id="loadout-change-copy"></p>
               <div id="loadout-change-summary" class="loadout-change-summary"></div>
-              <div class="loadout-confirm-actions"><button id="loadout-cancel" type="button">KEEP CURRENT</button><button id="loadout-accept" type="button">CONFIRM CHANGE</button></div>
+              <div class="loadout-confirm-actions"><button id="loadout-cancel" class="btn secondary" type="button">KEEP CURRENT</button><button id="loadout-accept" class="btn primary" type="button">CONFIRM CHANGE</button></div>
             </div>
           </section>
         </div>
       </section>
-      <section id="merchant-panel" class="merchant-panel" hidden aria-hidden="true" aria-labelledby="merchant-title" role="dialog" aria-modal="true">
-        <div class="merchant-card">
-          <button id="close-merchant" class="close" type="button" aria-label="Close merchant">×</button>
-          <div class="eyebrow">RARE FIELD TRADER · RUN SCRAP</div>
-          <h2 id="merchant-title">BLACK <em>MARKET.</em></h2>
-          <p class="merchant-copy">Spend scrap to prepare for the next room.</p>
+      <section id="merchant-panel" class="merchant-panel dlg" hidden aria-hidden="true" aria-labelledby="merchant-title" role="dialog" aria-modal="true">
+        <div class="dlg-card dlg-md merchant-card">
+          <button id="close-merchant" class="close" type="button" aria-label="Close merchant"><span data-icon="status-close"></span></button>
+          <header class="dlg-head">
+            <span class="dlg-icon" data-icon="station-merchant"></span>
+            <div>
+              <div class="eyebrow">RARE FIELD TRADER · RUN SCRAP</div>
+              <h2 id="merchant-title">BLACK <em>MARKET.</em></h2>
+              <p class="dlg-sub merchant-copy">Spend <span class="term" data-tip="Scrap is run currency: it buys gear here and opens vault gates. Coins are different: they are earned when a run ends and buy permanent Safehouse upgrades.">scrap</span> to prepare for the next room.</p>
+            </div>
+          </header>
           <div id="merchant-stock" class="merchant-stock" aria-live="polite"></div>
-          <div class="merchant-footer"><kbd>E</kbd> OR <kbd>ESC</kbd> TO LEAVE</div>
+          <footer class="dlg-foot"><span class="keyhints"><span class="keyhint"><kbd data-action="interact">E</kbd><kbd>ESC</kbd>Leave</span></span></footer>
         </div>
       </section>
-      <section id="cache-panel" class="merchant-panel" hidden aria-hidden="true" aria-labelledby="cache-title" role="dialog" aria-modal="true">
-        <div class="merchant-card">
-          <button id="close-cache" class="close" type="button" aria-label="Close room cache">×</button>
-          <div class="eyebrow">ROOM CLEAR · PICK ONE REWARD</div>
-          <h2 id="cache-title">FIELD <em>CACHE.</em></h2>
-          <p class="merchant-copy">Choose what helps this run most. Prototype gear costs one health.</p>
+      <section id="cache-panel" class="merchant-panel dlg" hidden aria-hidden="true" aria-labelledby="cache-title" role="dialog" aria-modal="true">
+        <div class="dlg-card dlg-md merchant-card cache-card">
+          <button id="close-cache" class="close" type="button" aria-label="Close room cache"><span data-icon="status-close"></span></button>
+          <header class="dlg-head">
+            <span class="dlg-icon" data-icon="station-cache-open"></span>
+            <div>
+              <div class="eyebrow">ROOM CLEAR · PICK ONE REWARD</div>
+              <h2 id="cache-title">FIELD <em>CACHE.</em></h2>
+              <p class="dlg-sub merchant-copy">Choose what helps this run most. Prototype gear costs one health.</p>
+            </div>
+          </header>
           <div id="cache-options" class="merchant-stock" aria-live="polite"></div>
-          <div class="merchant-footer">CHOOSE ONE · <kbd>ESC</kbd> CLOSE &nbsp;·&nbsp; CACHE STAYS SEALED UNTIL YOU TAKE A REWARD</div>
+          <footer class="dlg-foot"><span class="dim">The cache stays sealed until you take a reward.</span><span class="keyhints"><span class="keyhint"><kbd>ESC</kbd>Close</span></span></footer>
         </div>
       </section>
-      <section id="weapon-pickup" class="weapon-pickup" hidden aria-hidden="true" aria-labelledby="weapon-pickup-name" role="dialog" aria-modal="true">
-        <div class="weapon-pickup-card">
-          <div class="eyebrow">FIELD WEAPON · FRESH MAGAZINE</div>
-          <h2 id="weapon-pickup-name"></h2>
+      <section id="weapon-pickup" class="weapon-pickup dlg" hidden aria-hidden="true" aria-labelledby="weapon-pickup-name" role="dialog" aria-modal="true">
+        <div class="dlg-card dlg-md weapon-pickup-card">
+          <header class="dlg-head">
+            <div>
+              <div class="eyebrow">FIELD WEAPON · FRESH MAGAZINE</div>
+              <h2 id="weapon-pickup-name"></h2>
+            </div>
+          </header>
           <div id="weapon-pickup-hero" class="weapon-pickup-hero"></div>
           <div id="weapon-pickup-compare" class="weapon-pickup-compare"></div>
           <p id="weapon-pickup-stats"></p>
           <div id="weapon-swap-options" class="weapon-swap-options"></div>
-          <button id="decline-weapon-pickup" class="decline-pickup" type="button">LEAVE IT HERE</button>
-          <div class="pickup-footer"><kbd>1</kbd> PRIMARY &nbsp; <kbd>2</kbd> SECONDARY &nbsp; <kbd>3</kbd> TERTIARY IF UNLOCKED &nbsp; <kbd>ESC</kbd> LEAVE IT</div>
+          <button id="decline-weapon-pickup" class="btn ghost block decline-pickup" type="button">LEAVE IT HERE <kbd>ESC</kbd></button>
+          <footer class="dlg-foot center"><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd>Primary</span><span class="keyhint"><kbd data-action="weaponTwo">2</kbd>Secondary</span><span class="keyhint dim"><kbd data-action="weaponThree">3</kbd>Tertiary if unlocked</span></span></footer>
         </div>
       </section>
-      
+      <div id="tip" role="tooltip" hidden></div>
     </main>
-    <script type="module">
+
+<script type="module">
       import('./game.js?v=2026-10-06').catch(error=>{
         console.error(error);
         const button=document.querySelector('#start-button');
