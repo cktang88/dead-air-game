@@ -91,11 +91,12 @@ export function createAffordances() {
     ctx.beginPath(); ctx.arc(sp.x, sp.y, r, 0, TAU); ctx.stroke(); ctx.restore();
   }
 
-  function edgeArrow(ctx, cam, from, to, color, label, alpha = 1) {
+  function edgeArrow(ctx, cam, from, to, color, label, alpha = 1, strong = false) {
     const dx = to.x - from.x, dy = to.y - from.y, ang = Math.atan2(dy, dx);
     const hx = cam.w / 2 - 60, hy = cam.h / 2 - 125, k = Math.min(Math.abs(hx / (Math.cos(ang) || 1e-6)), Math.abs(hy / (Math.sin(ang) || 1e-6)));
     const ax = cam.w / 2 + Math.cos(ang) * k, ay = cam.h / 2 + Math.sin(ang) * k, pulse = 0.5 + 0.5 * Math.sin(t * 4);
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(ax, ay);
+    if (strong) { ctx.strokeStyle = color; ctx.globalAlpha = alpha * 0.6; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 21 + pulse * 7, 0, TAU); ctx.stroke(); ctx.globalAlpha = alpha; }
     ctx.fillStyle = 'rgba(16,12,24,0.85)'; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.rotate(ang); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(9 + pulse * 2, 0); ctx.lineTo(-4, -7); ctx.lineTo(-1, 0); ctx.lineTo(-4, 7); ctx.closePath(); ctx.fill(); ctx.rotate(-ang);
     const right = ax > cam.w / 2;
@@ -140,7 +141,7 @@ export function createAffordances() {
         if (pk.kind !== 'exit' || !pk.available) continue;
         const sp = toScreen(cam, pk.x, pk.y);
         if (onScreen(sp, cam, 20)) break;
-        if (ready) edgeArrow(ctx, cam, p, sp, '#6dffb0', 'EXTRACT', 1);
+        if (ready) { const m = Math.round(Math.hypot(pk.x - state.player.x, pk.y - state.player.y) / 32); edgeArrow(ctx, cam, p, sp, '#6dffb0', `EXTRACT · ${m} M`, 0.75 + 0.25 * Math.sin(t * 5), true); }
         else {
           const h = nearestHostileRoom({player: state.player, rooms: state.rooms, enemies: state.enemies});
           if (h) { const hs = toScreen(cam, h.x, h.y); if (!onScreen(hs, cam, 20)) edgeArrow(ctx, cam, p, hs, '#ff8a6a', `CLEAR ROOM · ${h.hostiles}`, 0.8); }

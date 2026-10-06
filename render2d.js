@@ -390,6 +390,29 @@ export function createRenderer(container, state) {
         const g = lgrad(ctx, -7, -7, 7, 7, '#f4fff9', '#bde8d2');
         ctx.fillStyle = g; rrectPath(ctx, -7.4, -7.4, 14.8, 14.8, 3); ctx.fill();
         ctx.fillStyle = '#25b673'; ctx.fillRect(-1.8, -5.5, 3.6, 11); ctx.fillRect(-5.5, -1.8, 11, 3.6);
+      } else if (pk.kind === 'ammo') {
+        ctx.fillStyle = INK; rrectPath(ctx, -8.6, -6.6, 17.2, 13.2, 2.5); ctx.fill();
+        ctx.fillStyle = '#3f6f7c'; rrectPath(ctx, -7.4, -5.4, 14.8, 10.8, 2); ctx.fill();
+        ctx.fillStyle = '#d9b45a'; for (let i = -1; i <= 1; i++) ctx.fillRect(i * 4.4 - 1.4, -4, 2.8, 7);
+        ctx.fillStyle = '#8fe0ff'; ctx.fillRect(-7.4, 2.6, 14.8, 2.2);
+      } else if (pk.kind === 'armor') {
+        ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(8.6, -5.5); ctx.lineTo(7, 4); ctx.lineTo(0, 9); ctx.lineTo(-7, 4); ctx.lineTo(-8.6, -5.5); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#75cfe0'; ctx.beginPath(); ctx.moveTo(0, -7.4); ctx.lineTo(6.8, -4.6); ctx.lineTo(5.6, 3.2); ctx.lineTo(0, 7.4); ctx.lineTo(-5.6, 3.2); ctx.lineTo(-6.8, -4.6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(-1, -5, 2, 9);
+      } else if (pk.kind === 'locker') {
+        ctx.fillStyle = INK; ctx.fillRect(-9.6, -13, 19.2, 25);
+        const g = ctx.createLinearGradient(-8, 0, 8, 0); g.addColorStop(0, '#5b6a74'); g.addColorStop(1, '#2f3942');
+        ctx.fillStyle = g; ctx.fillRect(-8.4, -11.8, 16.8, 22.6);
+        ctx.fillStyle = INK; ctx.fillRect(-0.6, -11.8, 1.2, 22.6);
+        ctx.fillStyle = '#8fe0ff'; ctx.fillRect(-7, -9, 5.2, 2); ctx.fillRect(1.8, -9, 5.2, 2);
+        ctx.fillStyle = '#d9b45a'; ctx.fillRect(-6.2, -2, 2.6, 6); ctx.fillRect(-2.4, -2, 2.6, 6); ctx.fillRect(2.4, -2, 2.6, 6); ctx.fillRect(6.2 - 2.6, -2, 2.6, 6);
+      } else if (pk.kind === 'cache' && pk.claimed) {
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
+        ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-8.4, -6.4, 16.8, 12.8);
+        ctx.fillStyle = '#17120d'; ctx.fillRect(-6.4, -4.4, 12.8, 8.8);
+        ctx.fillStyle = '#6c5636'; ctx.fillRect(-8.6, -11, 17.2, 4);
+        ctx.globalAlpha = 1;
       } else if (pk.kind === 'cache') {
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
         const g = lgrad(ctx, 0, -7, 0, 7, '#d9a04a', '#7c5528');
@@ -404,7 +427,7 @@ export function createRenderer(container, state) {
   function drawPickupGlows(b) {
     ctx.globalCompositeOperation = 'lighter';
     for (const pk of state.pickups) {
-      if (!pk.available || !inView(pk, b, 40)) continue;
+      if (!pk.available || pk.claimed || !inView(pk, b, 40)) continue;
       const pulse = 0.55 + 0.45 * Math.sin(vis.time * 3 + hashPos(pk.x, pk.y) * 9), r = pk.kind === 'exit' ? 40 : pk.kind === 'gun' ? 28 : 19;
       ctx.globalAlpha = (pk.kind === 'exit' ? 0.55 : 0.5) * pulse;
       ctx.drawImage(glowSprite(pk.kind === 'exit' ? (vis.exitReady ? '#6dffb0' : '#ff5969') : pk.color || '#f4c66d'), pk.x - r, pk.y - r - 2, r * 2, r * 2);

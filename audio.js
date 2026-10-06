@@ -286,6 +286,14 @@ export function playEmptyClick(opts){
   });
 }
 
+export function playLowAmmo(opts){
+  withAudioContext(context=>{
+    const out=makeOut(context,opts,{wet:.08}),v=.18;
+    tone(context,out,{type:'triangle',f0:760,f1:760,dur:.07,vol:v});
+    tone(context,out,{type:'triangle',f0:560,f1:560,dur:.09,vol:v,delay:.1});
+  });
+}
+
 export function playReloadStart(opts){
   withAudioContext(context=>{
     const out=makeOut(context,opts,{wet:.05}),v=.2*jitter(.08);
