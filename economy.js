@@ -27,7 +27,7 @@ export function ammoPickupRounds(maxReserve, pct) {
  */
 export function supplyDrop(roll, source, {health, maxHealth, ammoLow, armorUseful}) {
   const crate = source === 'crate', hurt = maxHealth > 0 && health / maxHealth <= 0.5;
-  const ammo = (crate ? 0.34 : 0.13) * (ammoLow ? 2 : 1);
+  const ammo = (crate ? 0.34 : 0.18) * (ammoLow ? 2.5 : 1); // tuned up for 3-HP lethality: fewer kills per mag, more drops when you are low
   const heal = health >= maxHealth ? 0 : (crate ? 0.12 : 0.04) * (hurt ? 2.2 : 1);
   const armor = armorUseful ? (crate ? 0.07 : 0.025) : 0;
   if (roll < ammo) return 'ammo';

@@ -10,6 +10,8 @@ const frame=document.querySelector('#game');
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const stateOf=win=>JSON.parse(win.render_game_to_text());
 const GAME_URL='../index.html?browser-smoke&debug';
+// First runs open on the Signal Check tutorial floor; this smoke exercises the generated floor, so mark it done (the dedicated Signal Check checks live elsewhere).
+window.localStorage.setItem('dead-air.onboarding.v1',JSON.stringify({signalDone:true,manual:[],cards:[]}));
 
 async function waitForBoot(doc,win){
   const deadline=Date.now()+30000;

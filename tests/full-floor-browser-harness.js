@@ -397,6 +397,7 @@ async function waitForGame() {
 async function run() {
   const report = {seed, fullFloor, rooms: [], events: [], errors: []};
   try {
+    localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); // skip the Signal Check tutorial floor
     frame.src = '../index.html?full-floor-browser-harness';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});

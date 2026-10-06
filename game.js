@@ -462,6 +462,7 @@ function stepEchoes(dt){
     view.fx.ring(e.x,e.y,4,18,'#ff7a8a',.3,2);}
 }
 // SHOVE (shove.js): the melee fallback when both guns are dry, and the way to take a quiet enemy down without a gun.
+const RIOT_SHIELD_TURN=1.05;// rad/s: slow enough that circling a riot (or a shove that drops its shield) gets you behind it
 function playerShove(){
   const p=state.player;if(!p||state.mode!=='play'||state.peek||state.paused||state.loadoutOpen||state.supplyOpen||state.runModal)return;
   if(!shoveReady(state.realElapsed,state.shoveReadyAt||0))return;
@@ -476,7 +477,7 @@ function playerShove(){
     if(out.kind==='ignored'){view.fx.spark(enemy.x,enemy.y,Math.atan2(-dir.y,-dir.x),5,1);continue;}
     if(out.kind!=='takedown')loud=true;
     enemy.stun=Math.max(enemy.stun||0,out.stagger);enemy.knock.x=dir.x*out.knock;enemy.knock.y=dir.y*out.knock;
-    if(out.kind==='blocked'){enemy.shieldFlash=.28;playShieldBlock({distance:distance(enemy,p),pan:(enemy.x-p.x)/480});view.fx.spark(enemy.x-dir.x*8,enemy.y-dir.y*8,Math.atan2(-dir.y,-dir.x),6,1);view.fx.floater(enemy.x,enemy.y-26,'BLOCKED','#bfd4e4',13,1);continue;}
+    if(out.kind==='blocked'){enemy.shieldFlash=.28;playShieldBlock({distance:distance(enemy,p),pan:(enemy.x-p.x)/480});view.fx.spark(enemy.x-dir.x*8,enemy.y-dir.y*8,Math.atan2(-dir.y,-dir.x),6,1);view.fx.floater(enemy.x,enemy.y-26,out.label,'#bfd4e4',14,1.1);state.shake=Math.max(state.shake,3);continue;}
     enemy.hp-=out.damage;view.fx.hitEnemy(enemy,out.damage,dir.x,dir.y,enemy.hp<=0);
     if(out.label)view.fx.floater(enemy.x,enemy.y-30,out.label,out.kind==='takedown'?'#b49bff':'#ffd27a',out.kind==='takedown'?20:14,1.2);
     state.shake=Math.max(state.shake,3);state.hitstop=Math.max(state.hitstop,.05);
@@ -495,7 +496,7 @@ function startReload(){
 }
 function notifyReady(key,gap){return cooldownReady(state.notify,key,performance.now()/1000,gap);}
 function supplyCtx(){const gi=state.weaponIndex,g=GUNS[gi],low=ammoStatus({mag:state.weaponAmmo[gi],reserve:state.reserveAmmo[gi],magSize:magSize(g)})!=='ok'||state.weaponSlots.some(i=>ammoStatus({mag:state.weaponAmmo[i],reserve:state.reserveAmmo[i],magSize:magSize(GUNS[i])})==='dry');return {health:state.health,maxHealth:state.maxHealth,ammoLow:low,armorUseful:!(state.maxArmor>0&&state.armor>=state.maxArmor)};}
-function rollSupplyDrop(source,x,y){const kind=supplyDrop(random(),source,supplyCtx());if(!kind)return;dropPickup(kind,x,y,kind==='ammo'?(source==='crate'?.35:.2):1);}
+function rollSupplyDrop(source,x,y){const kind=supplyDrop(random(),source,supplyCtx());if(!kind)return;dropPickup(kind,x,y,kind==='ammo'?(source==='crate'?.4:.3):1);}
 function playerShoot(){
   const p=state.player;if(!p||state.reloadTimer>0||state.weaponBurst)return;
   if(state.weaponAmmo[state.weaponIndex]<=0){
@@ -1058,7 +1059,7 @@ function updateEnemies(dt){
     e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;e.suspicion=out.suspicion||0;e.spotted=!!out.spotted;e.dodging=!!out.dodging;if(out.dodging)e.dodgeDir=e.ai?.dodge;
     if(out.aiming&&!e.wasAiming)playEnemyTell();e.wasAiming=out.aiming;
     if(out.locked&&!e.locked&&e.type==='sniper')playSniperLock({distance:d,pan:(e.x-player.x)/480});e.locked=!!out.locked;
-    if(e.def.shield){if(!e.shieldInit){e.shieldInit=true;e.shieldAng=Math.atan2(ny,nx);}e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,1.5);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}
+    if(e.def.shield){if(!e.shieldInit){e.shieldInit=true;e.shieldAng=Math.atan2(ny,nx);}e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,RIOT_SHIELD_TURN);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}
     if(e.def.melee){
       if(e.stun>0){e.meleeWindup=0;}
       else{

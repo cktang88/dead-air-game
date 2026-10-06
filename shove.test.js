@@ -40,7 +40,8 @@ test('heavies shrug it off: no takedown on brutes, riots block the front, flanki
   const dir = {x: 1, y: 0};
   assert.notEqual(shoveOutcome({type: 'brute', hp: 100, aware: false, facing: {x: 1, y: 0}, dir}).kind, 'takedown');
   assert.notEqual(shoveOutcome({type: 'gunner', hp: 100, aware: false, elite: true, facing: {x: 1, y: 0}, dir}).kind, 'takedown');
-  assert.equal(shoveOutcome({type: 'riot', hp: 70, aware: true, facing: {x: -1, y: 0}, shieldFacing: {x: -1, y: 0}, dir}).kind, 'blocked');
+  const front = shoveOutcome({type: 'riot', hp: 70, aware: true, facing: {x: -1, y: 0}, shieldFacing: {x: -1, y: 0}, dir});
+  assert.equal(front.kind, 'blocked'); assert.equal(front.label, 'SHIELD DOWN'); assert.ok(front.stagger > 0.35, 'long enough to drop the shield (enemy-attacks SHIELD_DOWN_STUN)');
   assert.equal(shoveOutcome({type: 'riot', hp: 70, aware: true, facing: {x: 1, y: 0}, shieldFacing: {x: 1, y: 0}, dir}).label, 'FLANK');
   assert.equal(shoveOutcome({type: 'boss', hp: 900, aware: true, dir}).kind, 'ignored');
   const brute = shoveOutcome({type: 'brute', hp: 100, aware: true, facing: {x: -1, y: 0}, dir});

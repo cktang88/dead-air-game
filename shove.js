@@ -20,6 +20,8 @@ export const SHOVE = {
   maxTargets: 3,
 };
 
+// A shove into a riot's shield knocks it down: stun above the shield-down threshold (0.35 s) so shots land on the front too.
+export const SHIELD_BREAK = 0.9;
 const HEAVY = new Set(['brute', 'riot', 'boss']);
 
 // Enemies inside the shove wedge, nearest first. `hitRadius(enemy)` defaults to 11.
@@ -46,7 +48,7 @@ export function shoveOutcome({type, hp, aware, asleep = false, elite = false, fa
   if (unawareBehind && !HEAVY.has(type) && !elite) return {kind: 'takedown', damage: Math.max(hp, 1), stagger: 0, knock: SHOVE.knock * 0.4, label: 'SILENT TAKEDOWN'};
   if (type === 'riot') {
     const front = shieldFacing ? -(shieldFacing.x * dir.x + shieldFacing.y * dir.y) > 0.3 : !strikeFromBehind(facing || {x: 0, y: 0}, dir);
-    if (front) return {kind: 'blocked', damage: 0, stagger: 0.25, knock: SHOVE.knock * 0.8, label: 'BLOCKED'};
+    if (front) return {kind: 'blocked', damage: 0, stagger: SHIELD_BREAK, knock: SHOVE.knock * 0.8, label: 'SHIELD DOWN'};
     return {kind: 'hit', damage: SHOVE.damage * 2, stagger: SHOVE.stagger, knock: SHOVE.knock, label: 'FLANK'};
   }
   if (type === 'brute') return {kind: 'hit', damage: SHOVE.damage * 0.5, stagger: 0.35, knock: SHOVE.knock * 0.45, label: ''};
