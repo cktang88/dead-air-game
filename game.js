@@ -908,15 +908,16 @@ function updatePlayer(dt){
   updateTutorHint(p);
   updateRoom();
 }
-const tutor={seen:(()=>{try{return loadSeen(localStorage);}catch{return new Set();}})(),shownAt:-99,current:null,still:0,wasMoving:false};
+const tutor={seen:(()=>{try{return loadSeen(localStorage);}catch{return new Set();}})(),done:new Set(),shownAt:-99,current:null,still:0,wasMoving:false};
 function updateTutorHint(p){
   const el=$('tutor-hint');if(!el)return;const dt=state.frameDt||1/60,moving=hasMovementInput();tutor.still=moving?0:tutor.still+dt;
+  if(moving)tutor.done.add('moved');if(moving&&input.keys.has('shift'))tutor.done.add('sprinted');if(state.reloadTimer>0)tutor.done.add('reloaded');if(state.thrown.length)tutor.done.add('threw');if(state.loadoutOpen)tutor.done.add('loadout');if(state.shotsFired>0)tutor.done.add('fired');
   const clock=performance.now()/1000;
   if(tutor.current&&clock-tutor.shownAt>5){tutor.current=null;el.classList.remove('show');}
   if(tutor.current||clock-tutor.shownAt<2.5)return;
   const gi=state.weaponIndex,gun=GUNS[gi],others=state.weaponSlots.filter(i=>i!==gi);
   const centreBusy=!!document.querySelector('#room-banner.show,#toast.show');if(moving)tutor.moved=true;
-  const ctx={shots:state.shotsFired||0,moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.supplyOpen||state.paused||state.mode!=='play',seen:tutor.seen,runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
+  const ctx={shots:state.shotsFired||0,moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.supplyOpen||state.paused||state.mode!=='play',seen:tutor.seen,done:tutor.done,inCombat:state.enemies.some(e=>e.alive&&(e.type==='boss'||distance(p,e)<460)),runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
   const keys={reload:keyLabel(binding('reload')),throwableCycle:keyLabel(binding('throwableCycle')),throwableUse:keyLabel(binding('throwableUse')),loadout:'TAB',moveKeys:['moveUp','moveLeft','moveDown','moveRight'].map(a=>keyLabel(binding(a)))};
   const hint=pickHint(ctx,keys);if(!hint)return;
   tutor.current=hint;tutor.shownAt=clock;tutor.seen.add(hint.id);try{saveSeen(localStorage,tutor.seen);}catch{}
