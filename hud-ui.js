@@ -113,13 +113,16 @@ export function pushFeed(text, tone) {
   const host = $('feed');
   if (!host) return;
   tone = tone || feedTone(text);
-  const first = host.firstElementChild;
-  if (first && first.dataset.text === text && performance.now() - Number(first.dataset.t) < 1200) {
-    const n = Number(first.dataset.n || 1) + 1;
-    first.dataset.n = String(n); first.dataset.t = String(performance.now());
-    first.querySelector('b').textContent = `×${n}`;
-    clearTimeout(first._timer); first._timer = setTimeout(() => first.remove(), FEED_LIFE_MS);
-    first.classList.remove('bump'); void first.offsetWidth; first.classList.add('bump');
+  // coalesce: the same line already on screen (anywhere in the feed, recent) becomes "x2", moves to the top and restarts its life
+  const now = performance.now();
+  const dup = [...host.children].find(el => el.dataset.text === text && now - Number(el.dataset.t) < 6000);
+  if (dup) {
+    const n = Number(dup.dataset.n || 1) + 1;
+    dup.dataset.n = String(n); dup.dataset.t = String(now);
+    dup.querySelector('b').textContent = `×${n}`;
+    clearTimeout(dup._timer); dup.classList.remove('out'); dup._timer = setTimeout(() => { dup.classList.add('out'); setTimeout(() => dup.remove(), 260); }, FEED_LIFE_MS);
+    if (dup !== host.firstElementChild) host.prepend(dup);
+    dup.classList.remove('bump'); void dup.offsetWidth; dup.classList.add('bump');
     return;
   }
   const item = document.createElement('div');

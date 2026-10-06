@@ -1,7 +1,7 @@
 // Screen-space affordance layer: world interaction prompts, name tags, target highlight, off-screen arrows.
 // Pure presentation; all "what can I do here" decisions come from interaction.js via state.interact.
 import {drawIcon, ENEMY_ICON} from './icons.js';
-import {hudSafeRects, placeEdgeArrow} from './hud-safe.js';
+import {hudSafeRects, placeEdgeArrow, clearShift} from './hud-safe.js';
 import {nearestHostileRoom, promptParts} from './interaction.js';
 
 import {COLORS, FONTS, RADII} from './theme.js';
@@ -127,7 +127,13 @@ export function createAffordances() {
       ctx.save(); ctx.globalAlpha = e.elite ? 1 : 0.85;
       ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(bx, by, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
       if (icon) drawIcon(ctx, icon, bx, by, 11, col);
-      if (e.elite) outlinedText(ctx, `ELITE ${e.def?.name || ''}`.trim(), sp.x, sp.y + r + 12, COLORS.sprint, 12, 'center');
+      if (e.elite) {
+        const text = `ELITE ${e.def?.name || ''}`.trim(), tw = textW(ctx, text, 12) / 2 + 6;
+        let lx = sp.x, ly = sp.y + r + 12;
+        const sh = clearShift({x0: lx - tw, x1: lx + tw, y0: ly - 9, y1: ly + 9}, hudSafeRects(4), cam.w, cam.h, 120);   // never under the HUD panels
+        if (sh) { lx += sh.dx; ly += sh.dy; }
+        outlinedText(ctx, text, lx, ly, COLORS.sprint, 12, 'center');
+      }
       ctx.restore();
     }
   }

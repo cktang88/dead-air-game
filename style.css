@@ -206,7 +206,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 @keyframes objective-flash { 0% { background: color-mix(in srgb, var(--t) 45%, var(--panel-solid)); transform: scale(1.06); box-shadow: 0 0 24px var(--t); } 100% { transform: none; } }
 
 /* ============================================================ room banner, feed, toast */
-#room-banner { position: absolute; z-index: 3; top: 168px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; }
+#room-banner { position: absolute; z-index: 3; top: 84px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; }
 #room-banner small { display: block; font: 700 var(--fs-label) var(--font-body); letter-spacing: .5em; color: var(--danger); margin-bottom: 6px; padding-left: .5em; text-shadow: 0 1px 8px #000; }
 #room-banner strong { display: block; font: 800 44px/1 var(--font-display); letter-spacing: .12em; color: var(--text-hi); text-shadow: 0 2px 24px rgba(0, 0, 0, .8); white-space: nowrap; }
 #room-banner span { display: inline-block; margin-top: var(--s-2); padding: 4px var(--s-3); font: 700 var(--fs-label) var(--font-body); letter-spacing: .18em; color: var(--scrap); border: 1px solid color-mix(in srgb, var(--scrap) 40%, transparent); border-radius: 999px; background: rgba(13, 10, 20, .7); }
@@ -227,7 +227,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #feed { position: absolute; z-index: 4; top: 54px; right: var(--s-6); width: 290px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .feed-item { --t: var(--text-mid); display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 10px; background: var(--panel); border: 1px solid var(--border); border-right: 3px solid var(--t); border-radius: var(--r-md); font: 600 var(--fs-label)/1.2 var(--font-body); letter-spacing: .06em; color: var(--text-hi); animation: feed-in var(--dur-slow) var(--ease-spring); transition: opacity var(--dur) var(--ease-in), transform var(--dur) var(--ease-in), max-height var(--dur); box-shadow: var(--e-1); backdrop-filter: blur(8px); }
 .feed-item svg { width: 16px; height: 16px; flex: none; fill: var(--t); }
-.feed-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-item span { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.feed-item { align-items: flex-start; } .feed-item svg { margin-top: 1px; }
 .feed-item b { color: var(--t); font: 700 var(--fs-label) var(--font-mono); }
 .feed-item.out { opacity: 0; transform: translateX(24px); }
 .feed-item.bump { animation: feed-bump .22s var(--ease-out); }
@@ -593,7 +594,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
   .title-card h1 { font-size: clamp(72px, 11vw, 112px); } .title-card .tagline { margin: var(--s-3) 0; }
   .btn.xl { min-height: 56px; } .side-card { padding: var(--s-4) var(--s-5); }
   .dlg-card { padding: var(--s-5) var(--s-6) var(--s-4); } .dlg h2 { font-size: 30px; } .dlg-head { margin-bottom: var(--s-3); }
-  #room-banner { top: 150px; } #room-banner strong { font-size: 38px; }
+  #room-banner { top: 78px; } #room-banner strong { font-size: 38px; }
   .vitals { padding: var(--s-2) var(--s-3); min-width: 150px; } .hp-num { font-size: 30px; }
   #minimap { width: 138px; height: 104px; }
   .dlg-icon { width: 44px; height: 44px; } .pause-card h2 { font-size: 56px; }
