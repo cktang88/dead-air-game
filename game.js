@@ -971,7 +971,7 @@ function updatePlayer(dt){
     state.cornerStuck=blockedRatio<.35&&(vx!==0||vy!==0)?state.cornerStuck+1:0;if(state.cornerStuck>8){state.cornerSign=-(state.cornerSign||1);state.cornerStuck=0;}
     const nudge=cornerNudge({x:vx,y:vy},blockedRatio,topSpeed,state.cornerSign||1);
     state.cmdVel={x:state.playerVel.x+state.playerKnock.x+nudge.x,y:state.playerVel.y+state.playerKnock.y+nudge.y};
-    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult});}
+    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult,kind:'sprint'});}
     state.sprintBlend=approach(state.sprintBlend,sprinting?1:0,12,rdt);state.recoil=stepRecoil(state.recoil,rdt);state.dryTimer=Math.max(0,state.dryTimer-rdt);
     stepBloom(state.bloom,rd0,gunFeel(GUNS[state.weaponIndex]));
     p.x=here.x;p.y=here.y;

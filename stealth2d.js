@@ -153,10 +153,10 @@ export function createStealthLayer() {
       const col = hot ? COLORS.danger : COLORS['tier-rare'];
       ctx.save();
       const pulse = 0.5 + 0.5 * Math.sin(time * (8 + 14 * frac));
-      ctx.fillStyle = withAlpha(col, (0.04 + 0.08 * frac) * (0.6 + 0.4 * pulse)); ctx.beginPath(); ctx.arc(t.x, t.y, item.radius, 0, TAU); ctx.fill();
-      ctx.strokeStyle = withAlpha(col, 0.5 + 0.4 * frac); ctx.lineWidth = 1.6; ctx.setLineDash([6, 5]); ctx.lineDashOffset = -time * 30;
+      ctx.fillStyle = withAlpha(col, (0.10 + 0.14 * frac) * (0.6 + 0.4 * pulse)); ctx.beginPath(); ctx.arc(t.x, t.y, item.radius, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = withAlpha(col, 0.8 + 0.2 * frac); ctx.lineWidth = 2.4; ctx.setLineDash([6, 5]); ctx.lineDashOffset = -time * 30;
       ctx.beginPath(); ctx.arc(t.x, t.y, item.radius, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      ctx.strokeStyle = withAlpha(col, 0.9); ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      ctx.strokeStyle = withAlpha(col, 1); ctx.lineWidth = 3.2; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(t.x, t.y, item.radius * 0.96, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
       ctx.restore();
     }
