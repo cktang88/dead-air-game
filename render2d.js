@@ -6,6 +6,8 @@ import {Fx} from './fx2d.js';
 import {Lighting} from './lighting2d.js';
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
+import {drawIcon} from './icons.js';
+import {createAffordances} from './affordances2d.js';
 
 export {hexStr};
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
@@ -58,6 +60,7 @@ class Trail {
 }
 
 export function createRenderer(container, state) {
+  const affordances = createAffordances();
   const canvas = document.createElement('canvas');
   canvas.tabIndex = 0;
   canvas.style.cursor = 'none';
@@ -304,23 +307,43 @@ export function createRenderer(container, state) {
 
   function drawGates(b) {
     for (const gate of state.lockedDoors) {
-      if (gate.opened) continue;
+      const open = gate.opened ? Math.min(1, (gate.openAnim = (gate.openAnim ?? 0) + (1 / 60) / 0.7)) : 0;
+      if (open >= 1) continue;
       const cx = (gate.cells.reduce((s, c) => s + c.x, 0) / gate.cells.length + 0.5) * TILE, cy = (gate.cells.reduce((s, c) => s + c.y, 0) / gate.cells.length + 0.5) * TILE;
       if (!inView({x: cx, y: cy}, b, 60)) continue;
       const span = gate.cells.length * TILE, vertical = gate.axis === 'y', pulse = 0.5 + 0.5 * Math.sin(vis.time * 3);
+      const afford = (state.scrap || 0) >= gate.cost, col = gate.opened ? '#6dffb0' : afford ? '#ffb04a' : '#ff6a78';
       ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
-      ctx.fillStyle = 'rgba(8,6,12,0.7)'; ctx.fillRect(-span / 2 - 1, -7, span + 2, 15);
-      const g = ctx.createLinearGradient(0, -5, 0, 5); g.addColorStop(0, '#6f5236'); g.addColorStop(1, '#3a2a1c');
-      ctx.fillStyle = g; ctx.fillRect(-span / 2, -5, span, 10); ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.strokeRect(-span / 2, -5, span, 10);
-      ctx.strokeStyle = '#d99a4a'; ctx.lineWidth = 1.7; ctx.beginPath(); for (let x = -span / 2 + 5; x < span / 2; x += 6) { ctx.moveTo(x, -5); ctx.lineTo(x, 5); } ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,230,170,0.5)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(-span / 2, -4.2); ctx.lineTo(span / 2, -4.2); ctx.stroke();
-      ctx.fillStyle = INK; ctx.fillRect(-9, -8, 18, 16);
-      ctx.fillStyle = rgba('#ffb04a', 0.85 + pulse * 0.15); ctx.fillRect(-7.5, -6.5, 15, 13);
-      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, -1.2, 2.2, Math.PI, 0); ctx.lineWidth = 1.2; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillRect(-3.4, -1, 6.8, 5);
+      ctx.globalAlpha = 1 - open * open;
+      const half = span / 2, slide = open * half * 0.95;
+      for (const side of [-1, 1]) {
+        ctx.save(); ctx.translate(side * slide, 0);
+        const x0 = side < 0 ? -half : 0, w = half;
+        ctx.fillStyle = 'rgba(8,6,12,0.7)'; ctx.fillRect(x0 - 1, -8, w + 2, 17);
+        ctx.fillStyle = '#2b2430'; ctx.fillRect(x0, -6, w, 12);
+        // hazard stripes
+        ctx.save(); ctx.beginPath(); ctx.rect(x0, -6, w, 12); ctx.clip();
+        ctx.fillStyle = gate.opened ? '#4aa878' : '#e9b23c'; for (let x = x0 - 14; x < x0 + w + 14; x += 12) { ctx.beginPath(); ctx.moveTo(x, 6); ctx.lineTo(x + 6, 6); ctx.lineTo(x + 12, -6); ctx.lineTo(x + 6, -6); ctx.closePath(); ctx.fill(); }
+        ctx.restore();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.strokeRect(x0, -6, w, 12);
+        ctx.restore();
+      }
+      if (!gate.opened) {
+        // lock plate with padlock
+        ctx.fillStyle = INK; rrectPath(ctx, -12, -11, 24, 22, 4); ctx.fill();
+        ctx.fillStyle = rgba(col, 0.9 + pulse * 0.1); rrectPath(ctx, -10.5, -9.5, 21, 19, 3); ctx.fill();
+        ctx.rotate(vertical ? -Math.PI / 2 : 0);
+        drawIcon(ctx, 'lock-locked', 0, 0, 15, INK);
+      }
       ctx.restore();
-      const near = state.player && Math.hypot(state.player.x - cx, state.player.y - cy) < 90;
-      ctx.font = `800 9px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = rgba('#ffd27a', near ? 1 : 0.7); ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.lineWidth = 2.6;
-      const label = `${gate.cost} SCRAP`; ctx.strokeText(label, cx, cy - (vertical ? 0 : 15) - (vertical ? 0 : 0) + (vertical ? -span / 2 - 9 : 0)); ctx.fillText(label, cx, cy - (vertical ? 0 : 15) + (vertical ? -span / 2 - 9 : 0));
+      if (gate.opened) continue;
+      // cost painted on the gate
+      ctx.save(); ctx.translate(cx, cy + (vertical ? -span / 2 - 12 : -19));
+      const label = `${gate.cost}`, w = 36;
+      ctx.fillStyle = 'rgba(14,10,20,0.85)'; rrectPath(ctx, -w / 2, -7, w, 14, 5); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
+      ctx.save(); ctx.translate(-w / 2 + 8, 0); ctx.scale(4.2, 4.2); ctx.fillStyle = col; hexPath(ctx, 1); ctx.fill(); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(0, 0, 0.35, 0, TAU); ctx.fill(); ctx.restore();
+      ctx.font = `800 10px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(label, -w / 2 + 14, 0.5);
+      ctx.restore();
     }
   }
 
@@ -391,9 +414,16 @@ export function createRenderer(container, state) {
       ctx.beginPath(); ctx.moveTo(3, 0); ctx.lineTo(-2, -3.2); ctx.lineTo(-2, 3.2); ctx.closePath(); ctx.fill(); ctx.restore();
     }
     ctx.globalAlpha = 1;
-    ctx.font = `800 8px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.lineWidth = 2.4; ctx.fillStyle = col;
-    const label = ready ? 'EXTRACT' : 'LOCKED'; ctx.strokeText(label, 0, -30); ctx.fillText(label, 0, -30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col;
+    ctx.restore(); ctx.save(); ctx.translate(pk.x, pk.y);
+    // vertical beacon pillar so the exit is visible from across the room
+    const bw = 10 + Math.sin(t * 3) * 2, bg = ctx.createLinearGradient(0, -120, 0, -20); bg.addColorStop(0, rgba(col, 0)); bg.addColorStop(1, rgba(col, ready ? 0.45 : 0.25));
+    ctx.fillStyle = bg; ctx.fillRect(-bw, -120, bw * 2, 100);
+    ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `900 13px ${FONT}`; ctx.lineWidth = 3.4; const label = ready ? 'EXTRACT' : 'EXIT · LOCKED';
+    drawIcon(ctx, ready ? 'exit-extraction' : 'lock-locked', -ctx.measureText(label).width / 2 - 8, -36, 13, col);
+    ctx.strokeText(label, 4, -36); ctx.fillText(label, 4, -36);
     ctx.restore();
   }
 
@@ -480,6 +510,7 @@ export function createRenderer(container, state) {
       // alert tick above the head
       const p = windup ? 1 - e.meleeWindup / 0.48 : 1 - e.aimTimer / (e.vis?.aimMax || 0.5);
       ctx.save(); ctx.translate(e.x, e.y - look.r - (e.elite ? 12 : 8) - Math.sin(p * 9) * 0.8);
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(0, 11, 6.5, 0, TAU); ctx.stroke(); ctx.strokeStyle = windup ? '#ffad57' : '#ff3a50'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(0, 11, 6.5, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke();
       ctx.fillStyle = windup ? '#ffad57' : '#ff4a5e'; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(-3.8, -2.6); ctx.lineTo(3.8, -2.6); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
     }
@@ -760,6 +791,8 @@ export function createRenderer(container, state) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     }
+    affordances.draw(ctx, state, viewCam, dpr, dt, vis.exitReady);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawCrosshair(dpr);
     const ms = performance.now() - t0;
     stats.drawMs = stats.drawMs * 0.9 + ms * 0.1; stats.frames++; stats.bakeMs = world.bakeMs;

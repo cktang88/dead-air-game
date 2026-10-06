@@ -214,6 +214,8 @@ kbd {
 #minimap { display: block; width: 138px; height: 104px; image-rendering: pixelated; }
 #interaction-hint { position: absolute; z-index: 3; left: 50%; bottom: 40px; transform: translateX(-50%); padding: 9px 16px; border: 1px solid var(--line-2); background: #171420e6; color: #efe4d0; font: 10px var(--font-mono); letter-spacing: .12em; opacity: 0; transition: opacity .15s; pointer-events: none; }
 #interaction-hint.show { opacity: 1; }
+#tutor-hint { position: absolute; z-index: 3; left: 50%; bottom: 34%; transform: translate(-50%, 8px); padding: 8px 16px; border: 1px solid #f4c66d88; border-radius: 6px; background: #171420dd; color: #ffe7b0; font: 700 13px var(--font-mono); letter-spacing: .14em; opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; text-align: center; }
+#tutor-hint.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ============================================================ stat bars */
 .stat-bars { display: grid; gap: 3px; }
@@ -453,6 +455,9 @@ kbd {
 }
 
 /* hide in-run HUD behind the title / end screen */
-#game-shell:has(#overlay.show) :is(#tempo, #hud, #run-stats, #minimap-wrap, #feed, #topbar, #room-banner, #interaction-hint, #hurt-edge) { opacity: 0; visibility: hidden; }
+#game-shell:has(#overlay.show) :is(#tempo, #hud, #run-stats, #minimap-wrap, #feed, #topbar, #room-banner, #interaction-hint, #tutor-hint, #hurt-edge) { opacity: 0; visibility: hidden; }
 #game-shell:has(#overlay.show) #toast { display: none; }
 .merchant-stock + .merchant-footer { border-top: 0; margin-top: 0; padding-top: 4px; }
+
+.mm-legend { display: flex; flex-wrap: wrap; gap: 2px 7px; max-width: 138px; margin-top: 4px; font: 700 8px var(--font-mono); letter-spacing: .08em; color: #a9a3b4; }
+.mm-legend span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: var(--c); }

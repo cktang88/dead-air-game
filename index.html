@@ -41,11 +41,11 @@
       </section>
       <section id="run-stats" class="run-stats panel" aria-label="Run stats">
         <div class="stat"><small>KILLS</small><b id="kills">00</b></div>
-        <div class="stat scrap"><small>SCRAP</small><b id="scrap">000</b></div>
-        <div class="stat"><small>SECTOR</small><b id="sector-count">01 / 10</b></div>
+        <div class="stat scrap" title="Scrap: spend it to unlock vault gates and buy gear at the Black Market. Lost if you die."><small>SCRAP · SPEND</small><b id="scrap">000</b></div>
+        <div class="stat" title="Rooms cleared out of total rooms on this floor."><small>ROOMS CLEARED</small><b id="sector-count">01 / 10</b></div>
       </section>
-      <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas></div>
-      <div id="interaction-hint">E &nbsp;·&nbsp; OPEN THE LOADOUT</div>
+      <div id="minimap-wrap"><canvas id="minimap" width="138" height="104"></canvas><div class="mm-legend"><span style="--c:#6dffb0">EXIT</span><span style="--c:#f4c66d">CACHE</span><span style="--c:#ffd27a">SHOP</span><span style="--c:#74dfab">CLINIC</span><span style="--c:#8fe0ff">BENCH</span><span style="--c:#ffb04a">GATE</span></div></div>
+      <div id="tutor-hint" role="status" aria-live="polite"></div>
       <div id="toast" role="status"></div>
       <section id="pause-screen" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
         <div class="pause-card">
