@@ -13,7 +13,7 @@ export const LABEL_RANGE = 300;
 export const PRIORITY = Object.freeze({gate: 0, cache: 1, market: 2, gun: 3, locker: 3.5, station: 4, exit: 5, pickup: 6});
 const prio = k => PRIORITY[k] ?? 9;
 
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+import {dist} from './util.js';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 'S'}`;
 
 /** "3 HOSTILES" style helper. */

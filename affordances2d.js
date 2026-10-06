@@ -6,7 +6,7 @@ import {nearestHostileRoom, promptParts} from './interaction.js';
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
 const TAU = Math.PI * 2;
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+import {clamp} from './util.js';
 const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const BAD = '#ff6a78', GREY = '#8d8a96';
 

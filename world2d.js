@@ -26,6 +26,8 @@ export class WorldLayer {
     this.level = null;
     this.chunks = new Map();
     this.queue = [];
+    this.queueDone = false;
+    this.pendingDecals = new Map(); // chunk key -> decals waiting for a bake or the next flush
     this.patterns = null;
     this.version = 0;
     this.bakeMs = 0;
@@ -38,7 +40,7 @@ export class WorldLayer {
     if (cs === this.cs) return;
     if (Math.abs(cs - this.cs) / this.cs < 0.2 && this.chunks.size) return;
     this.cs = cs;
-    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.level = lv; }
+    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.level = lv; }
   }
 
   textures() {
@@ -55,7 +57,7 @@ export class WorldLayer {
   }
 
   setLevel({tileMap, rooms, doors, seed}) {
-    this.chunks.clear(); this.queue = []; this.version++;
+    this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.version++;
     const h = tileMap.length, w = tileMap[0].length;
     const kind = new Uint8Array(w * h).fill(2);
     const tileRoom = new Int16Array(w * h).fill(-1);
@@ -111,34 +113,68 @@ export class WorldLayer {
     if (!L || cx < 0 || cy < 0 || cx * CHUNK_TILES >= L.w || cy * CHUNK_TILES >= L.h) return null;
     const key = cy * 1000 + cx;
     let chunk = this.chunks.get(key);
-    if (!chunk) this.chunks.set(key, chunk = {cx, cy, floor: null, walls: null, baked: false});
+    if (!chunk) this.chunks.set(key, chunk = {cx, cy, floor: null, g: null, baked: false, step: 0});
     return chunk;
   }
 
-  bake(chunk) {
-    if (chunk.baked) return;
+  // Cached 2D context of a chunk's floor canvas (getContext on every stamp was measurable).
+  ctxOf(chunk) { return chunk.g || (chunk.g = chunk.floor.getContext('2d')); }
+
+  // One bake step per call: 0 floor, 1 walls + shadows, 2 props + doors. Returns true when the chunk is complete.
+  bakeStep(chunk) {
+    if (chunk.baked) return true;
     const t0 = performance.now();
-    chunk.baked = true;
-    this.bakeFloor(chunk);
-    this.bakeWalls(chunk);
+    const step = chunk.step || 0;
+    if (step === 0) { this.bakeFloor(chunk); chunk.step = chunk.floor ? 1 : 3; }
+    else if (step === 1) { this.bakeWalls(chunk); chunk.step = 2; }
+    else { this.bakeProps(chunk); chunk.step = 3; }
+    if (chunk.step >= 3) { chunk.baked = true; this.flushPending(chunk); }
     this.bakeMs += performance.now() - t0;
+    return chunk.baked;
   }
 
-  // Bake a few not-yet-ready chunks nearest to (x,y) when there is spare frame time.
-  idleBake(x, y, budgetMs = 6) {
+  bake(chunk) { while (!chunk.baked) this.bakeStep(chunk); }
+
+  // Level start: bake the chunks around (x,y) synchronously (behind the title / loading screen) so the first frames don't hitch.
+  prewarm(x, y, radius = 1) {
     const L = this.level;
     if (!L) return;
-    if (!this.queue.length) {
+    const cx = Math.floor(x / CW), cy = Math.floor(y / CW);
+    for (let j = cy - radius; j <= cy + radius; j++) for (let i = cx - radius; i <= cx + radius; i++) {
+      const chunk = this.chunkAt(i, j);
+      if (chunk && this.chunkHasContent(i, j)) this.bake(chunk);
+    }
+  }
+
+  // Spend up to budgetMs baking chunk steps: first the neighbourhood around the player's look-ahead point
+  // (velocity vx,vy in world px/s), then everything else nearest-first. Budget is checked between steps.
+  idleBake(x, y, budgetMs = 6, vx = 0, vy = 0) {
+    const L = this.level;
+    if (!L) return;
+    if (!this.queue.length && !this.queueDone) {
       const list = [];
       for (let cy = 0; cy * CHUNK_TILES < L.h; cy++) for (let cx = 0; cx * CHUNK_TILES < L.w; cx++) list.push({cx, cy, d: Math.hypot((cx + 0.5) * CW - x, (cy + 0.5) * CW - y)});
       list.sort((a, b) => a.d - b.d);
       this.queue = list;
+      this.queueDone = true;
     }
     const end = performance.now() + budgetMs;
-    while (this.queue.length && performance.now() < end) {
-      const {cx, cy} = this.queue.shift();
+    const ax = x + vx * 0.7, ay = y + vy * 0.7;
+    const pending = [];
+    for (let cy = Math.floor((ay - CW * 1.2) / CW); cy <= Math.floor((ay + CW * 1.2) / CW); cy++) for (let cx = Math.floor((ax - CW * 1.2) / CW); cx <= Math.floor((ax + CW * 1.2) / CW); cx++) {
       const chunk = this.chunkAt(cx, cy);
-      if (chunk && !chunk.baked && this.chunkHasContent(cx, cy)) this.bake(chunk);
+      if (chunk && !chunk.baked && this.chunkHasContent(cx, cy)) pending.push({chunk, d: Math.hypot((cx + 0.5) * CW - ax, (cy + 0.5) * CW - ay)});
+    }
+    pending.sort((a, b) => a.d - b.d);
+    for (const {chunk} of pending) {
+      while (!chunk.baked) { if (performance.now() >= end) return; this.bakeStep(chunk); }
+    }
+    while (this.queue.length) {
+      const {cx, cy} = this.queue[0];
+      const chunk = this.chunkAt(cx, cy);
+      if (!chunk || chunk.baked || !this.chunkHasContent(cx, cy)) { this.queue.shift(); continue; }
+      if (performance.now() >= end) return;
+      this.bakeStep(chunk);
     }
   }
 
@@ -284,7 +320,7 @@ export class WorldLayer {
     // cover tiles can throw shadows into this chunk from up-left
     const sx0 = tx0 - 3, sy0 = ty0 - 3;
     if (!chunk.floor) return;
-    const CS = this.cs, g = chunk.floor.getContext('2d');
+    const CS = this.cs, g = this.ctxOf(chunk);
     g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     const hasFilter = 'filter' in g;
     // crisp directional cast shadows: one union hull per height, small blur, uniform alpha
@@ -398,6 +434,16 @@ export class WorldLayer {
         g.strokeStyle = '#100d16'; g.lineWidth = 1.3; g.beginPath(); for (let k = 11; k < 19; k += 2.6) { g.moveTo(a + 10, b + k); g.lineTo(a + 22, b + k); } g.stroke();
       }
     }
+  }
+
+  // ---- props: interior cover, doorway frames and doors (third bake step)
+  bakeProps(chunk) {
+    const L = this.level, x0 = chunk.cx * CW, y0 = chunk.cy * CW;
+    const tx0 = chunk.cx * CHUNK_TILES, ty0 = chunk.cy * CHUNK_TILES, tx1 = Math.min(L.w, tx0 + CHUNK_TILES), ty1 = Math.min(L.h, ty0 + CHUNK_TILES);
+    const kindAt = (x, y) => x < 0 || y < 0 || x >= L.w || y >= L.h ? 2 : L.kind[y * L.w + x];
+    if (!chunk.floor) return;
+    const CS = this.cs, g = this.ctxOf(chunk);
+    g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     // interior cover: props standing on the floor
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 3) continue;
@@ -510,47 +556,80 @@ export class WorldLayer {
   }
 
   // ---- decals
-  stamp(bounds, draw) {
-    if (!this.level) return;
-    const cx0 = Math.floor(bounds.x0 / CW), cx1 = Math.floor(bounds.x1 / CW), cy0 = Math.floor(bounds.y0 / CW), cy1 = Math.floor(bounds.y1 / CW);
-    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-      const chunk = this.chunkAt(cx, cy);
-      if (!chunk) continue;
-      if (!chunk.baked) this.bake(chunk);
-      if (!chunk.floor) continue;
-      const g = chunk.floor.getContext('2d');
-      const CS = this.cs, L = this.level;
-      g.save(); g.setTransform(CS, 0, 0, CS, -cx * CW * CS, -cy * CW * CS);
-      g.beginPath();
-      for (let ty = Math.floor(bounds.y0 / TILE); ty <= Math.floor(bounds.y1 / TILE); ty++) for (let tx = Math.floor(bounds.x0 / TILE); tx <= Math.floor(bounds.x1 / TILE); tx++) if (L.kind[ty * L.w + tx] === 0) g.rect(tx * TILE, ty * TILE, TILE, TILE);
-      g.clip(); draw(g); g.restore();
-    }
-  }
-
+  // stampDecal only queues; flushDecals (start of draw) paints every queued decal of a chunk in one pass
+  // with one clip path, and decals aimed at a chunk that is still baking wait until it is done.
   stampDecal(d) {
     const L = this.level;
     if (!L) return;
     const tx = Math.floor(d.x / TILE), ty = Math.floor(d.y / TILE);
     if (L.kind[ty * L.w + tx] !== 0) return;
     const R = (d.r || 12) + 6;
-    this.stamp({x0: d.x - R, y0: d.y - R, x1: d.x + R, y1: d.y + R}, (g) => drawDecal(g, d));
+    const rect = {x0: d.x - R, y0: d.y - R, x1: d.x + R, y1: d.y + R, d};
+    const cx0 = Math.floor(rect.x0 / CW), cx1 = Math.floor(rect.x1 / CW), cy0 = Math.floor(rect.y0 / CW), cy1 = Math.floor(rect.y1 / CW);
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      if (!this.chunkAt(cx, cy)) continue;
+      const key = cy * 1000 + cx;
+      let list = this.pendingDecals.get(key);
+      if (!list) this.pendingDecals.set(key, list = []);
+      list.push(rect);
+      if (list.length > 400) list.splice(0, list.length - 400);
+    }
+  }
+
+  flushDecals() {
+    if (!this.pendingDecals.size) return;
+    for (const [key, list] of this.pendingDecals) {
+      const chunk = this.chunks.get(key);
+      if (chunk && chunk.baked) this.paintDecals(chunk, list);
+      if (!chunk || chunk.baked) this.pendingDecals.delete(key);
+    }
+  }
+
+  flushPending(chunk) {
+    const key = chunk.cy * 1000 + chunk.cx, list = this.pendingDecals.get(key);
+    if (!list) return;
+    this.pendingDecals.delete(key);
+    this.paintDecals(chunk, list);
+  }
+
+  paintDecals(chunk, list) {
+    if (!chunk.floor) return;
+    const L = this.level, CS = this.cs, g = this.ctxOf(chunk);
+    g.save();
+    g.setTransform(CS, 0, 0, CS, -chunk.cx * CW * CS, -chunk.cy * CW * CS);
+    const seen = new Set();
+    g.beginPath();
+    for (const r of list) {
+      for (let ty = Math.floor(r.y0 / TILE); ty <= Math.floor(r.y1 / TILE); ty++) for (let tx = Math.floor(r.x0 / TILE); tx <= Math.floor(r.x1 / TILE); tx++) {
+        if (tx < 0 || ty < 0 || tx >= L.w || ty >= L.h) continue;
+        const k = ty * L.w + tx;
+        if (L.kind[k] !== 0 || seen.has(k)) continue;
+        seen.add(k); g.rect(tx * TILE, ty * TILE, TILE, TILE);
+      }
+    }
+    g.clip();
+    for (const r of list) drawDecal(g, r.d);
+    g.restore();
   }
 
   // ---- drawing
   draw(ctx, cam, bounds, dpr) {
     const L = this.level;
     if (!L) return;
+    this.flushDecals();
     const cx0 = Math.max(0, Math.floor(bounds.x0 / CW)), cx1 = Math.floor(bounds.x1 / CW), cy0 = Math.max(0, Math.floor(bounds.y0 / CW)), cy1 = Math.floor(bounds.y1 / CW);
     const s = cam.scale * dpr, ox = cam.w / 2 * dpr - cam.x * s, oy = cam.h / 2 * dpr - cam.y * s;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = Math.abs(s - this.cs) > 0.02;
     let covered = bounds.x0 >= 0 && bounds.y0 >= 0 && bounds.x1 <= L.w * TILE && bounds.y1 <= L.h * TILE;
-    const draws = [];
+    const draws = [], bakeEnd = performance.now() + 8;
     for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
       const chunk = this.chunkAt(cx, cy);
       if (!chunk) { covered = false; continue; }
-      if (!chunk.baked) this.bake(chunk);
+      // A visible chunk that is not ready is baked now, a step at a time within a small frame budget
+      // (prebaking ahead of the player keeps this rare); past the budget it shows what it has.
+      while (!chunk.baked && performance.now() < bakeEnd) this.bakeStep(chunk);
       const img = chunk.floor;
       if (!img) { covered = false; continue; }
       draws.push([img, Math.round(ox + cx * CW * s), Math.round(oy + cy * CW * s), Math.round(ox + (cx + 1) * CW * s), Math.round(oy + (cy + 1) * CW * s)]);
