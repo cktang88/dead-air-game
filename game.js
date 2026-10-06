@@ -9,8 +9,9 @@ import {META_UPGRADES, awardCoins, emptyProgress, progressionStats, purchaseUpgr
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js?v=vital-reserve-2';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon} from './layout.js';
-import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
-import {generateDungeon} from './dungeon.js?v=room-names-3';
+import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js?v=templates-1';
+import {paceEnemyCount} from './room-templates.js?v=templates-1';
+import {generateDungeon} from './dungeon.js?v=templates-1';
 import {createNav, stepEnemyBrain} from './enemy-brain.js';
 import {hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
@@ -259,7 +260,7 @@ function makeRewardDoorGates(){
 function placeRoleRewards(room){
   const reserved=[];
   for(const kind of roomPickupKinds(room.role)){
-    const point=findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...reserved],tileSize:TILE,random});
+    const point=findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...reserved],tileSize:TILE,random,preferred:room.rewardSpots});
     if(!point)continue;
     dropPickup(kind,point.x,point.y,kind==='scrap'?30+Math.floor(random()*21):0,room.index);
     reserved.push({...point,radius:18});
@@ -290,32 +291,29 @@ function makeLevel(){
   }
   for(const run of wallRuns){const width=run.len*TILE;makeFixedBox(run.x*TILE+width/2,run.y*TILE+TILE/2,width/2,TILE/2);}
   makeRewardDoorGates();
+  // Room templates (room-templates.js) already stamped hard cover into the tile map; crates are the destructible low cover.
   for(const room of state.rooms){
-    const point=findRoomCratePosition(room);
-    if(!point)throw new Error(`Room ${room.index} has no safe crate position`);
-    spawnCrate(point.x,point.y);placeRoleRewards(room);
-  }
-  for(const room of state.rooms){
-    const pickRoomProp=()=>findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...state.pickups.map(pickup=>({...pickup,radius:18}))],tileSize:TILE,random});
-    for(let i=0;i<Math.floor((room.x2-room.x1)*(room.y2-room.y1)/52);i++){
-      const position=pickRoomProp();if(!position)continue;
-      if(random()<.3){state.colliders.push({body:makeBody({x:position.x,y:position.y},7,true)});state.cover.push({x:position.x,y:position.y,radius:9,kind:'pillar'});}
-      else if(random()<.9)spawnCrate(position.x,position.y);
+    for(const crate of room.crates||[])spawnCrate((crate.x+.5)*TILE,(crate.y+.5)*TILE);
+    if(!(room.crates||[]).length){
+      const point=findRoomCratePosition(room);
+      if(!point)throw new Error(`Room ${room.index} has no safe crate position`);
+      spawnCrate(point.x,point.y);
     }
+    placeRoleRewards(room);
   }
   let combatIndex=0;
   for(const [i,room] of state.rooms.entries()){
     if(i===0)continue;
     if(room.role==='merchant')continue;
-    const count=roomEnemyCount(room.role,random(),combatIndex),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
+    const count=paceEnemyCount(room,roomEnemyCount(room.role,random(),combatIndex)),encounter=roomEncounterTypes(room.role,chooseEncounterTypes(count,state.seed+i*7919));
     if(room.role==='combat')combatIndex++;
     for(let j=0;j<count;j++){
       const elite=room.role==='elite'&&encounter[j]==='brute',point=findEnemySpawn(room,encounter[j],elite);
       if(point)spawnEnemy(encounter[j],point.x,point.y,i,elite);
     }
     if(!roomPickupKinds(room.role).length){
-      if(i%2===1){dropPickup('scrap',rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE,10+Math.floor(random()*21));}
-      if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,rand(room.x1+2,room.x2-2)*TILE,rand(room.y1+2,room.y2-2)*TILE);}
+      if(i%2===1){dropPickup('scrap',...freeRoomPoint(room),10+Math.floor(random()*21));}
+      if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,...freeRoomPoint(room));}
     }
   }
   const start=state.rooms[0];const sx=(start.cx+.5)*TILE,sy=(start.cy+.5)*TILE;
@@ -337,6 +335,13 @@ function spawnCrate(x,y){
   physics.createCollider(RAPIER.ColliderDesc.cuboid(12,12),body);state.colliders.push({body});
   const crate={x,y,hp:60,maxHp:60,body,healthBarTimer:0,damageStage:0,flash:0,chips:[]};state.crates.push(crate);state.cover.push({x,y,radius:17,kind:'crate',crate});return crate;
 }
+function freeRoomPoint(room){
+  for(let attempt=0;attempt<30;attempt++){
+    const tx=Math.floor(rand(room.x1+1,room.x2)),ty=Math.floor(rand(room.y1+1,room.y2)),x=(tx+.5)*TILE,y=(ty+.5)*TILE;
+    if(state.solidMap[ty]?.[tx]===0&&!state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+14)&&state.doors.every(door=>Math.hypot(x-(door.x+.5)*TILE,y-(door.y+.5)*TILE)>=TILE*1.2))return [x,y];
+  }
+  return [(room.cx+.5)*TILE+TILE,(room.cy+.5)*TILE];
+}
 function findEnemySpawn(room,type,elite=false){
   const radius=elite?13:type==='brute'?10:8;
   const clear=(x,y)=>state.solidMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]===0&&
@@ -344,9 +349,13 @@ function findEnemySpawn(room,type,elite=false){
     !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
     !state.pickups.some(pickup=>pickup.available&&Math.hypot(x-pickup.x,y-pickup.y)<radius+18)&&
     !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+enemy.radius+4);
+  // Planned spawn tiles sit far from the entry door and near cover; take the best few in random order.
+  const planned=(room.spawnTiles||[]).slice(0,14).sort(()=>random()-.5);
+  for(const tile of planned){const x=(tile.x+.5)*TILE,y=(tile.y+.5)*TILE;if(clear(x,y))return {x,y};}
+  const entry=room.entry?{x:(room.entry.x+.5)*TILE,y:(room.entry.y+.5)*TILE}:null;
   for(let attempt=0;attempt<48;attempt++){
     const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
-    if(clear(x,y))return {x,y};
+    if(clear(x,y)&&(!entry||attempt>30||Math.hypot(x-entry.x,y-entry.y)>TILE*5))return {x,y};
   }
   for(let ty=room.y1+1;ty<=room.y2;ty++)for(let tx=room.x1+1;tx<=room.x2;tx++){
     const x=(tx+.5)*TILE,y=(ty+.5)*TILE;if(clear(x,y))return {x,y};
