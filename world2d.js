@@ -2,14 +2,17 @@
 // A frame only blits the visible chunks; persistent decals (blood, scorch, casings) are stamped onto the floor chunks.
 import {TILE} from './catalog.js';
 import {INK, TAU, actorSprite, corpseSprite, hash2, makeCanvas, mix, rgba, seeded, shade} from './sprites2d.js';
-import {blotch, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2d.js';
+import {blotch, carpetTile, dirtTile, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2d.js';
+import {paintFloorTile} from './floors2d.js';
+import {LIGHT, coverStyle, lampPool, paintCover, paintDecor, shadowKey, COVER_HEIGHT} from './props2d.js';
 
 export const CHUNK_TILES = 12;
 const CW = CHUNK_TILES * TILE;
 const FLOOR = '#6a5f56';
 const WALL_LIP = 5;
 const WALL_LIP_E = 3.4;
-const SHADOW_DX = 24, SHADOW_DY = 31;
+const WALL_SHADOW = COVER_HEIGHT.wall;
+const isOpen = (k) => k === 0 || k === 3; // floor, or floor under a piece of hard cover
 
 export const ROLE_TINT = {
   entry: ['#4fd1a8', 0.10], extraction: ['#d8e060', 0.11], elite: ['#ff4a4a', 0.17], hazard: ['#ffb020', 0.14],
@@ -40,7 +43,7 @@ export class WorldLayer {
 
   textures() {
     if (this.sources) return this.sources;
-    this.sources = {grime: grimeTile(192, 5, 1), grime2: grimeTile(160, 9, 1.4), wall: wallTile(128, 11), void: voidTile(128, 3), plate: steelPlateTile(64, 9)};
+    this.sources = {grime: grimeTile(192, 5, 1), grime2: grimeTile(160, 9, 1.4), wall: wallTile(128, 11), void: voidTile(128, 3), plate: steelPlateTile(64, 9), carpet: carpetTile(64, 4), dirt: dirtTile(128, 8)};
     return this.sources;
   }
 
@@ -57,26 +60,49 @@ export class WorldLayer {
     const kind = new Uint8Array(w * h).fill(2);
     const tileRoom = new Int16Array(w * h).fill(-1);
     const isFloor = (x, y) => x >= 0 && y >= 0 && x < w && y < h && tileMap[y][x] === 0;
+    // hard cover stamped by room templates: solid in the tile map, but drawn as a prop standing on the room floor
+    const cover = new Map();
+    rooms.forEach((room, index) => {
+      for (const c of room.cover || []) if (tileMap[c.y]?.[c.x] === 1) cover.set(c.y * w + c.x, {kind: c.kind, style: coverStyle(room, c.kind), room: index});
+    });
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (isFloor(x, y)) { kind[y * w + x] = 0; continue; }
+      if (cover.has(y * w + x)) { kind[y * w + x] = 3; continue; }
       let near = false;
       for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) if (isFloor(x + dx, y + dy)) { near = true; break; }
       kind[y * w + x] = near ? 1 : 2;
     }
     rooms.forEach((room, index) => {
-      for (let y = room.y1; y <= room.y2; y++) for (let x = room.x1; x <= room.x2; x++) if (isFloor(x, y)) tileRoom[y * w + x] = index;
+      for (let y = room.y1; y <= room.y2; y++) for (let x = room.x1; x <= room.x2; x++) if (kind[y * w + x] === 0 || kind[y * w + x] === 3) tileRoom[y * w + x] = index;
     });
     const rnd = seeded((seed >>> 0) + 991);
     const floorTiles = [];
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (kind[y * w + x] === 0) floorTiles.push([x, y]);
     const stains = [];
-    const stainCount = Math.floor(floorTiles.length / 15);
+    const stainCount = Math.floor(floorTiles.length / 28);
     for (let i = 0; i < stainCount; i++) {
       const [tx, ty] = floorTiles[Math.floor(rnd() * floorTiles.length)];
       const t = rnd();
-      stains.push({x: (tx + rnd()) * TILE, y: (ty + rnd()) * TILE, r: 10 + rnd() * 34, kind: t < 0.42 ? 'oil' : t < 0.7 ? 'rust' : t < 0.88 ? 'damp' : 'pale'});
+      stains.push({x: (tx + rnd()) * TILE, y: (ty + rnd()) * TILE, r: 10 + rnd() * 30, kind: t < 0.42 ? 'oil' : t < 0.7 ? 'rust' : t < 0.88 ? 'damp' : 'pale'});
     }
-    this.level = {tileMap, rooms, doors, seed, w, h, kind, tileRoom, stains, isFloor};
+    // animated / lighting extras: server LEDs, flickering lamps, beacons
+    const live = {leds: [], lamps: [], beacons: []};
+    for (const [idx, c] of cover) {
+      const tx = idx % w, ty = (idx / w) | 0;
+      if (c.style === 'server') for (let i = 0; i < 6; i++) {
+        const hv = hash2(tx * 6 + i, ty, seed + 4);
+        live.leds.push({x: tx * TILE + 3.5 + i * 4.6, y: ty * TILE + 28.6, ph: hv * 40, rate: 0.6 + hash2(tx, ty * 6 + i, seed) * 3.2, col: hv < 0.55 ? '90,255,170' : hv < 0.8 ? '255,180,70' : '90,210,255', room: c.room});
+      } else if (c.style === 'beacon') live.beacons.push({x: tx * TILE + 16, y: ty * TILE + 13, ph: hash2(tx, ty, seed) * 6, room: c.room});
+    }
+    rooms.forEach((room, index) => {
+      const accent = room.theme?.accent || '#ffb070', emergency = room.role === 'hazard';
+      for (const d of room.theme?.decor || []) {
+        if (d.kind !== 'light') continue;
+        if (emergency) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 84, col: '#ff3a3a', mode: 'pulse', ph: hash2(d.x * 8, d.y * 8, seed) * 6, a: 0.2, room: index});
+        else if (d.flicker) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 74, col: accent, mode: 'flicker', ph: hash2(d.x * 8, d.y * 8, seed) * 50, a: 0.16, room: index});
+      }
+    });
+    this.level = {tileMap, rooms, doors, seed, w, h, kind, tileRoom, stains, isFloor, cover, live};
     this.cw = CW;
   }
 
@@ -129,22 +155,27 @@ export class WorldLayer {
     const CS = this.cs, c = makeCanvas(CW * CS, CW * CS), g = c.getContext('2d');
     g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     const tx0 = chunk.cx * CHUNK_TILES, ty0 = chunk.cy * CHUNK_TILES, tx1 = Math.min(L.w, tx0 + CHUNK_TILES), ty1 = Math.min(L.h, ty0 + CHUNK_TILES);
-    const floorAt = (x, y) => x >= 0 && y >= 0 && x < L.w && y < L.h && L.kind[y * L.w + x] === 0;
-    const tint = this.pattern(g, 'grime');
-    // base slabs with per-tile variation
+    const floorAt = (x, y) => x >= 0 && y >= 0 && x < L.w && y < L.h && isOpen(L.kind[y * L.w + x]);
+    const wallAt = (x, y) => x < 0 || y < 0 || x >= L.w || y >= L.h || (L.kind[y * L.w + x] >= 1 && L.kind[y * L.w + x] !== 3);
+    const matOf = (x, y) => { const r = L.tileRoom[y * L.w + x]; return r >= 0 ? (L.rooms[r].theme?.floor || 'concrete') : 'corridor'; };
+    const paths = {};
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (!floorAt(x, y)) continue;
-      const n = hash2(x, y, L.seed), f = 0.9 + n * 0.2;
-      g.fillStyle = shade(FLOOR, f);
-      g.fillRect(x * TILE, y * TILE, TILE, TILE);
-      const room = L.tileRoom[y * L.w + x];
+      const room = L.tileRoom[y * L.w + x], mat = matOf(x, y);
+      paintFloorTile(g, mat, x, y, {seed: L.seed, accent: room >= 0 ? L.rooms[room].theme?.accent : null, wallN: wallAt(x, y - 1), wallS: wallAt(x, y + 1), wallE: wallAt(x + 1, y), wallW: wallAt(x - 1, y)});
+      (paths[mat] ||= []).push(x, y);
       if (room >= 0) { const [col, a] = roomTint(L.rooms[room], room); g.fillStyle = rgba(col, a); g.fillRect(x * TILE, y * TILE, TILE, TILE); }
     }
-    // grime over everything
-    g.beginPath();
-    for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) if (floorAt(x, y)) g.rect(x * TILE, y * TILE, TILE, TILE);
-    g.fillStyle = tint; g.fill();
-    g.globalAlpha = 0.3; g.fillStyle = this.pattern(g, 'grime2'); g.fill(); g.globalAlpha = 1;
+    // material overlays: grime everywhere, fibres on carpet, grit on dirt
+    const overlay = (mat, name, alpha) => {
+      const list = paths[mat]; if (!list || !alpha) return;
+      g.beginPath(); for (let i = 0; i < list.length; i += 2) g.rect(list[i] * TILE, list[i + 1] * TILE, TILE, TILE);
+      g.globalAlpha = alpha; g.fillStyle = this.pattern(g, name); g.fill(); g.globalAlpha = 1;
+    };
+    const GRIME = {concrete: 1, tile: 0.45, metal: 0.7, carpet: 0.35, grate: 0.4, wood: 0.6, dirt: 0.3, vault: 0.5, hazard: 0.9, corridor: 0.9};
+    for (const mat of Object.keys(paths)) overlay(mat, 'grime', GRIME[mat] ?? 0.8);
+    overlay('concrete', 'grime2', 0.3); overlay('hazard', 'grime2', 0.3); overlay('corridor', 'grime2', 0.25);
+    overlay('carpet', 'carpet', 0.7); overlay('dirt', 'dirt', 0.5);
     // clip following details to floor tiles
     g.save();
     g.beginPath();
@@ -152,62 +183,54 @@ export class WorldLayer {
     g.clip();
     for (const s of L.stains) {
       if (s.x + s.r < x0 || s.x - s.r > x0 + CW || s.y + s.r < y0 || s.y - s.r > y0 + CW) continue;
-      if (s.kind === 'oil') { blotch(g, s.x, s.y, s.r, '6,6,12', 0.36); blotch(g, s.x - s.r * 0.15, s.y - s.r * 0.15, s.r * 0.45, '80,90,130', 0.08); }
-      else if (s.kind === 'rust') blotch(g, s.x, s.y, s.r * 1.1, '120,62,30', 0.26);
-      else if (s.kind === 'damp') blotch(g, s.x, s.y, s.r * 1.3, '20,24,40', 0.18);
-      else blotch(g, s.x, s.y, s.r, '255,240,220', 0.07);
+      if (s.kind === 'oil') { blotch(g, s.x, s.y, s.r, '6,6,12', 0.3); blotch(g, s.x - s.r * 0.15, s.y - s.r * 0.15, s.r * 0.45, '80,90,130', 0.07); }
+      else if (s.kind === 'rust') blotch(g, s.x, s.y, s.r * 1.1, '120,62,30', 0.22);
+      else if (s.kind === 'damp') blotch(g, s.x, s.y, s.r * 1.3, '20,24,40', 0.15);
+      else blotch(g, s.x, s.y, s.r, '255,240,220', 0.06);
     }
-    // seams: faint grid + heavier slab joints
-    g.lineWidth = 0.8; g.strokeStyle = 'rgba(8,6,12,0.34)'; g.beginPath();
-    for (let y = ty0; y < ty1 + 1; y++) for (let x = tx0; x < tx1 + 1; x++) {
-      if (floorAt(x, y) && floorAt(x - 1, y) && x % 4 !== 0) { g.moveTo(x * TILE, y * TILE); g.lineTo(x * TILE, (y + 1) * TILE); }
-      if (floorAt(x, y) && floorAt(x, y - 1) && y % 4 !== 0) { g.moveTo(x * TILE, y * TILE); g.lineTo((x + 1) * TILE, y * TILE); }
-    }
-    g.stroke();
-    g.lineWidth = 1.4; g.strokeStyle = 'rgba(6,4,10,0.5)'; g.beginPath();
-    for (let y = ty0; y < ty1 + 1; y++) for (let x = tx0; x < tx1 + 1; x++) {
-      if (floorAt(x, y) && floorAt(x - 1, y) && x % 4 === 0) { g.moveTo(x * TILE, y * TILE); g.lineTo(x * TILE, (y + 1) * TILE); }
-      if (floorAt(x, y) && floorAt(x, y - 1) && y % 4 === 0) { g.moveTo(x * TILE, y * TILE); g.lineTo((x + 1) * TILE, y * TILE); }
-    }
-    g.stroke();
-    g.lineWidth = 0.8; g.strokeStyle = 'rgba(255,240,225,0.07)'; g.beginPath();
-    for (let y = ty0; y < ty1 + 1; y++) for (let x = tx0; x < tx1 + 1; x++) {
-      if (floorAt(x, y) && floorAt(x - 1, y)) { g.moveTo(x * TILE + 1, y * TILE); g.lineTo(x * TILE + 1, (y + 1) * TILE); }
-      if (floorAt(x, y) && floorAt(x, y - 1)) { g.moveTo(x * TILE, y * TILE + 1); g.lineTo((x + 1) * TILE, y * TILE + 1); }
-    }
-    g.stroke();
-    // cracks, drains, bolts
+    // cracks on the plainer floors
     g.lineCap = 'round'; g.lineJoin = 'round';
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
-      if (!floorAt(x, y)) continue;
+      if (L.kind[y * L.w + x] !== 0) continue;
+      const mat = matOf(x, y);
+      if (mat === 'grate' || mat === 'carpet' || mat === 'vault' || mat === 'tile') continue;
       const n = hash2(x, y, L.seed + 17);
-      if (n < 0.07) {
+      if (n < 0.05) {
         const r = seeded(Math.floor(n * 1e7)); let px = (x + r()) * TILE, py = (y + r()) * TILE, a = r() * TAU;
         g.strokeStyle = 'rgba(8,6,12,0.55)'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(px, py);
         for (let k = 0; k < 6; k++) { a += (r() - 0.5) * 1.2; px += Math.cos(a) * 6; py += Math.sin(a) * 6; g.lineTo(px, py); }
         g.stroke();
         g.strokeStyle = 'rgba(255,240,225,0.1)'; g.lineWidth = 0.6; g.stroke();
-      } else if (n > 0.985) {
-        const cx = (x + 0.5) * TILE, cy = (y + 0.5) * TILE;
-        g.fillStyle = '#17141c'; g.fillRect(cx - 8, cy - 8, 16, 16);
-        g.strokeStyle = '#4b4553'; g.lineWidth = 1; g.strokeRect(cx - 8, cy - 8, 16, 16);
-        g.strokeStyle = '#2a2631'; g.lineWidth = 1.2; g.beginPath(); for (let k = -5; k <= 5; k += 3.3) { g.moveTo(cx - 6, cy + k); g.lineTo(cx + 6, cy + k); } g.stroke();
       }
     }
-    for (const [index, room] of L.rooms.entries()) this.paintRoom(g, room, index, x0, y0);
+    for (const [index, room] of L.rooms.entries()) {
+      if (room.x2 * TILE + TILE < x0 - 40 || room.x1 * TILE > x0 + CW + 40 || room.y2 * TILE + TILE < y0 - 40 || room.y1 * TILE > y0 + CW + 40) continue;
+      for (const d of room.theme?.decor || []) {
+        if (d.kind === 'light') continue;
+        const px = d.x * TILE, py = d.y * TILE, reach = ((d.len || 0) + (d.w || 0)) * TILE + 40;
+        if (px + reach < x0 || px - 40 > x0 + CW || py + reach < y0 || py - 40 > y0 + CW) continue;
+        paintDecor(g, d, room.theme.accent, L.seed);
+      }
+      this.paintRoom(g, room, index, x0, y0);
+    }
     g.restore();
-    // ambient room lamp pools (additive)
+    // practical lamps and ambient room glow (additive)
     g.globalCompositeOperation = 'lighter';
     for (const [index, room] of L.rooms.entries()) {
+      const accent = room.theme?.accent || roomTint(room, index)[0];
+      for (const d of room.theme?.decor || []) {
+        if (d.kind !== 'light' || d.flicker || room.role === 'hazard') continue;
+        const px = d.x * TILE, py = d.y * TILE;
+        if (px + 90 < x0 || px - 90 > x0 + CW || py + 90 < y0 || py - 90 > y0 + CW) continue;
+        lampPool(g, px, py, 84, accent, 0.15 * (room.theme.lights?.intensity ?? 0.6) + 0.04);
+      }
       const cx = (room.cx + 0.5) * TILE, cy = (room.cy + 0.5) * TILE, r = Math.min(room.x2 - room.x1, room.y2 - room.y1) * TILE * 0.62 + 40;
       if (cx + r < x0 || cx - r > x0 + CW || cy + r < y0 || cy - r > y0 + CW) continue;
-      const [col] = roomTint(room, index);
       const grad = g.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, rgba(mix(col, '#ffe8c8', 0.5), 0.17)); grad.addColorStop(0.6, rgba(col, 0.05)); grad.addColorStop(1, rgba(col, 0));
+      grad.addColorStop(0, rgba(mix(accent, '#ffe8c8', 0.5), 0.1)); grad.addColorStop(0.6, rgba(accent, 0.03)); grad.addColorStop(1, rgba(accent, 0));
       g.fillStyle = grad; g.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
     g.globalCompositeOperation = 'source-over';
-    // clip lamp light to floor: cheap approach is to leave it; walls are drawn on top.
     chunk.floor = c;
   }
 
@@ -253,36 +276,55 @@ export class WorldLayer {
     }
   }
 
-  // ---- walls
+  // ---- walls, cover props and shadows
   bakeWalls(chunk) {
     const L = this.level, x0 = chunk.cx * CW, y0 = chunk.cy * CW;
     const tx0 = chunk.cx * CHUNK_TILES, ty0 = chunk.cy * CHUNK_TILES, tx1 = Math.min(L.w, tx0 + CHUNK_TILES), ty1 = Math.min(L.h, ty0 + CHUNK_TILES);
     const kindAt = (x, y) => x < 0 || y < 0 || x >= L.w || y >= L.h ? 2 : L.kind[y * L.w + x];
-    // include tiles up-left of the chunk, which can throw shadows into it
-    const sx0 = tx0 - 2, sy0 = ty0 - 2;
+    // cover tiles can throw shadows into this chunk from up-left
+    const sx0 = tx0 - 3, sy0 = ty0 - 3;
     if (!chunk.floor) return;
     const CS = this.cs, g = chunk.floor.getContext('2d');
     g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     const hasFilter = 'filter' in g;
-    // soft long shadow + contact occlusion on the floor
-    const hullPath = () => {
-      g.beginPath();
-      for (let y = sy0; y < ty1; y++) for (let x = sx0; x < tx1; x++) {
-        if (kindAt(x, y) !== 1) continue;
-        const a = x * TILE, b = y * TILE, w = TILE;
-        g.moveTo(a, b); g.lineTo(a + w, b); g.lineTo(a + w + SHADOW_DX, b + SHADOW_DY); g.lineTo(a + w + SHADOW_DX, b + w + SHADOW_DY); g.lineTo(a + SHADOW_DX, b + w + SHADOW_DY); g.lineTo(a, b + w); g.closePath();
+    // crisp directional cast shadows: one union hull per height, small blur, uniform alpha
+    const solids = [];
+    for (let y = sy0; y < ty1; y++) for (let x = sx0; x < tx1; x++) {
+      const k = kindAt(x, y);
+      if (k === 1) solids.push({x: x * TILE, y: y * TILE, w: TILE, h: TILE, len: WALL_SHADOW});
+      else if (k === 3) {
+        const c = L.cover.get(y * L.w + x);
+        const same = (dx, dy) => L.cover.get((y + dy) * L.w + x + dx)?.style === c.style;
+        let fx = x * TILE, fy = y * TILE, fw = TILE, fh = TILE;
+        if (c.style === 'sandbag' || c.style === 'jersey' || c.style === 'jersey-hazard' || c.style === 'partition') {
+          const vertical = (same(0, -1) || same(0, 1)) && !(same(1, 0) || same(-1, 0));
+          if (vertical) { fx += 7; fw = 18; } else { fy += 7; fh = 17; }
+        } else if (c.style === 'bed') { fx += 3; fw = 26; }
+        else if (c.style === 'rack') { fx += 2; fw = 28; }
+        solids.push({x: fx, y: fy, w: fw, h: fh, len: COVER_HEIGHT[shadowKey(c.style, c.kind)] || 12});
       }
-    };
-    if (hasFilter) {
-      g.filter = `blur(${11}px)`; g.fillStyle = 'rgba(4,3,8,0.5)'; hullPath(); g.fill();
-      g.filter = `blur(${15}px)`; g.fillStyle = 'rgba(4,3,8,0.32)';
-      g.beginPath(); for (let y = sy0; y < ty1; y++) for (let x = sx0; x < tx1; x++) if (kindAt(x, y) === 1) g.rect(x * TILE - 3, y * TILE - 3, TILE + 6, TILE + 6); g.fill();
-      g.filter = 'none';
-    } else {
-      g.fillStyle = 'rgba(4,3,8,0.1)';
-      for (let i = 0; i < 5; i++) { g.save(); g.translate(i * 1.5 - 3, i * 1.2 - 2); hullPath(); g.fill(); g.restore(); }
     }
-    // void
+    const lens = [...new Set(solids.map((s) => s.len))].sort((a, b) => b - a);
+    g.save();
+    g.beginPath(); for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) if (isOpen(kindAt(x, y))) g.rect(x * TILE, y * TILE, TILE, TILE); g.clip();
+    for (const len of lens) {
+      const dx = LIGHT.x * len, dy = LIGHT.y * len;
+      g.beginPath();
+      for (const s of solids) {
+        if (s.len !== len) continue;
+        const {x, y, w, h} = s;
+        g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w + dx, y + dy); g.lineTo(x + w + dx, y + h + dy); g.lineTo(x + dx, y + h + dy); g.lineTo(x, y + h); g.closePath();
+      }
+      if (hasFilter) g.filter = `blur(${1.1 * CS}px)`;
+      g.fillStyle = 'rgba(4,3,10,0.3)'; g.fill();
+    }
+    if (hasFilter) {
+      g.filter = `blur(${3.2 * CS}px)`; g.fillStyle = 'rgba(4,3,10,0.28)';
+      g.beginPath(); for (const s of solids) g.rect(s.x - 2, s.y - 2, s.w + 4, s.h + 5); g.fill();
+      g.filter = 'none';
+    }
+    g.restore();
+    // bedrock
     g.beginPath();
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) if (kindAt(x, y) === 2) g.rect(x * TILE, y * TILE, TILE, TILE);
     g.fillStyle = this.pattern(g, 'void'); g.fill();
@@ -300,28 +342,25 @@ export class WorldLayer {
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 1) continue;
       const a = x * TILE, b = y * TILE;
-      const fl = (dx, dy) => kindAt(x + dx, y + dy) === 0;
-      // edges that face void get darker
       const vd = (dx, dy) => kindAt(x + dx, y + dy) === 2;
       for (const [dx, dy, gx0, gy0, gx1, gy1] of [[1, 0, a + TILE, b, a + TILE - 12, b], [-1, 0, a, b, a + 12, b], [0, 1, a, b + TILE, a, b + TILE - 12], [0, -1, a, b, a, b + 12]]) {
         if (!vd(dx, dy)) continue;
         const grad = g.createLinearGradient(gx0, gy0, gx1, gy1); grad.addColorStop(0, 'rgba(6,4,12,0.55)'); grad.addColorStop(1, 'rgba(6,4,12,0)');
         g.fillStyle = grad; g.fillRect(a, b, TILE, TILE);
       }
-      void fl;
     }
     // lips (visible faces), highlights and ink
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 1) continue;
       const a = x * TILE, b = y * TILE;
-      if (kindAt(x, y + 1) === 0) {
+      if (isOpen(kindAt(x, y + 1))) {
         const grad = g.createLinearGradient(0, b + TILE - WALL_LIP - 3, 0, b + TILE);
         grad.addColorStop(0, 'rgba(18,13,26,0)'); grad.addColorStop(0.45, 'rgba(18,13,26,0.7)'); grad.addColorStop(1, '#1d1726');
         g.fillStyle = grad; g.fillRect(a, b + TILE - WALL_LIP - 3, TILE, WALL_LIP + 3);
         g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(a, b + TILE - WALL_LIP - 1, TILE, 0.8);
         if (hash2(x, y, 41) > 0.45) { g.fillStyle = 'rgba(210,190,150,0.42)'; for (let k = 6; k < TILE; k += 12) g.fillRect(a + k, b + TILE - 3.3, 1.3, 1.3); }
       }
-      if (kindAt(x + 1, y) === 0) {
+      if (isOpen(kindAt(x + 1, y))) {
         const grad = g.createLinearGradient(a + TILE - WALL_LIP_E - 3, 0, a + TILE, 0);
         grad.addColorStop(0, 'rgba(18,13,26,0)'); grad.addColorStop(1, 'rgba(18,13,26,0.85)');
         g.fillStyle = grad; g.fillRect(a + TILE - WALL_LIP_E - 3, b, WALL_LIP_E + 3, TILE);
@@ -332,18 +371,18 @@ export class WorldLayer {
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 1) continue;
       const a = x * TILE, b = y * TILE;
-      if (kindAt(x, y - 1) === 0) { g.moveTo(a, b + 1.2); g.lineTo(a + TILE, b + 1.2); }
-      if (kindAt(x - 1, y) === 0) { g.moveTo(a + 1.2, b); g.lineTo(a + 1.2, b + TILE); }
+      if (isOpen(kindAt(x, y - 1))) { g.moveTo(a, b + 1.2); g.lineTo(a + TILE, b + 1.2); }
+      if (isOpen(kindAt(x - 1, y))) { g.moveTo(a + 1.2, b); g.lineTo(a + 1.2, b + TILE); }
     }
     g.stroke();
     g.strokeStyle = 'rgba(16,12,22,0.95)'; g.lineWidth = 1.5; g.beginPath();
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 1) continue;
       const a = x * TILE, b = y * TILE;
-      if (kindAt(x, y - 1) === 0) { g.moveTo(a, b); g.lineTo(a + TILE, b); }
-      if (kindAt(x, y + 1) === 0) { g.moveTo(a, b + TILE); g.lineTo(a + TILE, b + TILE); }
-      if (kindAt(x - 1, y) === 0) { g.moveTo(a, b); g.lineTo(a, b + TILE); }
-      if (kindAt(x + 1, y) === 0) { g.moveTo(a + TILE, b); g.lineTo(a + TILE, b + TILE); }
+      if (isOpen(kindAt(x, y - 1))) { g.moveTo(a, b); g.lineTo(a + TILE, b); }
+      if (isOpen(kindAt(x, y + 1))) { g.moveTo(a, b + TILE); g.lineTo(a + TILE, b + TILE); }
+      if (isOpen(kindAt(x - 1, y))) { g.moveTo(a, b); g.lineTo(a, b + TILE); }
+      if (isOpen(kindAt(x + 1, y))) { g.moveTo(a + TILE, b); g.lineTo(a + TILE, b + TILE); }
     }
     g.stroke();
     // conduits and vents on the wall tops
@@ -359,8 +398,44 @@ export class WorldLayer {
         g.strokeStyle = '#100d16'; g.lineWidth = 1.3; g.beginPath(); for (let k = 11; k < 19; k += 2.6) { g.moveTo(a + 10, b + k); g.lineTo(a + 22, b + k); } g.stroke();
       }
     }
-    // door frames
+    // interior cover: props standing on the floor
+    for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
+      if (kindAt(x, y) !== 3) continue;
+      const c = L.cover.get(y * L.w + x), room = L.rooms[c.room];
+      const same = (dx, dy) => L.cover.get((y + dy) * L.w + x + dx)?.style === c.style;
+      paintCover(g, {tx: x, ty: y, kind: c.kind, style: c.style, accent: room.theme?.accent || '#eaaa66', room, seed: L.seed, j: {n: same(0, -1), s: same(0, 1), e: same(1, 0), w: same(-1, 0)}});
+    }
+    // doorway frames: threshold plates and jambs at every opening of every room
+    for (const room of L.rooms) {
+      for (const o of room.openings || []) {
+        if (o.x < tx0 - 1 || o.x > tx1 || o.y < ty0 - 1 || o.y > ty1) continue;
+        this.paintOpening(g, o, room.theme?.accent || '#eaaa66', kindAt);
+      }
+    }
     for (const door of L.doors) this.paintDoor(g, door, x0, y0);
+  }
+
+  paintOpening(g, o, accent, kindAt) {
+    const X = o.x * TILE, Y = o.y * TILE, side = o.side;
+    g.save(); g.beginPath(); g.rect(X, Y, TILE, TILE); g.clip();
+    const horiz = side === 'n' || side === 's', th = 5;
+    const px = side === 'w' ? X : side === 'e' ? X + TILE - th : X, py = side === 'n' ? Y : side === 's' ? Y + TILE - th : Y;
+    const w = horiz ? TILE : th, h = horiz ? th : TILE;
+    g.fillStyle = '#17141d'; g.fillRect(px, py, w, h);
+    g.fillStyle = rgba(accent, 0.55); if (horiz) g.fillRect(px, py + (side === 'n' ? th - 1.6 : 0), TILE, 1.6); else g.fillRect(px + (side === 'w' ? th - 1.6 : 0), py, 1.6, TILE);
+    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 0.8; g.strokeRect(px + 0.4, py + 0.4, w - 0.8, h - 0.8);
+    const jamb = (jx, jy, jw, jh) => { g.fillStyle = '#58505f'; g.fillRect(jx, jy, jw, jh); g.strokeStyle = INK; g.lineWidth = 0.9; g.strokeRect(jx, jy, jw, jh); g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(jx, jy, jw, 1); };
+    const solid = (x, y) => kindAt(x, y) === 1;
+    if (horiz) {
+      const jy = side === 'n' ? Y : Y + TILE - 6;
+      if (solid(o.x - 1, o.y)) jamb(X, jy, 4, 6);
+      if (solid(o.x + 1, o.y)) jamb(X + TILE - 4, jy, 4, 6);
+    } else {
+      const jx = side === 'w' ? X : X + TILE - 6;
+      if (solid(o.x, o.y - 1)) jamb(jx, Y, 6, 4);
+      if (solid(o.x, o.y + 1)) jamb(jx, Y + TILE - 4, 6, 4);
+    }
+    g.restore();
   }
 
   paintDoor(g, door, x0, y0) {
@@ -380,6 +455,58 @@ export class WorldLayer {
     }
     g.strokeStyle = 'rgba(90,70,52,0.9)'; g.lineWidth = 2; g.beginPath(); g.moveTo(-TILE + 3, -1); g.lineTo(TILE - 3, -1); g.stroke();
     g.restore();
+  }
+
+  // Cheap animated extras drawn each frame on top of the baked floor: blinking server LEDs, flickering lamps, beacons.
+  drawLive(ctx, cam, bounds, dpr, t) {
+    const L = this.level;
+    if (!L) return;
+    const s = cam.scale * dpr, ox = cam.w / 2 * dpr - cam.x * s, oy = cam.h / 2 * dpr - cam.y * s;
+    const inB = (x, y, r) => x + r > bounds.x0 && x - r < bounds.x1 && y + r > bounds.y0 && y - r < bounds.y1;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'lighter';
+    const glow = this.glowSprite || (this.glowSprite = new Map());
+    const sprite = (col) => {
+      let c = glow.get(col);
+      if (!c) { c = makeCanvas(64, 64); const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, rgba(mix(col, '#ffffff', 0.35), 1)); gr.addColorStop(0.45, rgba(col, 0.32)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); glow.set(col, c); }
+      return c;
+    };
+    for (const l of L.live.lamps) {
+      if (!inB(l.x, l.y, l.r)) continue;
+      const v = l.mode === 'pulse' ? 0.35 + 0.65 * Math.max(0, Math.sin(t * 3.2 + l.ph)) ** 2 : (Math.sin(t * 23 + l.ph) * Math.sin(t * 7.3 + l.ph * 2) > 0.62 ? 0.25 : 1) * (0.85 + 0.15 * Math.sin(t * 11 + l.ph));
+      ctx.globalAlpha = Math.min(1, l.a * v * 3.2);
+      const r = l.r * s; ctx.drawImage(sprite(l.col), l.x * s + ox - r, l.y * s + oy - r, r * 2, r * 2);
+    }
+    for (const b of L.live.beacons) {
+      if (!inB(b.x, b.y, 40)) continue;
+      const v = Math.max(0, Math.sin(t * 4 + b.ph)); ctx.globalAlpha = 0.25 + 0.75 * v;
+      const r = 22 * s; ctx.drawImage(sprite('#ff3a2a'), b.x * s + ox - r, b.y * s + oy - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1;
+    const byCol = {};
+    for (const l of L.live.leds) {
+      if (!inB(l.x, l.y, 4)) continue;
+      const ph = t * l.rate + l.ph, on = ph % 1 < 0.55 ? 1 : 0.12, k = on * (0.55 + 0.45 * Math.sin(ph * 6.3));
+      if (k < 0.08) continue;
+      (byCol[l.col] ||= []).push(l.x, l.y, k);
+    }
+    for (const col in byCol) {
+      const a = byCol[col];
+      for (let i = 0; i < a.length; i += 3) {
+        ctx.fillStyle = `rgba(${col},${Math.min(1, a[i + 2] + 0.2).toFixed(2)})`;
+        ctx.fillRect(a[i] * s + ox - 0.4 * s, a[i + 1] * s + oy - 0.4 * s, 2.2 * s, 1.7 * s);
+        ctx.fillStyle = `rgba(${col},${(a[i + 2] * 0.16).toFixed(3)})`;
+        ctx.fillRect(a[i] * s + ox - 2 * s, a[i + 1] * s + oy - 2 * s, 6 * s, 5.5 * s);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Lamps in the room the player stands in carve a little light out of the darkness layer.
+  lights(bounds, room) {
+    const L = this.level, out = [];
+    if (!L || room < 0) return out;
+    for (const l of L.live.lamps) if (l.room === room && l.x > bounds.x0 - 100 && l.x < bounds.x1 + 100 && l.y > bounds.y0 - 100 && l.y < bounds.y1 + 100) out.push({x: l.x, y: l.y, r: l.r * 0.8, a: 0.22});
+    return out;
   }
 
   // ---- decals
@@ -428,7 +555,12 @@ export class WorldLayer {
       if (!img) { covered = false; continue; }
       draws.push([img, Math.round(ox + cx * CW * s), Math.round(oy + cy * CW * s), Math.round(ox + (cx + 1) * CW * s), Math.round(oy + (cy + 1) * CW * s)]);
     }
-    if (!covered) { ctx.fillStyle = '#0b0a10'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); }
+    if (!covered) { // outside the dungeon (and chunks without content): solid bedrock instead of flat black
+      const p = this.pattern(ctx, 'void'), k = s / this.cs;
+      p.setTransform(new DOMMatrix([k, 0, 0, k, ox, oy]));
+      ctx.imageSmoothingEnabled = true; ctx.fillStyle = p; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.imageSmoothingEnabled = Math.abs(s - this.cs) > 0.02;
+    }
     for (const [img, l, t, r, b] of draws) ctx.drawImage(img, 0, 0, img.width, img.height, l, t, r - l, b - t);
     ctx.imageSmoothingEnabled = true;
     ctx.restore();

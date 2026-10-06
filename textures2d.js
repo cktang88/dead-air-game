@@ -131,11 +131,11 @@ export function dirtTile(size = 128, seed = 8) {
   const area = size * size / 10000;
   for (let i = 0; i < 12 * area; i++) {
     const r = 6 + rnd() * 22, light = rnd() < 0.5;
-    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, light ? '230,200,150' : '20,12,6', light ? 0.08 : 0.12));
+    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, light ? '230,200,150' : '20,12,6', light ? 0.08 : 0.07));
   }
   for (let i = 0; i < 60 * area; i++) {
     const x = rnd() * size, y = rnd() * size, r = 0.8 + rnd() * 2.2, light = rnd() < 0.45;
-    g.fillStyle = light ? 'rgba(240,215,170,0.35)' : 'rgba(18,10,6,0.45)';
+    g.fillStyle = light ? 'rgba(240,215,170,0.35)' : 'rgba(18,10,6,0.3)';
     g.beginPath(); g.ellipse(x, y, r, r * 0.7, rnd() * 3, 0, 6.3); g.fill();
     if (!light) { g.fillStyle = 'rgba(240,215,170,0.18)'; g.fillRect(x - r * 0.5, y - r * 0.9, r, 0.7); }
   }

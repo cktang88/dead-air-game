@@ -749,6 +749,7 @@ export function createRenderer(container, state) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     world.draw(ctx, viewCam, b, dpr);
+    world.drawLive(ctx, viewCam, b, dpr, now);
     world.idleBake(p.x, p.y, 4);
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
@@ -770,7 +771,7 @@ export function createRenderer(container, state) {
 
     // darkness + light pools
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList(), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
+    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList().concat(world.lights(b, state.currentRoom)), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
 

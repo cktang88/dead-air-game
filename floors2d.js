@@ -5,8 +5,8 @@ import {INK, hash2, mix, rgba, seeded, shade} from './sprites2d.js';
 
 // base colour per material; the room accent is mixed in a little so every room has its own hue
 export const FLOOR_BASE = {
-  concrete: '#6c6b70', tile: '#8d949b', metal: '#4f5560', carpet: '#4a4d66', grate: '#2b3037',
-  wood: '#7b5c41', dirt: '#6d5d48', vault: '#3f3c46', hazard: '#524a50', corridor: '#4d525b',
+  concrete: '#76757b', tile: '#aab2ba', metal: '#59606c', carpet: '#666a8c', grate: '#343a43',
+  wood: '#8a6a4b', dirt: '#9a8468', vault: '#4a4752', hazard: '#5c535a', corridor: '#575c66',
 };
 const ACCENT_MIX = {concrete: 0.07, tile: 0.1, metal: 0.08, carpet: 0.28, grate: 0.0, wood: 0.05, dirt: 0.04, vault: 0.05, hazard: 0.1, corridor: 0};
 
@@ -26,10 +26,10 @@ export function paintFloorTile(g, mat, tx, ty, o) {
       // 2x2 sub tiles with grout
       g.fillStyle = shade(base, light ? 0.9 : 1.0);
       g.fillRect(X + TILE / 2, Y, TILE / 2, TILE / 2); g.fillRect(X, Y + TILE / 2, TILE / 2, TILE / 2);
-      g.strokeStyle = 'rgba(30,40,46,0.55)'; g.lineWidth = 1; g.beginPath();
+      g.strokeStyle = 'rgba(30,40,46,0.3)'; g.lineWidth = 1; g.beginPath();
       g.moveTo(X + TILE / 2, Y); g.lineTo(X + TILE / 2, Y + TILE); g.moveTo(X, Y + TILE / 2); g.lineTo(X + TILE, Y + TILE / 2);
       g.stroke();
-      g.strokeStyle = 'rgba(20,28,34,0.7)'; g.lineWidth = 1.4; g.strokeRect(X + 0.7, Y + 0.7, TILE - 1.4, TILE - 1.4);
+      g.strokeStyle = 'rgba(20,28,34,0.42)'; g.lineWidth = 1.2; g.strokeRect(X + 0.7, Y + 0.7, TILE - 1.4, TILE - 1.4);
       g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1; g.beginPath(); g.moveTo(X + 2, Y + 2); g.lineTo(X + TILE - 2, Y + 2); g.moveTo(X + 2, Y + 2); g.lineTo(X + 2, Y + TILE - 2); g.stroke();
       if (n > 0.8) { // gloss streak
         const gr = g.createLinearGradient(X, Y, X + TILE, Y + TILE);

@@ -121,7 +121,7 @@ export class Lighting {
     // outside the map is solid dark
     // outside the map is solid dark
     g.globalCompositeOperation = 'source-over';
-    g.fillStyle = 'rgba(6,4,14,0.95)';
+    g.fillStyle = 'rgba(6,4,14,0.86)';
     const mx0 = ox, my0 = oy, mx1 = ox + L.w * TILE * ls, my1 = oy + L.h * TILE * ls;
     if (my0 > 0) g.fillRect(0, 0, lw, my0);
     if (my1 < lh) g.fillRect(0, my1, lw, lh - my1);
