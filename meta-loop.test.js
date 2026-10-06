@@ -116,7 +116,7 @@ test('tradeoff upgrades are locked until a goal grants them', () => {
   const unlocked = purchaseUpgrade(grantUnlock(rich, 'upg:adrenal'), 'adrenal');
   assert.equal(unlocked.purchased, true);
   const stats = progressionStats(unlocked.progress);
-  assert.equal(stats.maxHealth, 4);
+  assert.equal(stats.maxHealth, 2);
   assert.ok(Math.abs(stats.damageMult - 1.2) < 1e-9);
 });
 

@@ -7,7 +7,7 @@
 
 export const BOSS = {
   name: 'THE CONDUCTOR',
-  maxHp: 1100,
+  maxHp: 700,
   radius: 20,
   phaseThresholds: [.66, .33],
   contactDamage: 2,
@@ -15,7 +15,7 @@ export const BOSS = {
   chargeSpeed: 300,
   chargeTime: .85,
   exposedTime: 1.5,
-  exposedDamageMult: 1.5,
+  exposedDamageMult: 2,
   maxAdds: 4,
 };
 

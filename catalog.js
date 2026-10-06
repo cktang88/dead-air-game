@@ -41,7 +41,7 @@ export const GUNS = [
     feel:{moveMul:1,moveAdd:0,perShot:.09,firstMul:.5,kick:.5,shake:1.9,nudge:12}, sound:{crack:3100,body:230,bodyDur:.06,tail:.22,vol:.9} },
   { id:'smg_burst', name:'KITE BURST', verb:'BURST', short:'BURST · THREE-ROUND, PRECISE', category:'SMG', damage:21, rate:.31, speed:760, range:310, mag:24, reserve:96, spread:.032, burst:{shots:3,interval:.075}, reload:1.8, swap:.3, color:0xffdf83, ammo:'9mm', visual:{length:26,width:5,art:'BURST'},
     feel:{perShot:.2,kick:.5,shake:2.0,nudge:12}, sound:{crack:4100,body:420,bodyDur:.035,tail:.08,vol:.75,rattle:false} },
-  { id:'pistol_45', name:'TALON .45', verb:'PUNCH', short:'PUNCH · STAGGERS TARGETS', category:'PISTOL', damage:52, rate:.48, speed:750, range:330, mag:7, reserve:35, spread:.035, reload:1.55, stun:.45, swap:.25, color:0xffb987, ammo:'.45', visual:{length:20,width:5,art:'PISTOL'},
+  { id:'pistol_45', name:'TALON .45', verb:'PUNCH', short:'PUNCH · STAGGERS TARGETS', category:'PISTOL', damage:40, rate:.48, speed:750, range:330, mag:7, reserve:35, spread:.035, reload:1.55, stun:.45, swap:.25, color:0xffb987, ammo:'.45', visual:{length:20,width:5,art:'PISTOL'},
     feel:{kick:.9,shake:3.0,nudge:30}, sound:{crack:2400,body:230,bodyDur:.1,tail:.24,vol:1.0} },
   { id:'sniper_lynx', name:'LYNX MARKSMAN', verb:'PIERCE', short:'PIERCE · THROUGH ENEMIES', category:'SNIPER', penetration:{enemies:4,crates:3,walls:0}, damage:78, rate:.78, speed:1120, range:760, mag:6, reserve:30, spread:.006, reload:2.2, swap:.5, noise:1.1, color:0x8bc8ff, ammo:'7.62mm', visual:{length:43,width:6,art:'SNIPER'},
     feel:{kick:1.0,shake:3.2,nudge:55} },
@@ -71,15 +71,15 @@ export const BASE_GUN_IDS = GUNS.filter(gun => !gun.variantOf).map(gun => gun.id
 // One plate is all the "gear" left: a rare drop that soaks damage before health. (Weight, harness and scanner
 // were bookkeeping and are gone; the two-gun limit is the real constraint.)
 export const GEAR = [
-  {id:'armor',name:'ARMOR PLATE',description:'Absorbs 2 damage before health',armorDurability:2},
+  {id:'armor',name:'ARMOR PLATE',description:'Absorbs one hit before health',armorDurability:1},
 ];
 
 export const ENEMY_TYPES = {
-  chaser:{name:'RUSHER', color:0xe95563, hp:42, speed:72, damage:1, range:19, brain:'rush'},
-  gunner:{name:'GUNNER', color:0xe9a45a, hp:52, speed:40, damage:1, minRange:105, range:300, projectileSpeed:190, brain:'shoot'},
-  brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush'},
-  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:36, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
-  riot:{name:'RIOT', color:0x8aa0b4, hp:78, speed:30, damage:1, range:23, brain:'rush', shield:true, shieldHalfArc:1.15},
-  boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:1100, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
-  guard:{name:'WARDEN', color:0x58aeca, hp:65, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
+  chaser:{name:'RUSHER', color:0xe95563, hp:30, speed:72, damage:1, range:26, brain:'rush', melee:{windup:.48, lunge:true}},
+  gunner:{name:'GUNNER', color:0xe9a45a, hp:40, speed:40, damage:1, minRange:105, range:300, projectileSpeed:190, brain:'shoot'},
+  brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush', melee:{windup:.48}},
+  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:30, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
+  riot:{name:'RIOT', color:0x8aa0b4, hp:70, speed:30, damage:1, range:26, brain:'rush', melee:{windup:.48, lunge:true}, shield:true, shieldHalfArc:1.15},
+  boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:700, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
+  guard:{name:'WARDEN', color:0x58aeca, hp:60, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
 };

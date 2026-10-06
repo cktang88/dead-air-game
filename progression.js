@@ -112,7 +112,7 @@ export function progressionStats(progress) {
   return {
     moveSpeed:112*(1+.06*runner-.06*stockpile),
     idleScale:Math.max(.03,.08-.01*stillmind),
-    maxHealth:Math.max(1,5+vitalreserve-adrenal),
+    maxHealth:Math.max(1,3+vitalreserve-adrenal),
     maxWeaponSlots:thirdslot>=1?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
     roomClearScrap:20+2*salvager,

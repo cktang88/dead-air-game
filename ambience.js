@@ -142,6 +142,7 @@ function startChatter(id,pan,vol){
 }
 
 /** Cut an enemy's radio with a squelch (call when it dies). */
+export function ambienceChatter(id,pan=0,vol=.14){if(A&&A.ctx&&!A.chat.has(id))startChatter(id,pan,vol);}
 export function ambienceCutChatter(id){
   if(!A)return;
   const v=A.chat.get(id);if(!v)return;

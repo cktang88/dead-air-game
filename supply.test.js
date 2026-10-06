@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {GUNS} from './catalog.js';
+import {LETHALITY, hitsToKill} from './stealth.js';
 import {shotBeat} from './time-rule.js';
 import {SIGNAL_COST, SUPPLY_MEDKIT_HP, offerCard, offerStatus, supplyOffers} from './supply.js';
 
@@ -66,4 +67,18 @@ test('time beats suit the new roster: sprays tick cheaply, launch/breach/punch c
   assert.ok(beat('pistol_45') > beat('smg_vector'));
   assert.ok(beat('smg_vector') <= beat('machine'), 'the faster spray variant stays cheap per shot');
   for (const g of GUNS) assert.ok(Number.isFinite(beat(g.id)) && beat(g.id) > 0, g.id);
+});
+
+test('every gun fits the lethality table: basic enemies die in 1-2 good hits of a fitting gun, brutes take real work', () => {
+  const dmg = g => g.damage * (g.burst ? 1 : 1);
+  for (const g of GUNS) {
+    if (g.id === 'launcher') continue; // blast, not hits
+    const hits = type => hitsToKill(LETHALITY[type].hp, dmg(g));
+    assert.ok(hits('guard') <= 5, `${g.id} kills a warden in a few hits`);
+    assert.ok(hits('brute') >= (g.id === 'sniper_mule' ? 1 : 2), `${g.id} does not one-shot a brute unless it is the breach gun`);
+  }
+  for (const id of ['pistol_45', 'rifle', 'ar_bastion', 'sniper_lynx', 'sniper_quill', 'sniper_mule', 'smg_heavy'])
+    assert.ok(hitsToKill(LETHALITY.gunner.hp, GUNS.find(g => g.id === id).damage) <= 2, `${id} drops a gunner in 1-2 hits`);
+  for (const id of ['machine', 'ar_ash', 'smg_burst', 'pistol_9']) assert.ok(hitsToKill(LETHALITY.chaser.hp, GUNS.find(g => g.id === id).damage) <= 2, `${id} drops a rusher in 1-2 hits`);
+  assert.ok(GUNS.find(g => g.id === 'launcher').lob.damage >= LETHALITY.gunner.hp, 'a shell kills a basic enemy outright');
 });

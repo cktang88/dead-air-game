@@ -181,7 +181,7 @@ export const ENEMY_KNOCK_DECAY = 7; // 1/s
 // Freeze-frame length (seconds, real time). Tiny on ordinary hits, longer on kills / heavy rounds.
 export function hitstopFor({ kill = false, damage = 0 } = {}) {
   const weight = clamp(damage / 80, 0, 1);
-  return kill ? 0.04 + 0.05 * weight : 0.008 + 0.012 * weight;
+  return kill ? 0.065 + 0.045 * weight : 0.012 + 0.014 * weight;
 }
 
 /* -------------------------------------------------------------------- reload */

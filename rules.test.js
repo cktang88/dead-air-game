@@ -81,7 +81,7 @@ test('a mod the gun cannot take is ignored everywhere',()=>{
 });
 test('armor durability absorbs incoming damage separately from health',()=>{
   const armor=GEAR.find(item=>item.id==='armor');
-  assert.equal(armor.armorDurability,2);assert.equal(armor.weight,undefined,'no carry weight');assert.equal(GEAR.length,1);
+  assert.equal(armor.armorDurability,1);assert.equal(armor.weight,undefined,'no carry weight');assert.equal(GEAR.length,1);
   assert.deepEqual(absorbArmorDamage(2,1),{armor:1,healthDamage:0,absorbed:1});
   assert.deepEqual(absorbArmorDamage(1,3),{armor:0,healthDamage:2,absorbed:1});
   assert.deepEqual(absorbArmorDamage(0,1),{armor:0,healthDamage:1,absorbed:0});
@@ -294,18 +294,18 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:5,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:3,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,thirdslot:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.thirdslot,1);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:5,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,thirdslot:0}}).maxWeaponSlots,2);
 });
 
 test('Vital Reserve raises saved starting health by one per capped tier',()=>{
   let progress=awardCoins(emptyProgress(),1000);
-  for(const maxHealth of [6,7,8]){
+  for(const maxHealth of [4,5,6]){
     const purchase=purchaseUpgrade(progress,'vitalreserve');
     assert.equal(purchase.purchased,true);
     progress=purchase.progress;
@@ -314,8 +314,8 @@ test('Vital Reserve raises saved starting health by one per capped tier',()=>{
   assert.equal(purchaseUpgrade(progress,'vitalreserve').purchased,false);
   const restored=parseProgress(JSON.stringify(progress));
   assert.equal(restored.upgrades.vitalreserve,3);
-  assert.equal(progressionStats(restored).maxHealth,8);
-  assert.equal(progressionStats(parseProgress(JSON.stringify({version:1,coins:12,upgrades:{runner:1}}))).maxHealth,5);
+  assert.equal(progressionStats(restored).maxHealth,6);
+  assert.equal(progressionStats(parseProgress(JSON.stringify({version:1,coins:12,upgrades:{runner:1}}))).maxHealth,3);
 });
 
 test('Lucky Find is saved and adds capped rarity levels without changing item quantity',()=>{

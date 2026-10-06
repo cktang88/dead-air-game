@@ -21,6 +21,7 @@
 
 import {createNav} from './enemy-nav.js';
 import {incomingThreats} from './enemy-tactics.js';
+import {DODGERS, SUSPICION, hearingReach, inCone, shouldDodge, stepSuspicion, turnFacing, visionFor} from './stealth.js';
 
 export {createNav};
 
@@ -40,7 +41,7 @@ export const PROFILES = {
   riot: {dodge: 0.02, react: [0.3, 0.5], alertRadius: 240},
   brute: {dodge: 0.08, react: [0.3, 0.55], alertRadius: 220, chargeWindup: 0.55, chargeTime: 0.7, chargeSpeed: 2.3, chargeCooldown: [2.2, 3.4], recover: 0.9},
 };
-const SIGHT_RANGE = 440;
+const SIGHT_RANGE = 440;   // aware enemies see 360 degrees out to this range; UNAWARE ones only see their cone (stealth.js)
 const FORGET_AFTER = 14;
 const ENGAGED_MEMORY = 5;
 
@@ -80,9 +81,10 @@ export function brainState(e, rng = Math.random) {
     windup: 0, windupTotal: 0, aim: {x: 1, y: 0}, cd: between(rng, 0.4, 1.4), sinceFire: 9, sinceStart: 9, shotsLeft: 0,
     strafeDir: rng() < 0.5 ? -1 : 1, strafeT: 0, dodgeT: 0, dodgeCd: 0, dodge: null, dodgeSeen: new WeakSet(),
     path: null, pathT: 0, pathGoal: null, pathVer: -1, stuck: 0, nudge: null, prevX: e.x, prevY: e.y,
-    face: {x: 1, y: 0}, search: null, flank: null, flankT: 0,
+    face: {x: e.face?.x ?? 1, y: e.face?.y ?? 0}, search: null, flank: null, flankT: 0,
     zigT: 0, zigDir: rng() < 0.5 ? -1 : 1, zigPhase: rng() * TAU, circleDir: rng() < 0.5 ? -1 : 1, circleT: 0,
     ambush: 0, ambushUsed: false, brute: {phase: 'advance', t: 0, cd: between(rng, 0.5, 1.5), dir: null},
+    suspicion: 0, inView: false, spotted: false, pat: null, dodging: false,
     prof,
   };
   return e.ai;
@@ -106,6 +108,7 @@ function alertMates(c, at, delay) {
     const oa = brainState(o, rng);
     if (oa.aware || oa.pending) continue;
     oa.pending = {x: at.x, y: at.y, t: delay + between(rng, 0.05, 0.3) + dist(e, o) / 900};
+    world.alerts?.push({from: e, to: o});   // the renderer draws a radio pulse from the alerter to each mate it wakes
   }
 }
 
@@ -117,10 +120,22 @@ function perceive(c) {
   const {e, ai, world, dt, rng, p} = c;
   const d = dist(e, p);
   const wasAware = ai.aware;
-  const sees = d <= (e.def.sightRange ?? SIGHT_RANGE) && clearLine(world, e, p);
+  const stealthy = e.posture !== undefined;   // enemies spawned without a posture (tests, boss adds) keep legacy 360 sight
+  const asleep = stealthy && e.posture === 'sleep' && !ai.aware;
+  let sees;
+  if (ai.aware || !stealthy) sees = d <= (e.def.sightRange ?? SIGHT_RANGE) && clearLine(world, e, p);
+  else {
+    // UNAWARE: a vision cone, filled by suspicion instead of an instant spot. Sleepers only notice you underfoot.
+    const vis = visionFor(e.type, e.def);
+    const inView = asleep ? d < 26 : (d <= SUSPICION.close || inCone(e, ai.face, vis.half, vis.range, p, 6));
+    sees = false;
+    ai.inView = inView && d <= vis.range && clearLine(world, e, p);
+    ai.suspicion = stepSuspicion(ai.suspicion, {inView: ai.inView, d, range: vis.range, speed: Math.hypot(p.vx ?? 0, p.vy ?? 0), dt});
+    if (ai.suspicion >= SUSPICION.alertAt) { sees = true; ai.spotted = true; }
+  }
   ai.sees = sees;
   if (sees) {
-    if (!ai.aware) { ai.aware = true; ai.reaction = between(rng, ...ai.prof.react); alertMates(c, p, 0.2); }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react); alertMates(c, p, 0.2); if (e.posture === 'sleep') e.posture = 'guard'; }
     learn(ai, p);
     ai.lost = 0; ai.peekMiss = 0; ai.lockTime += dt;
   } else {
@@ -129,15 +144,15 @@ function perceive(c) {
     if (ai.last) ai.last.age += dt;
   }
   for (const n of world.noises ?? []) {
-    const reach = world.los(e.x, e.y, n.x, n.y) ? n.radius : n.radius * 0.55;
+    const reach = hearingReach({radius: n.radius, blocked: !world.los(e.x, e.y, n.x, n.y), asleep});
     if (dist(e, n) > reach) continue;
     const guess = {x: n.x + gaussian(rng) * 28, y: n.y + gaussian(rng) * 28};
-    if (!ai.aware) { ai.aware = true; ai.reaction = between(rng, 0.12, 0.3); learn(ai, guess, false); alertMates(c, guess, 0.15); }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.heard = true; ai.reaction = between(rng, 0.12, 0.3); learn(ai, guess, false); alertMates(c, guess, 0.15); if (e.posture === 'sleep') e.posture = 'guard'; }
     else if (!sees) { learn(ai, guess, false); ai.lost = Math.min(ai.lost, 2); }
   }
   if (e.hp < ai.hpPrev - 1e-9 && !sees) {
     const guess = {x: p.x + gaussian(rng) * 40, y: p.y + gaussian(rng) * 40};
-    if (!ai.aware) { ai.aware = true; ai.reaction = 0.12; }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = 0.12; if (e.posture === 'sleep') e.posture = 'guard'; }
     learn(ai, guess, false); ai.lost = Math.min(ai.lost, 1);
   }
   ai.hpPrev = e.hp;
@@ -145,10 +160,10 @@ function perceive(c) {
     ai.pending.t -= dt;
     if (ai.pending.t <= 0) {
       const pend = ai.pending; ai.pending = null;
-      if (!ai.aware) { ai.aware = true; ai.reaction = between(rng, ...ai.prof.react) * 0.6; learn(ai, pend, false); ai.lost = 1; }
+      if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react) * 0.6; learn(ai, pend, false); ai.lost = 1; if (e.posture === 'sleep') e.posture = 'guard'; }
     }
   }
-  if (ai.aware && ai.lost > FORGET_AFTER) { ai.aware = false; ai.last = null; ai.search = null; ai.cover = null; }
+  if (ai.aware && ai.lost > FORGET_AFTER) { ai.aware = false; ai.suspicion = 0.45; ai.spotted = false; ai.last = null; ai.search = null; ai.cover = null; }
   return wasAware;
 }
 
@@ -608,33 +623,75 @@ function bruteStep(c) {
 
 // ---- reactions --------------------------------------------------------------------------------
 
+// Deterministic sidestep (stealth.js shouldDodge): only an aware enemy that is facing the shot, is not winding up,
+// stunned or still reacting, and had time to see it coming. Same shot, same answer; every dodge has a cooldown
+// the player can bait. The sidestep is fast and visible (see stealth2d.js afterimage).
 function tryDodge(c) {
-  const {e, ai, world, rng, dt, out} = c;
+  const {e, ai, world, out} = c;
   if (ai.dodgeT > 0) {
-    out.intent = 'dodge';
-    out.moveX = ai.dodge.x * 1.7; out.moveY = ai.dodge.y * 1.7; out.speed = 1.7;
+    out.intent = 'dodge'; ai.dodging = true;
+    out.moveX = ai.dodge.x * 2; out.moveY = ai.dodge.y * 2; out.speed = 2;
     return true;
   }
-  if (ai.dodgeCd > 0 || !world.projectiles?.length) return false;
+  ai.dodging = false;
+  if (ai.dodgeCd > 0 || !world.projectiles?.length || !DODGERS[e.type]) return false;
   const actor = {x: e.x, y: e.y, radius: e.radius};
   const threats = incomingThreats(actor, world.projectiles);
-  for (const {shot} of threats) {
-    if (ai.dodgeSeen.has(shot)) continue;
-    ai.dodgeSeen.add(shot);
-    if (rng() > ai.prof.dodge * (ai.reaction > 0 ? 0.5 : 1)) continue;
+  for (const {shot, time} of threats) {
+    if (!shouldDodge({type: e.type, aware: ai.aware, sees: ai.sees, facing: ai.face, shotDir: {x: shot.vx, y: shot.vy},
+      windup: ai.windup, stun: e.stun ?? 0, reaction: ai.reaction, cooldown: ai.dodgeCd, timeToImpact: time})) continue;
     const speed = Math.hypot(shot.vx, shot.vy) || 1;
-    const sign = rng() < 0.5 ? 1 : -1;
+    // step to the side the enemy is already leaning toward (strafe direction), else the open one
+    const sign = ai.strafeDir;
     for (const s of [sign, -sign]) {
       const dir = {x: -shot.vy / speed * s, y: shot.vx / speed * s};
       if (!world.nav || world.nav.walkable(e, {x: e.x + dir.x * 40, y: e.y + dir.y * 40}, bodyRadius(e))) {
-        ai.dodge = dir; ai.dodgeT = 0.26; ai.dodgeCd = 0.75;
-        out.intent = 'dodge'; out.moveX = dir.x * 1.7; out.moveY = dir.y * 1.7; out.speed = 1.7;
-        // A committed telegraph can be abandoned only early on.
+        ai.dodge = dir; ai.dodgeT = 0.3; ai.dodgeCd = DODGERS[e.type].cooldown; ai.dodging = true;
+        out.intent = 'dodge'; out.moveX = dir.x * 2; out.moveY = dir.y * 2; out.speed = 2;
         return true;
       }
     }
   }
   return false;
+}
+
+// ---- unaware postures ---------------------------------------------------------------------------
+// Unaware enemies stand in one of four readable postures (stealth.js POSTURES), set at spawn by game.js:
+//   patrol  walks a loop of waypoints (e.post.route), pausing to look around
+//   guard   holds e.post.home facing e.post.base, sweeping its cone slowly
+//   gather  like guard but facing its group's focus point (faces mates, cones overlap the table)
+//   sleep   no cone, no movement; wakes on noise, damage or being stepped on
+function unawareStep(c) {
+  const {e, ai, dt, out} = c;
+  const post = e.post ??= {home: {x: e.x, y: e.y}, base: {x: ai.face.x, y: ai.face.y}};
+  const kind = e.posture ?? 'guard';
+  out.intent = 'idle';
+  if (kind === 'sleep') { out.faceOverride = ai.face; return; }
+  const turnTo = (dir, rate = 2.4) => { out.faceOverride = turnFacing(ai.face, dir, rate, dt); };
+  if (kind === 'patrol' && post.route?.length > 1) {
+    const pat = ai.pat ??= {i: 0, wait: 0, look: 0};
+    if (pat.wait > 0) {
+      pat.wait -= dt; out.intent = 'idle';
+      const base = Math.atan2(ai.face.y, ai.face.x), a = base + Math.sin(ai.clock * 1.4 + e.id * 5) * 0.9;
+      turnTo({x: Math.cos(a), y: Math.sin(a)}, 1.6);
+      return;
+    }
+    const goal = post.route[pat.i % post.route.length];
+    out.intent = 'patrol';
+    if (go(c, goal, 0.5, 10)) { pat.wait = 1.1 + (e.id * 7 % 1); pat.i++; }
+    else if (out.moveX !== 0 || out.moveY !== 0) turnTo(norm(out.moveX, out.moveY), 3.2);
+    else { pat.i++; }
+    return;
+  }
+  if (dist(e, post.home) > 14) {
+    out.intent = 'patrol';
+    go(c, post.home, 0.6, 10);
+    if (out.moveX !== 0 || out.moveY !== 0) turnTo(norm(out.moveX, out.moveY), 3);
+    return;
+  }
+  const amp = kind === 'gather' ? 0.2 : 0.5, baseAng = Math.atan2(post.base.y, post.base.x);
+  const a = baseAng + Math.sin(ai.clock * 0.55 + e.id * 9) * amp;
+  turnTo({x: Math.cos(a), y: Math.sin(a)}, 1.8);
 }
 
 // ---- main entry -------------------------------------------------------------------------------
@@ -646,7 +703,7 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
   const p = world.player;
   const out = {
     moveX: 0, moveY: 0, speed: 1, aimX: ai.face.x, aimY: ai.face.y, fire: false, intent: 'idle',
-    windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, role: ai.role, goal: null, faceOverride: null,
+    windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, suspicion: ai.suspicion, inView: ai.inView, dodging: false, spotted: ai.spotted, role: ai.role, goal: null, faceOverride: null,
   };
   for (const key of ['clock']) ai[key] += dt;
   for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT']) ai[key] = Math.max(0, ai[key] - dt);
@@ -662,7 +719,7 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
 
   perceive(c);
   out.sees = ai.sees; out.aware = ai.aware;
-  if (!ai.aware) { out.intent = 'idle'; return finish(c); }
+  if (!ai.aware) { unawareStep(c); out.suspicion = ai.suspicion; return finish(c); }
   updateRole(c);
   out.role = ai.role;
 
@@ -748,7 +805,7 @@ function finish(c) {
     else if (moving) { out.moveX += ai.nudge.x * 0.8; out.moveY += ai.nudge.y * 0.8; }
   }
   ai.prevX = e.x; ai.prevY = e.y;
-  out.aware = ai.aware; out.role = ai.role;
+  out.aware = ai.aware; out.role = ai.role; out.suspicion = ai.suspicion; out.inView = ai.inView; out.dodging = ai.dodging; out.spotted = ai.spotted;
   out.tactic = out.intent;
   return out;
 }
