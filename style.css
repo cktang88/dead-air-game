@@ -789,3 +789,26 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 @keyframes cross-glow { 50% { box-shadow: 0 0 14px rgba(255, 212, 90, .35); } }
 @media (max-width: 860px) { .decision-grid, .freq-grid { grid-template-columns: 1fr; } .freq-card { min-height: 0; } .run-card h2 { font-size: 34px; } }
 @media (prefers-reduced-motion: reduce) { .decision-opt, .freq-card, .freq-cross, .freq-pips i.fresh { animation: none; } }
+
+/* ============================================================ END SCREEN: fits any viewport, three distinct moments */
+#overlay:has(#run-result:not([hidden])) { padding: 24px 5vw 48px; }
+#overlay:has(#run-result:not([hidden])) .title-card { display: flex; flex-direction: column; max-height: calc(100vh - 72px); overflow: hidden; }
+#overlay:has(#run-result:not([hidden])) .title-card::before { display: none; }
+#overlay:has(#run-result:not([hidden])) #run-result { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-bottom: var(--s-3); scrollbar-width: thin; scrollbar-color: #3b3544 transparent; }
+#overlay:has(#run-result:not([hidden])) .title-card > :not(#run-result) { flex: none; }
+#overlay:has(#run-result:not([hidden])) .seed-control { display: none; }
+#run-result[data-kind=boss] { --acc: var(--coin); }
+#run-result[data-kind=extract] { --acc: var(--slow); }
+.end-banner.boss strong { color: var(--coin); font-size: 34px; text-shadow: 0 0 28px rgba(255, 212, 90, .35); }
+.end-banner.won:not(.boss) strong { font-size: 32px; }
+.end-banner.boss .end-cause { color: var(--coin); letter-spacing: .26em; }
+.end-banner.boss { background: linear-gradient(90deg, rgba(255, 212, 90, .1), transparent 70%); }
+/* THE RULE collapses after the first death: one tab, click to expand */
+#how-to.compact { padding: var(--s-3) var(--s-4); align-self: start; cursor: pointer; }
+#how-to.compact > :not(.eyebrow) { display: none; }
+#how-to.compact .eyebrow { margin: 0; cursor: pointer; }
+#how-to.compact .eyebrow::after { content: '+ EXPAND'; margin-left: var(--s-3); color: var(--text-low); }
+#how-to.compact.open > :not(.eyebrow) { display: revert; }
+#how-to.compact.open { cursor: default; }
+#how-to.compact.open .eyebrow::after { content: '– COLLAPSE'; }
+@media (max-height: 760px) { #overlay:has(#run-result:not([hidden])) .kit-chip { display: none; } }

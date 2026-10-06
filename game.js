@@ -810,8 +810,8 @@ function finishRunImpl(result,causeArg){
   const showEnd=()=>{
     if(state.mode==='play')return;
     const el=$('run-result');el.hidden=false;
-    el.innerHTML=runEndHtml({won:result!=='dead',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
-    el.dataset.result=result==='dead'?'dead':'won';$('start-button').innerHTML='<span>RUN AGAIN</span><kbd>R</kbd>';$('start-button').classList.add('again');$('game-shell')?.classList.remove('dying');$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus();animateCounts(el);
+    el.innerHTML=runEndHtml({won:result!=='dead',boss:result==='won',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
+    el.dataset.result=result==='dead'?'dead':'won';el.dataset.kind=result==='won'?'boss':result;$('how-to')?.classList.toggle('compact',progress.stats.runs>1);$('start-button').innerHTML='<span>RUN AGAIN</span><kbd>R</kbd>';$('start-button').classList.add('again');$('game-shell')?.classList.remove('dying');$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus({preventScroll:true});animateCounts(el);
   };
   toast(result==='won'?'THE CONDUCTOR IS DOWN':result==='extract'?'EXTRACTED':'RUN OVER',3500);
   if(result!=='dead'||matchMedia('(prefers-reduced-motion: reduce)').matches)showEnd();else{$('game-shell')?.classList.add('dying');setTimeout(showEnd,1100);}
@@ -828,6 +828,7 @@ function wireMacroUi(){
     else if(act){const id=act.dataset.id,kind=act.dataset.act;if(kind==='tab')state.metaTab=id;else if(kind==='kit'){state.progress=selectKit(state.progress,id);saveProgress();}else if(kind==='heat'){state.progress=toggleInterference(state.progress,id);saveProgress();}}
     renderMeta();
   });
+  $('how-to')?.addEventListener('click',event=>{const hw=$('how-to');if(hw.classList.contains('compact')&&event.target.closest('.eyebrow'))hw.classList.toggle('open');});
   $('run-result').addEventListener('click',event=>{if(event.target.closest('[data-act="share"]')&&state.shareLine){try{navigator.clipboard?.writeText(state.shareLine);}catch{}event.target.textContent='COPIED';}});
   $('kit-chip')?.addEventListener('click',()=>{state.metaTab='unlocks';renderMeta();$('meta-panel').hidden=false;$('close-meta').focus();});
 }
