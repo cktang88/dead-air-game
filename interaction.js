@@ -98,7 +98,7 @@ export const ambientPrompt = targets => targets.find(t => t.kind === 'exit' && t
 
 /** Text pieces a renderer needs for a target. */
 export function promptParts(t, keyName = 'E') {
-  const head = t.kind === 'exit' ? t.verb : `${t.verb} ${t.subject}`.trim();
+  const head = t.kind === 'exit' ? (t.enabled ? 'EXTRACT' : 'EXIT LOCKED') : `${t.verb} ${t.subject}`.trim();
   return {key: t.keyed ? keyName : '', head, cost: t.cost != null ? `${t.cost} SCRAP` : '', reason: t.reason || '', enabled: t.enabled};
 }
 
