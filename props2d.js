@@ -224,7 +224,6 @@ function server(g, c, X, Y) {
   g.beginPath(); g.moveTo(x, Y); g.lineTo(x, Y + T); g.moveTo(x + w, Y); g.lineTo(x + w, Y + T); if (!c.j.n) { g.moveTo(x, Y); g.lineTo(x + w, Y); } g.stroke();
   g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x, Y + topH); g.lineTo(x + w, Y + topH); g.stroke();
 }
-export const SERVER_LED = {topH: 22};
 
 function desk(g, c, X, Y) {
   const right = c.j.w && !c.j.e, ox = right ? X - T : X;

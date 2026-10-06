@@ -25,8 +25,7 @@ import {incomingThreats} from './enemy-tactics.js';
 export {createNav};
 
 const TAU = Math.PI * 2;
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+import {clamp, dist} from './util.js';
 const between = (rng, lo, hi) => lo + rng() * (hi - lo);
 const gaussian = rng => Math.sqrt(-2 * Math.log(1 - rng())) * Math.cos(TAU * rng());
 const norm = (x, y) => { const l = Math.hypot(x, y); return l > 1e-9 ? {x: x / l, y: y / l} : {x: 0, y: 0}; };
@@ -199,6 +198,7 @@ function slide(c, dir, speed) {
 
 // A cover is {hide, peek}: `hide` is a point the target cannot see (checked for the body edges too),
 // `peek` is a nearby open point from which the target is visible inside the firing band.
+const MAX_COVER_SPOTS = 24;
 export function findCover(e, target, world, o = {}) {
   const nav = world.nav;
   if (!nav) return null;
@@ -213,15 +213,32 @@ export function findCover(e, target, world, o = {}) {
     return !world.los(target.x, target.y, pt.x, pt.y) &&
       !world.los(target.x, target.y, pt.x + px, pt.y + py) && !world.los(target.x, target.y, pt.x - px, pt.y - py);
   };
+  // Candidate budget: every candidate costs three line-of-sight rays, so a 13x13 tile window is thinned to
+  // an even sample of the tiles (nearest-first order) and the explicit cover props go first.
+  const maxSpots = o.maxCandidates ?? MAX_COVER_SPOTS;
   const spots = [];
   const et = nav.tileOf(e.x, e.y);
-  for (let ty = et.y - R; ty <= et.y + R; ty++) for (let tx = et.x - R; tx <= et.x + R; tx++) {
-    if (nav.isOpen(tx, ty)) spots.push(nav.centerOf(tx, ty));
-  }
   for (const cv of world.covers ?? []) {
     const n = norm(cv.x - target.x, cv.y - target.y), off = (cv.radius ?? 17) + radius + 4;
     const pt = {x: cv.x + n.x * off, y: cv.y + n.y * off};
     if (nav.isOpenAt(pt.x, pt.y)) spots.push(pt);
+  }
+  if (spots.length > maxSpots / 2) { spots.sort((a, b) => dist(a, e) - dist(b, e)); spots.length = Math.floor(maxSpots / 2); }
+  // Tiles hugging an obstacle are the likely hiding places: take those first (nearest-first), then fill with the rest.
+  const edge = [], open = [];
+  for (let ty = et.y - R; ty <= et.y + R; ty++) for (let tx = et.x - R; tx <= et.x + R; tx++) {
+    if (!nav.isOpen(tx, ty)) continue;
+    const c = nav.centerOf(tx, ty);
+    (!nav.isOpen(tx + 1, ty) || !nav.isOpen(tx - 1, ty) || !nav.isOpen(tx, ty + 1) || !nav.isOpen(tx, ty - 1) ? edge : open).push(c);
+  }
+  const byNear = (a, b) => dist(a, e) - dist(b, e);
+  let room = Math.max(0, maxSpots - spots.length);
+  edge.sort(byNear);
+  for (let i = 0; i < edge.length && room > 0; i++, room--) spots.push(edge[i]);
+  if (room > 0 && open.length) {
+    open.sort(byNear);
+    const stride = Math.max(1, open.length / room);
+    for (let i = 0; i < room && Math.floor(i * stride) < open.length; i++) spots.push(open[Math.floor(i * stride)]);
   }
   const scored = [];
   for (const hide of spots) {
@@ -439,7 +456,10 @@ function rangedStep(c) {
   ai.coverT -= dt;
   const drifted = ai.cover && Math.hypot(target.x - ai.cover.tx, target.y - ai.cover.ty) > 70;
   const exposedAtHide = ai.cover && ai.sees && ai.phase === 'duck' && dist(e, ai.cover.hide) < 16 && ai.sinceFire > 0.5;
-  if (!ai.cover || ai.coverT <= 0 || drifted || exposedAtHide) {
+  if ((!ai.cover || ai.coverT <= 0 || drifted || exposedAtHide) && world.coverBudget !== undefined && world.coverBudget <= 0) {
+    ai.coverT = Math.min(ai.coverT, 0) + 0.05; // another enemy used this frame's cover searches: retry next frames
+  } else if (!ai.cover || ai.coverT <= 0 || drifted || exposedAtHide) {
+    if (world.coverBudget !== undefined) world.coverBudget--;
     ai.cover = findCover(e, target, world, {minRange: band.min, maxRange: band.max, tiles: 6});
     ai.coverT = between(rng, 1.4, 2.4);
   }

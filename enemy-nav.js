@@ -8,6 +8,7 @@
 // World units are px, +y down, origin top-left, like game.js.
 
 const SQRT2 = Math.SQRT2;
+const FIELD_RADIUS = 40;
 const NEIGHBORS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 class MinHeap {
@@ -225,12 +226,14 @@ export function createNav(tileMap, solidMap, options = {}) {
 
   // Dijkstra distance field from a goal point. Shared by every enemy chasing the same target,
   // so a whole room of rushers costs one search per player tile. Cached until the nav changes.
-  nav.flowField = goal => {
+  // Expansion stops FIELD_RADIUS tiles (path cost) from the goal; beyond that distAt is Infinity and
+  // dirAt is null, so chasers fall back to direct steering.
+  nav.flowField = (goal, radius = FIELD_RADIUS) => {
     const target = nav.nearestOpen(goal.x, goal.y, 6);
     if (!target) return null;
     const key = target.y * w + target.x;
     const cached = fields.get(key);
-    if (cached) { fields.delete(key); fields.set(key, cached); return cached; }
+    if (cached && cached.radius === radius) { fields.delete(key); fields.set(key, cached); return cached; }
     const dist = new Float32Array(w * h).fill(Infinity);
     heap.clear();
     dist[key] = 0;
@@ -239,6 +242,7 @@ export function createNav(tileMap, solidMap, options = {}) {
       const c = heap.pop();
       const cx = c % w, cy = (c / w) | 0;
       const base = dist[c];
+      if (base > radius) continue;
       for (const [dx, dy] of NEIGHBORS) {
         const x = cx + dx, y = cy + dy;
         if (!inBounds(x, y)) continue;
@@ -251,6 +255,7 @@ export function createNav(tileMap, solidMap, options = {}) {
     }
     const field = {
       goal: target,
+      radius,
       dist,
       // Path cost in px from a world point to the goal (Infinity if unreachable).
       distAt(x, y) {

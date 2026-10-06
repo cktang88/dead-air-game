@@ -1,4 +1,5 @@
 // Colour helpers, cached sprites and procedural gun/actor art for the Canvas 2D renderer.
+import {hash2} from './util.js';
 export const INK = '#14111a';
 export const TAU = Math.PI * 2;
 
@@ -20,7 +21,7 @@ export function seeded(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-export const hash2 = (x, y, s = 0) => { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s | 0, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+export {hash2};
 
 export function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -36,7 +37,6 @@ export function setSpriteScale(pxPerUnit) {
   const px = Math.max(1, Math.round(pxPerUnit * 4) / 4);
   if (px !== PX) { PX = px; cache.clear(); }
 }
-export const spriteScale = () => PX;
 function cached(key, build) { let v = cache.get(key); if (!v) cache.set(key, v = build(PX)); return v; }
 
 function paint(half, draw, extra = 0) {

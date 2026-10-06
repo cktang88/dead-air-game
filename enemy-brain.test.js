@@ -664,3 +664,17 @@ test('a squad fight in a room with cover: enemies stay on open tiles and eventua
   });
   assert.ok(fires >= 3, `fires ${fires}`);
 });
+
+test('flow field expansion is capped by radius and falls back beyond it', () => {
+  const row = '#' + '.'.repeat(60) + '#';
+  const {solid, tiles} = mapOf(['#'.repeat(62), row, '#'.repeat(62)]);
+  const nav = createNav(tiles, solid);
+  const field = nav.flowField(at(1, 1), 10);
+  assert.ok(Number.isFinite(field.distAt(at(8, 1).x, at(8, 1).y)));
+  assert.equal(field.distAt(at(30, 1).x, at(30, 1).y), Infinity);
+  assert.equal(field.dirAt(at(30, 1).x, at(30, 1).y), null);
+  const def = nav.flowField(at(1, 1));
+  assert.ok(Number.isFinite(def.distAt(at(25, 1).x, at(25, 1).y)));
+  assert.equal(def.distAt(at(55, 1).x, at(55, 1).y), Infinity);
+  assert.notEqual(def, field);
+});
