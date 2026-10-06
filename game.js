@@ -1111,7 +1111,7 @@ function setupControls(){
 }
 async function boot(){
   await RAPIER.init();
-  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta};
+  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').innerHTML='<span>ENTER THE SECTOR</span><span class="arrow">↗</span>';
   let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;musicSyncGame(state,dt);ambienceSync(state,dt);if(state.mode==='play')update(dt);render(dt);}requestAnimationFrame(loop);
 }
