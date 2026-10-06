@@ -91,27 +91,15 @@ export function createTimeFx() {
     if (this.pulse > 0.02) { // beat: a brief cool-white tick as the world lets a moment through
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.07 * this.pulse * flashK; ctx.fillStyle = '#cfe0ff'; ctx.fillRect(0, 0, w, h); ctx.restore();
     }
-    this.drawMeter(ctx, w, h, dpr);
   };
 
-  // Thin line along the top edge: fills outward from the centre in proportion to the world rate, only while time is changing.
-  fx.drawMeter = function drawMeter(ctx, w, h, dpr) {
-    const a = this.meter.activity; if (a < 0.02) return;
-    const rate = clamp(this.rate, 0, 1), thick = Math.max(2, Math.round(3 * dpr)), cx = w / 2, half = w / 2 * rate;
-    // colour: icy blue at still -> warm white at sprint
-    const r = Math.round(110 + 145 * rate), gg = Math.round(170 + 70 * rate), b = Math.round(255 - 55 * rate);
-    ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(120,150,210,0.18)'; ctx.fillRect(0, 0, w, thick);
-    const grad = ctx.createLinearGradient(cx - half, 0, cx + half, 0);
-    grad.addColorStop(0, `rgba(${r},${gg},${b},0.15)`); grad.addColorStop(0.5, `rgba(${r},${gg},${b},0.95)`); grad.addColorStop(1, `rgba(${r},${gg},${b},0.15)`);
-    ctx.fillStyle = grad; ctx.shadowColor = `rgba(${r},${gg},${b},0.9)`; ctx.shadowBlur = 10 * dpr;
-    ctx.fillRect(cx - half, 0, half * 2, thick);
-    ctx.shadowBlur = 0;
-    // walk tick (0.35x): where a normal walk lands, so the bar reads like a gauge
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    for (const m of [0.35]) { const x = w / 2 * m; ctx.fillRect(cx - x - 1, 0, 2, thick + 3 * dpr); ctx.fillRect(cx + x - 1, 0, 2, thick + 3 * dpr); }
-    ctx.restore();
-  };
-
+  // The edge meter is a DOM strip (#time-edge, above the HUD scrim); game.js feeds it from edgeView().
   return fx;
+}
+
+// Edge meter geometry: sqrt-spread so still / walk / sprint land well apart on the gauge. Returns CSS-friendly values.
+export function edgeView(rate, activity) {
+  const r = clamp(rate, 0, 1), f = 0.04 + 0.96 * Math.sqrt(r);
+  const walk = 0.04 + 0.96 * Math.sqrt(0.35);
+  return {opacity: clamp(activity, 0, 1), width: f * 100, walk: walk * 100, color: `rgb(${Math.round(120 + 135 * r)},${Math.round(180 + 60 * r)},${Math.round(255 - 60 * r)})`};
 }

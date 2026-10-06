@@ -40,7 +40,7 @@ const CAUSE_LINES = {
   sniper: ['Marksmen show you the lane before they fire. When the line goes red, you should already be gone.', 'They see further than you do. Take cover or take the first shot.'],
   riot: ['Riot shields only cover the front. Circle, or wait for them to turn and take the back.', 'You shot the shield. Everyone does once.'],
   guard: ['Wardens hold their ground. Make them move before you commit.', 'A warden pinned you down. Flashbangs open them up.'],
-  boss: ['That was the Conductor. Every pattern had a telegraph. In slow time you can read all of them.', 'He winds up before every move. Stop moving and the whole hall slows down with you.'],
+  boss: ['That was the Conductor. Every pattern had a telegraph. In slow time you can read all of them.', 'He winds up before every move. Stop moving and the whole hall all but stops with you.'],
   elite: ['An elite room. The skull on the door is a promise.', 'You were warned. The skull on the door means it.'],
 };
 const GENERIC_DEATH = ['Signal lost. Stay on the line.', 'You went quiet. Come back and try again.', 'Dead air. Reset and reroute.'];

@@ -8,7 +8,7 @@ The game should run in a desktop browser with keyboard and mouse, load directly 
 
 ## Design pillars
 
-1. **Stillness is a tool.** Standing still slows the simulation to the current idle rate (0.18× by default). Movement runs at 1.00×. Firing does not change the rate, whether the player is standing still or moving.
+1. **Stillness is a tool; speed is time.** World time follows the player's actual speed: 0.08x standing still (STILL MIND lowers it), 0.35x walking, 1x at full sprint, eased. Each shot advances the world by a beat (about 0.12 s of world time at 1x, scaled by damage and fire interval, delivered as a burst of 1x flow). Sprinting makes footstep noise (radius 150) that enemies hear; walking does not. The player is outside time: movement, aim, fire rate, reload, i-frames and player bullets use the real clock (reload start also costs a small beat). All tunables: `time-rule.js`.
 2. **Rooms are decisions.** A doorway reveals enough to plan, but every room has different cover, enemy pressure, loot, and routes.
 3. **Weapons have jobs.** Primary and secondary slots support different ranges and tempos. Ammunition, reloads, recoil, damage, spread, and weight make the choice matter.
 4. **Hits feel physical.** Impacts use hit stop, knockback, particles, screen shake, and brief enemy collapse. Clear feedback should make each shot easy to read.
@@ -46,7 +46,7 @@ The first room should teach movement, aiming, slow time, shooting, cover, and sw
 
 ## Time and combat rules
 
-- Standing still: the current idle multiplier, including while firing.
+- Standing still: the idle multiplier (0.08x); walking 0.35x; sprinting 1x; each shot adds a beat.
 - Moving: 1.00× simulation speed, including while firing. Stop moving to slow the simulation immediately.
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.

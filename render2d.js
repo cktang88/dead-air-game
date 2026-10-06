@@ -1284,7 +1284,7 @@ export function createRenderer(container, state) {
 
   resize();
   window.addEventListener('resize', resize);
-  return {canvas, fx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
+  return {canvas, fx, timeFx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
 }
 
 function hexPath(ctx, r) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }

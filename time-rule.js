@@ -11,7 +11,7 @@ export const TIME_RULE = {
   stillFloor: 0.03,
   walkScale: 0.35,       // world rate at a normal walk
   sprintScale: 1,        // world rate at full sprint
-  sprintRatio: 1.45,     // sprint speed / walk speed (matches game.js SPRINT_MULTIPLIER)
+  sprintRatio: 1.4,      // speed ratio at which the world reaches full rate (sprint is 1.45x walk; velocity eases up to ~1.43x)
   deadSpeed: 0.04,       // speed ratio below this counts as standing still (coast tail, wall pushing)
   // Each shot lets a "beat" of world time through (seconds of world time, delivered at 1x).
   beat: {base: 0.12, min: 0.03, max: 0.2, refDamage: 30, interval: {ref: 0.25, exp: 0.5}, reload: 0.1, cap: 0.45},

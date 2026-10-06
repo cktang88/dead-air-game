@@ -763,3 +763,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 .end-rewards.new { color: var(--amber); } .end-rewards.tape { color: var(--cyan); } .end-rewards q { quotes: none; font: italic 12px/1.5 var(--font-body); color: var(--ink); }
 .share-line { display: flex; gap: 8px; align-items: center; padding: 8px 18px; border-top: 1px solid var(--line); } .share-line code { flex: 1; font: 11px/1.4 var(--font-mono); color: var(--ink-2); } .share-line button { padding: 6px 10px; font: 11px var(--font-mono); color: var(--ink); background: #2c2634; border: 1px solid #4a4351; cursor: pointer; }
 @media (max-width: 720px) { .decision-grid, .freq-grid { grid-template-columns: 1fr; } #build-strip { max-width: 90vw; bottom: 150px; } }
+
+/* Diegetic time meter: a thin line along the top edge, only visible while the world rate is changing. */
+#time-edge { position: absolute; z-index: 6; top: 0; left: 0; right: 0; height: 5px; pointer-events: none; opacity: 0; background: rgba(140, 170, 230, .22); }
+#time-edge i { position: absolute; top: 0; bottom: 0; left: 50%; width: 10%; transform: translateX(-50%); background: var(--edge-c, #9ad0ff); box-shadow: 0 0 14px 1px var(--edge-c, #9ad0ff); }
+#time-edge b { position: absolute; top: 0; height: 9px; width: 2px; background: rgba(255, 255, 255, .8); }
