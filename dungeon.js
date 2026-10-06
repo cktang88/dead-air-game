@@ -1,6 +1,10 @@
 import {chooseRewardDoor, roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
+import {rebuildCorridors} from './floor-topology.js';
+import {stampRoomTemplates} from './room-templates.js';
 import {assignRoomRoles} from './room-roles.js';
 
+// Digger parameters: wide size ranges give real room variety (closets to halls); short corridors keep floors tight.
+const DIGGER={roomWidth:[6,22],roomHeight:[6,15],corridorLength:[2,4],dugPercentage:0.26};
 const ROOM_NAMES = ['FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
 
 export function nameDungeonRooms(rooms){
@@ -17,7 +21,7 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
   for (const [mapWidth, mapHeight] of attempts) {
     ROT.RNG.setSeed(seed);
     const generator = new ROT.Map.Digger(mapWidth, mapHeight, {
-      roomWidth: [10, 22], roomHeight: [9, 18], corridorLength: [3, 8], dugPercentage: 0.29,
+      roomWidth: DIGGER.roomWidth, roomHeight: DIGGER.roomHeight, corridorLength: DIGGER.corridorLength, dugPercentage: DIGGER.dugPercentage,
     });
     const cells = Array.from({length: mapHeight}, () => Array(mapWidth).fill(1));
     generator.create((x, y, value) => { cells[y][x] = value; });
@@ -29,6 +33,7 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       };
     });
     if (!generatedRooms.length) continue;
+    const {loops} = rebuildCorridors(cells, generatedRooms, seed, 2);
 
     const start = generatedRooms.reduce((best, room) =>
       Math.hypot(room.cx - mapWidth / 2, room.cy - mapHeight / 2) < Math.hypot(best.cx - mapWidth / 2, best.cy - mapHeight / 2) ? room : best,
@@ -56,7 +61,10 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       room.name=room.secret?'UNMARKED ROOM':({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX',elite:'WARDEN'})[room.role];
       if(room.secret)room.revealedName='SIDE CACHE';
     }
-    return {cells: shaped.cells, doors: shaped.doors, lockedDoors:lockedDoor?[lockedDoor]:[], rooms:roleRooms, start: roleRooms[0], width: mapWidth, height: mapHeight};
+    // Stamp cover layouts, themes, spawn plans and pacing; hard cover becomes solid tiles in `cells`.
+    stampRoomTemplates({cells: shaped.cells, rooms: roleRooms, start: {cx: start.cx, cy: start.cy}, seed});
+    for (const room of roleRooms) room.pathLength = shortestFloorPath(shaped.cells, {x: start.cx, y: start.cy}, {x: room.cx, y: room.cy}).length;
+    return {cells: shaped.cells, doors: shaped.doors, lockedDoors:lockedDoor?[lockedDoor]:[], rooms:roleRooms, loops, start: roleRooms[0], width: mapWidth, height: mapHeight};
   }
   throw new Error(`ROT.js could not generate six reachable rooms for seed ${seed}`);
 }
