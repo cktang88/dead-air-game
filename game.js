@@ -873,7 +873,7 @@ function render(dt=1/60){
   const p=state.player,gun=GUNS[state.weaponIndex];
   const events=state.events.splice(0);
   view.consume(events);
-  view.render({dt,timeScale:state.timeScaleSmoothed,idleScale:progressionStats(state.progress).idleScale,shake:scaledCameraShake(state.shake,visualSettings.shake),mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:!hasUnclearedRouteEnemies(state.rooms,state.enemies),bloom:state.bloom?.value||0,gun});
+  view.render({dt,timeScale:state.timeScaleSmoothed,idleScale:progressionStats(state.progress).idleScale,shake:scaledCameraShake(state.shake,visualSettings.shake),motion:visualSettings.shake,flash:visualSettings.flash,mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:!hasUnclearedRouteEnemies(state.rooms,state.enemies),bloom:state.bloom?.value||0,gun});
   void p;
 }
 function renderGameToText(){
