@@ -185,6 +185,13 @@ export function runEndHtml({ won, rooms, totalRooms, kills, seconds, payout, see
 <div class="end-foot">SAFEHOUSE BALANCE · ${balance} COINS</div>`;
 }
 
+// True when any world point (screen px) lies inside `rect` grown by `pad`. Used to ghost the bottom-left HUD
+// when the player, a pickup or a corpse would otherwise be hidden behind it.
+export function hudOccludes(rect, points, pad = 18) {
+  if (!rect) return false;
+  return points.some(p => p.x >= rect.left - pad && p.x <= rect.right + pad && p.y >= rect.top - pad && p.y <= rect.bottom + pad);
+}
+
 // Settings / controls toggles on the title screen.
 function wireTitleUi() {
   const settings = $('settings-panel'), toggle = $('settings-button');

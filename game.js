@@ -22,7 +22,7 @@ import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraSh
 import {particleBurstBudget} from './particles.js';
 import {resolveProjectileImpacts} from './projectile-impacts.js';
 import {lootTier,lootTierForRoll} from './loot.js';
-import {gunIcon,strokeIcon,statBarsHtml,tierColor,categoryColor,tempoView,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone} from './hud-ui.js';
+import {gunIcon,strokeIcon,statBarsHtml,tierColor,categoryColor,tempoView,hudOccludes,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone} from './hud-ui.js';
 export {pushFeed};
 import {cacheRewardAvailable} from './cache-rewards.js';
 import {bruteMeleeHits,shieldBlocks,stepBruteMelee,turnShield} from './enemy-attacks.js';
@@ -142,7 +142,18 @@ function hud(){
 function syncHudFrame(){
   const gun=GUNS[state.weaponIndex];syncWeaponPanel();
   const strip=$('slot-strip');if(strip){const cells=strip.querySelectorAll('.slot-ammo');state.weaponSlots.forEach((gi,slot)=>{const c=cells[slot];if(c){const t=`${state.weaponAmmo[gi]}/${state.reserveAmmo[gi]}`;if(c.dataset.t!==t){c.dataset.t=t;c.innerHTML=`${state.weaponAmmo[gi]}<i>/${state.reserveAmmo[gi]}</i>`;}}});}
-  syncRunStats();
+  syncRunStats();fadeHudOverPlay();
+}
+let hudFadeFrame=0,hudFadeOn=false;
+function fadeHudOverPlay(){
+  if((hudFadeFrame++&7)!==0||!state.player)return;
+  const el=$('hud');if(!el)return;
+  const cam=view.cam,sc=cam.scale,project=o=>({x:(o.x-cam.x)*sc+innerWidth/2,y:(o.y-cam.y)*sc+innerHeight/2});
+  const points=[project(state.player)];
+  for(const pk of state.pickups)if(pk.available)points.push(project(pk));
+  for(const e of state.enemies)if(!e.alive)points.push(project(e));
+  const on=hudOccludes(el.getBoundingClientRect(),points);
+  if(on!==hudFadeOn){hudFadeOn=on;el.classList.toggle('ghost',on);}
 }
 function renderLoadout(){
   if(!$('loadout-gun'))return;
@@ -222,7 +233,8 @@ function showWeaponPickup(pickup){
   if(state.pendingGunPickup)return;
   state.pendingGunPickup=pickup;input.keys.clear();input.firing=false;renderWeaponPickup();$('weapon-pickup').querySelector('[data-pickup-slot]:not(:disabled)')?.focus();
 }
-function closeWeaponPickup(declined=false){
+let dialogClosedAt=-1e9;
+function closeWeaponPickup(declined=false){dialogClosedAt=performance.now();
   if(declined&&state.pendingGunPickup)state.pendingGunPickup.declined=true;
   state.pendingGunPickup=null;$('weapon-pickup').hidden=true;$('weapon-pickup').setAttribute('aria-hidden','true');view?.canvas.focus();
 }
@@ -517,7 +529,7 @@ function openCache(pickup){
   if(roomHasLivingEnemies(pickup.roomIndex,state.enemies)){toast('CLEAR THE CACHE ROOM FIRST');return;}
   state.cachePickup=pickup;state.cacheOpen=true;input.keys.clear();input.firing=false;renderCache();$('cache-panel').hidden=false;$('cache-panel').setAttribute('aria-hidden','false');$('close-cache').focus();
 }
-function closeCache(){state.cacheOpen=false;state.cachePickup=null;input.keys.clear();input.firing=false;$('cache-panel').hidden=true;$('cache-panel').setAttribute('aria-hidden','true');view.canvas.focus();}
+function closeCache(){dialogClosedAt=performance.now();state.cacheOpen=false;state.cachePickup=null;input.keys.clear();input.firing=false;$('cache-panel').hidden=true;$('cache-panel').setAttribute('aria-hidden','true');view.canvas.focus();}
 function takeCacheReward(choice){
   const pickup=state.cachePickup;if(!pickup||!cacheChoiceStatus(choice))return;
   const gun=GUNS[state.weaponIndex];
@@ -594,7 +606,7 @@ function renderMerchant(){
     return `<div class="merchant-row ${offer.sold?'sold':''} ${afford}" data-kind="${offer.type}"><div class="mr-icon">${icon}</div><span><strong>${merchantOfferName(offer)}</strong><small>${offer.type==='weapon'?`Add or replace a weapon slot (1–${maxWeaponSlots()})`:offer.type==='attachment'?'Permanent for this run · compatible with the named gun':gear?`${gear.description} · ${gear.weight.toFixed(1)} carry weight`:offer.type==='health'?'+2 health':'Refill to carry limit'}${reason}</small>${wGun?statBarsHtml(wGun,GUNS[state.weaponIndex],GUNS,{compact:true}):''}</span><button data-merchant="${index}" ${active?'':'disabled'}>${offer.sold?'SOLD':`${offer.cost} SCRAP`}</button></div>`;}).join('')+`<div class="merchant-footer">POCKETS · <b>${state.scrap}</b> SCRAP</div>`;
 }
 function openMerchant(room){state.merchantRoom=room;state.merchantOpen=true;renderMerchant();$('merchant-panel').hidden=false;$('merchant-panel').setAttribute('aria-hidden','false');$('close-merchant').focus();}
-function closeMerchant(){state.merchantOpen=false;$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');view.canvas.focus();}
+function closeMerchant(){dialogClosedAt=performance.now();state.merchantOpen=false;$('merchant-panel').hidden=true;$('merchant-panel').setAttribute('aria-hidden','true');view.canvas.focus();}
 function buyMerchantOffer(index){const offer=state.merchantRoom?.stock[index];if(!offer||!merchantCanBuy(offer))return;if(offer.type==='gear'){const item=GEAR.find(option=>option.id===offer.gearId);if(!item||!equipGear(offer.gearId))return;state.scrap-=Math.max(0,offer.cost-item.cost);offer.sold=true;hud();renderMerchant();return;}state.scrap-=offer.cost;
   if(offer.type==='weapon'){const weaponIndex=GUNS.findIndex(gun=>gun.id===offer.gunId),slot=weaponSlotForGun(weaponIndex);if(slot===undefined)return;state.weaponSlots[slot]=weaponIndex;state.weaponAmmo[weaponIndex]=GUNS[weaponIndex].mag;state.reserveAmmo[weaponIndex]=GUNS[weaponIndex].reserve;toast(`${weaponSlotLabel(slot)} · ${GUNS[weaponIndex].name}`);}
   else if(offer.type==='attachment'){state.scrap+=offer.cost;const mod=MODS.find(item=>item.id===offer.modId);if(!installMod(offer.modId,offer.gunIndex))return;state.scrap-=Math.max(0,offer.cost-mod.cost);}
@@ -749,7 +761,7 @@ function update(dt){
   state.time+=step;state.elapsed+=step;updatePlayer(step);updateEnemies(step);updateBullets(step);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
   const moving=hasMovementInput(),firing=input.firing||!!state.weaponBurst;
   const sprinting=moving&&input.keys.has('shift'),tv=tempoView({moving,firing,sprinting,scale}),tempoEl=$('tempo');
-  tempoEl.dataset.state=tv.state;tempoEl.classList.toggle('firing',firing);tempoEl.style.setProperty('--fill',tv.fraction.toFixed(3));
+  if(tempoEl.dataset.state!==tv.state){tempoEl.dataset.state=tv.state;state.tempoChangedAt=state.elapsedReal=performance.now();tempoEl.classList.remove('idle');}else if(tempoEl.dataset.state&&performance.now()-(state.tempoChangedAt||0)>3500)tempoEl.classList.add('idle');tempoEl.classList.toggle('firing',firing);tempoEl.style.setProperty('--fill',tv.fraction.toFixed(3));
   $('tempo-label').textContent=tv.label;$('tempo-speed').textContent=tv.speed;$('tempo-fill').style.width=`${tv.percent}%`;$('tempo-hint').textContent=tv.hint;
   drawMinimap();syncHudFrame();
 }
@@ -878,6 +890,7 @@ function setupControls(){
     if(key===binding('shellCycle'))cycleShotgunShell();
     if(key===binding('throwableUse')&&state.mode==='play'&&!state.merchantOpen&&!state.cacheOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
     if(key==='r'&&(state.mode==='dead'||state.mode==='won')){newRun();return;}
+    if(key==='escape'&&(e.repeat||performance.now()-dialogClosedAt<350))return;
     if(key==='escape'){if(state.merchantOpen)closeMerchant();else if(state.cacheOpen)closeCache();else if(state.loadoutOpen)toggleLoadout(false);else state.paused=!state.paused;toast(state.paused?'PAUSED':'BACK IN');}
     if(key===binding('weaponOne'))switchWeapon(0);
     if(key===binding('weaponTwo'))switchWeapon(1);
@@ -904,7 +917,7 @@ function setupControls(){
 }
 async function boot(){
   await RAPIER.init();
-  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view};
+  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view,spawnEnemy,hitPlayer,fireBullet};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').textContent='ENTER THE SECTOR ↗';
   let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;if(state.mode==='play')update(dt);render(dt);}requestAnimationFrame(loop);
 }
