@@ -101,6 +101,7 @@ export class WorldLayer {
       for (const d of room.theme?.decor || []) {
         if (d.kind !== 'light') continue;
         if (emergency) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 84, col: '#ff3a3a', mode: 'pulse', ph: hash2(d.x * 8, d.y * 8, seed) * 6, a: 0.2, room: index});
+        else if (d.steady) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 120, col: accent, mode: 'steady', ph: 0, a: 0.2, room: index});   // fixed-lit rooms (the Signal Check)
         else if (d.flicker) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 74, col: accent, mode: 'flicker', ph: hash2(d.x * 8, d.y * 8, seed) * 50, a: 0.16, room: index});
       }
     });
@@ -518,7 +519,7 @@ export class WorldLayer {
     };
     for (const l of L.live.lamps) {
       if (!inB(l.x, l.y, l.r)) continue;
-      const v = l.mode === 'pulse' ? 0.35 + 0.65 * Math.max(0, Math.sin(t * 3.2 + l.ph)) ** 2 : (Math.sin(t * 23 + l.ph) * Math.sin(t * 7.3 + l.ph * 2) > 0.62 ? 0.25 : 1) * (0.85 + 0.15 * Math.sin(t * 11 + l.ph));
+      const v = l.mode === 'steady' ? 1 : l.mode === 'pulse' ? 0.35 + 0.65 * Math.max(0, Math.sin(t * 3.2 + l.ph)) ** 2 : (Math.sin(t * 23 + l.ph) * Math.sin(t * 7.3 + l.ph * 2) > 0.62 ? 0.25 : 1) * (0.85 + 0.15 * Math.sin(t * 11 + l.ph));
       ctx.globalAlpha = Math.min(1, l.a * v * 3.2);
       const r = l.r * s; ctx.drawImage(sprite(l.col), l.x * s + ox - r, l.y * s + oy - r, r * 2, r * 2);
     }

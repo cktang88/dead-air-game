@@ -67,11 +67,11 @@ export const SCRIPT = [
     card: {id: 'time.breath', title: 'BREATH', line: 'time follows your feet'},
   },
   {
-    id: 'shot', name: 'SHOT', start: {x: 19.5, y: 6.5}, idleHint: {after: 6, keys: 'fire', word: 'FIRE'},
+    id: 'shot', name: 'SHOT', start: {x: 22.5, y: 6.5}, idleHint: {after: 6, keys: 'fire', word: 'FIRE'},
     goal: {type: 'kill'},                             // every enemy of the room dead shatters the glass
     unlock: 'glass',
     props: [],
-    enemies: [{type: 'gunner', x: 31.5, y: 6.5, posture: 'sleep', face: {x: -1, y: 0}}],
+    enemies: [{type: 'gunner', x: 29.5, y: 6.5, posture: 'sleep', face: {x: -1, y: 0}}],
     card: {id: 'time.shot', title: 'SHOT', line: 'every shot lets time through'},
   },
   {
@@ -126,7 +126,7 @@ export function buildSignalLayout() {
   const rooms = ROOM_RECTS.map((r, index) => ({
     index, x1: r.x1, x2: r.x2, y1: r.y1, y2: r.y2, cx: Math.floor((r.x1 + r.x2) / 2), cy: Math.floor((r.y1 + r.y2) / 2),
     role: 'combat', name: SCRIPT[index].name, template: 'signal', shape: 'rectangle', cover: [], crates: [], spawnTiles: [], visited: index === 0, cleared: false, signal: true,
-    theme: {floor: 'concrete', tint: '#2a3340', accent: ['#6dd5ff', '#ffd27a', '#ff8a6a', '#b49bff', '#6dffb0'][index], lights: {color: '#9ad8ff', intensity: 0.6, flicker: false},
+    theme: {floor: 'concrete', tint: '#2a3340', accent: ['#6dd5ff', '#ffd27a', '#ff8a6a', '#b49bff', '#6dffb0'][index], lights: {color: '#9ad8ff', intensity: 1.0, flicker: false},
       decor: lightGrid(r)},
   }));
   for (const c of COVER) for (const t of c.tiles) { cells[t.y][t.x] = T_WALL; rooms[c.room].cover.push({x: t.x, y: t.y, kind: c.kind}); }
@@ -138,7 +138,7 @@ export function buildSignalLayout() {
 
 function lightGrid(r) {
   const out = [];
-  for (let y = r.y1 + 2; y < r.y2; y += 4) for (let x = r.x1 + 2; x < r.x2; x += 6) out.push({kind: 'light', x: x + 0.5, y: y + 0.5, rot: 0, color: '#9ad8ff', flicker: false});
+  for (let y = r.y1 + 2; y < r.y2; y += 4) for (let x = r.x1 + 3; x < r.x2; x += 6) out.push({kind: 'light', x: x + 0.5, y: y + 0.5, rot: 0, color: '#9ad8ff', flicker: false, steady: true});
   return out;
 }
 

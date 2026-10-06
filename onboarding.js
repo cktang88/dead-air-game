@@ -150,7 +150,7 @@ export function manualTriggers(ctx) {
   add('pickup', !!ctx.pickedUp && ctx.pickedUp.size > 0);
   add('gun', ctx.gunPickup);
   add('mod', ctx.modPickup);
-  add('scrap', ctx.scrap > 0 || (ctx.pickedUp?.has?.('scrap') ?? false));
+  add('scrap', (ctx.scrap > (ctx.startScrap ?? 0)) || (ctx.pickedUp?.has?.('scrap') ?? false));
   add('coins', ctx.coinsBanked);
   add('gate', ctx.gateSeen);
   add('supply', ctx.supplySeen);

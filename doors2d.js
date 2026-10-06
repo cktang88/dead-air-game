@@ -67,9 +67,9 @@ export function createDoorLayer() {
       if (g.broken || !inB(b, (g.x + 0.5) * TILE, (g.y + 0.5) * TILE, 40)) continue;
       const X = g.x * TILE, Y = g.y * TILE, vertical = has(g.x, g.y - 1) || has(g.x, g.y + 1);
       ctx.save(); ctx.translate(X, Y);
-      const thick = 7, ox = vertical ? (TILE - thick) / 2 : 0, oy = vertical ? 0 : (TILE - thick) / 2, w = vertical ? thick : TILE, h = vertical ? TILE : thick;
+      const thick = 9, ox = vertical ? (TILE - thick) / 2 : 0, oy = vertical ? 0 : (TILE - thick) / 2, w = vertical ? thick : TILE, h = vertical ? TILE : thick;
       ctx.fillStyle = 'rgba(8,6,12,0.45)'; ctx.fillRect(ox - 1.5, oy - 1.5, w + 3, h + 3);
-      const gr = ctx.createLinearGradient(ox, oy, ox + w, oy + h); gr.addColorStop(0, 'rgba(150,215,255,0.34)'); gr.addColorStop(0.5, 'rgba(190,235,255,0.16)'); gr.addColorStop(1, 'rgba(120,190,240,0.30)');
+      const gr = ctx.createLinearGradient(ox, oy, ox + w, oy + h); gr.addColorStop(0, 'rgba(150,220,255,0.55)'); gr.addColorStop(0.5, 'rgba(200,240,255,0.3)'); gr.addColorStop(1, 'rgba(120,195,245,0.5)');
       ctx.fillStyle = gr; ctx.fillRect(ox, oy, w, h);
       ctx.strokeStyle = 'rgba(205,240,255,0.85)'; ctx.lineWidth = 1.1; ctx.strokeRect(ox + 0.5, oy + 0.5, w - 1, h - 1);
       // a moving glint so it reads as glass, not a wall

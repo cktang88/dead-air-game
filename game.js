@@ -27,7 +27,7 @@ import {shapeDungeon} from './layout.js';
 import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPosition} from './room-props.js';
 import {paceEnemyCount} from './room-templates.js';
 import {generateDungeon} from './dungeon.js';
-import {createNav, stepEnemyBrain} from './enemy-brain.js';
+import {createNav, stepEnemyBrain, brainState} from './enemy-brain.js';
 import {choosePostures, damageModifier, deathCause, shotNoiseRadius} from './stealth.js';
 import {noiseRayLengths} from './stealth2d.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,shouldRegen,lockerSpawns,cooldownReady,objectiveText,refillCost} from './economy.js';
@@ -589,8 +589,8 @@ function killEnemy(enemy,bullet){
   if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.meleeWindup=0;for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);{const bl=Math.hypot(bullet.vx,bullet.vy)||1,kv=enemyKnockback((bullet.damage||0)*1.6,enemy.type)*1.4;enemy.body.setLinvel({x:bullet.vx/bl*kv,y:bullet.vy/bl*kv},true);}enemy.hp=0;
   view.fx.kill(enemy,bullet.vx,bullet.vy);
   state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(6+Math.floor(random()*8));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
-  if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
-  rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));
+  if(!signalOn()){if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
+  rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));}
   playKill();onEnemyKilled(enemy,bullet);hud();checkRoomClear();
 }
 function hitPlayer(damage,x,y,srcAng=null,srcName=null){const before=state.health+state.armor,wasPlay=state.mode==='play'&&state.invuln<=0;hitPlayerBase(damage,x,y,srcAng,srcName);if(wasPlay&&state.health+state.armor<before)onPlayerDamaged();}
@@ -1365,7 +1365,7 @@ function spawnSignalRoom(index){
   for(const spec of script.enemies){
     const e=spawnEnemy(spec.type,spec.x*TILE,spec.y*TILE,index);
     e.posture=spec.posture;e.post={home:{x:e.x,y:e.y},base:{...spec.face},route:null};e.face={...spec.face};e.aim={...spec.face};e.aware=false;e.suspicion=0;
-    if(spec.fixed){e.fixed=true;e.def={...e.def,speed:0,range:spec.range||e.def.range};}
+    if(spec.fixed){e.fixed=true;e.def={...e.def,speed:0,range:spec.range||e.def.range};const ai=brainState(e,random);ai.aware=true;ai.suspicion=1;ai.cd=.05;ai.reaction=.1;}   // a turret: always on watch, fires the moment you are in its lane
   }
   sg.props=script.props.map(p=>({kind:p.kind,x:p.x*TILE,y:p.y*TILE,vx:p.vx,vy:p.vy,resetX:p.resetX*TILE,endX:p.endX*TILE}));
   if(script.flash){state.throwables.flash=Math.max(state.throwables.flash||0,script.flash);const i=THROWABLES.findIndex(item=>item.id==='flash');if(i>=0)state.throwableIndex=i;updateThrowableHud();}
@@ -1455,7 +1455,7 @@ function knowledgeCtx(){
   return {speedRatio:ratio,moved:kn.moved,shots:state.shotsFired||0,runSeconds:state.realElapsed,hits:kn.hits,armor:state.armor,bloom:state.bloom?.value||0,reloaded:kn.reloaded,autoSwapped:kn.autoSwapped,crateHit:kn.crateHit,
     noiseRing:kn.noiseRing,silentHit:kn.silentHit,thrown:state.thrown.length>0||state.effects.length>0,glassSeen:state.glass.some(g=>!g.broken&&near((g.x+.5)*TILE,(g.y+.5)*TILE,7)),shotCategory:gun.category,
     enemies,offscreenThreat:state.enemies.some(e=>e.alive&&(e.aimTimer>0||e.meleeWindup>0)&&!onScreen(e.x,e.y)),pickedUp:kn.picked,doorSeen:state.doorProps.some(d=>!d.gate&&near(d.x*TILE,d.y*TILE,7)),roomsCleared:state.roomsCleared,calmRegen:kn.calmRegen,
-    rewardDoors:state.doorMarkers.length>0,minimapEnemies:state.enemies.some(e=>e.alive&&state.rooms[e.roomIndex]?.visited),scrap:state.scrap,gateSeen:state.lockedDoors.some(g=>!g.opened&&near((g.x+.5)*TILE,(g.y+.5)*TILE,8)),
+    startScrap:runStats().startScrap,rewardDoors:state.doorMarkers.length>0,minimapEnemies:state.enemies.some(e=>e.alive&&state.rooms[e.roomIndex]?.visited),scrap:state.scrap,gateSeen:state.lockedDoors.some(g=>!g.opened&&near((g.x+.5)*TILE,(g.y+.5)*TILE,8)),
     supplySeen:state.pickups.some(pk=>pk.available&&(pk.kind==='cache'||pk.kind==='locker')&&near(pk.x,pk.y,6))||state.rooms[state.currentRoom]?.role==='merchant',freqPicked:kn.freqPicked,exitOpen:state.extractionOpen,gunPickup:kn.gunPickup,modPickup:kn.modPickup,coinsBanked:(state.progress.stats?.runs||0)>0};
 }
 function wantedCards(ctx){
