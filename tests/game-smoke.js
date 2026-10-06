@@ -1,6 +1,6 @@
 import {DEFAULT_KEY_BINDINGS,loadKeyBindings} from '../keybindings.js';
-import {emptyProgress,progressionStats,SAVE_KEY} from '../progression.js?v=vital-reserve-2';
-import {readSavedProgress} from '../progress-storage.js?v=vital-reserve-2';
+import {emptyProgress,progressionStats,SAVE_KEY} from '../progression.js';
+import {readSavedProgress} from '../progress-storage.js';
 
 const report=document.querySelector('#result');
 const frame=document.querySelector('#game');

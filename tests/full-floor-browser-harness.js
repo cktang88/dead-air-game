@@ -1,5 +1,5 @@
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {generateDungeon} from '../dungeon.js?v=room-names-3';
+import {generateDungeon} from '../dungeon.js';
 import {shortestFloorPath} from '../layout.js';
 import {hasIncomingProjectile} from '../enemy-tactics.js';
 import {parseRunSeed} from '../seeds.js';
