@@ -87,10 +87,13 @@ const TEMPLATES = {
     }
   }},
   'l-pairs': {min: [7, 7], build(c) {
-    const ox = 2 + Math.floor(c.rand() * 2), oy = 2 + Math.floor(c.rand() * 2);
+    // quadrant L-corners placed about a quarter of the way in, so big rooms get mid-floor cover too
+    const ox = Math.max(2, Math.round(c.w * .27) + Math.floor(c.rand() * 2)), oy = Math.max(2, Math.round(c.h * .27) + Math.floor(c.rand() * 2));
     for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-      const x = sx > 0 ? c.x1 + ox : c.x2 - ox, y = sy > 0 ? c.y1 + oy : c.y2 - oy;
+      const x = c.cx - sx * ox, y = c.cy - sy * oy;
       c.hard(x, y, 'wall'); c.hard(x + sx, y, 'wall'); c.hard(x, y + sy, 'wall');
+      if (c.w >= 12) c.hard(x + 2 * sx, y, 'wall');
+      if (c.h >= 11) c.hard(x, y + 2 * sy, 'wall');
       c.low(x + 3 * sx, y + 1 * sy); c.low(x + 1 * sx, y + 3 * sy);
     }
   }},
@@ -272,7 +275,7 @@ function stampRoom(cells, room, seed, ctxExtra) {
   const rand = seededRandom(Math.imul(seed + 7, 2654435761) ^ Math.imul(room.index + 1, 40503));
   const w = room.x2 - room.x1 + 1, h = room.y2 - room.y1 + 1;
   const openings = findOpenings(cells, room);
-  const centerRadius = room.role === 'entry' || room.role === 'extraction' ? 3 : 1;
+  const centerRadius = room.role === 'entry' || room.role === 'extraction' ? (Math.min(w, h) >= 11 ? 3 : Math.min(w, h) >= 8 ? 2 : 1) : 1;
   const zone = protectedZone(room, openings, centerRadius);
   const name = pickTemplate(room, w, h, rand, ctxExtra.usage, room.breather);
   ctxExtra.usage[name] = (ctxExtra.usage[name] || 0) + 1;
@@ -282,6 +285,11 @@ function stampRoom(cells, room, seed, ctxExtra) {
     hard: (x, y, kind) => hardItems.push({x, y, kind}), low: (x, y) => lowItems.push({x, y})};
   const build = (templateName) => TEMPLATES[templateName].build(c);
   build(name);
+  let secondary = null;
+  if (w * h >= 150 && ['vault', 'l-pairs', 'island-cross', 'arena-ring', 'landing', 'warden-arena', 'safehouse', 'clinic-beds', 'scatter'].includes(name)) {
+    const extra = ['pillar-grid', 'lane-walls', 'partitions'].filter(n => w >= TEMPLATES[n].min[0] && h >= TEMPLATES[n].min[1]);
+    if (extra.length) { secondary = extra[Math.floor(rand() * extra.length)]; build(secondary); }
+  }
 
   const blocked = new Set();
   const placedHard = [], placedLow = [];
@@ -317,7 +325,7 @@ function stampRoom(cells, room, seed, ctxExtra) {
   for (const item of lowItems) tryCrate(item.x, item.y, false);
 
   // top up low cover: aim for a per-role density, preferring tiles next to hard cover (cover pairs)
-  const density = {entry: 40, extraction: 40, cache: 55, hazard: 22, elite: 30, armory: 40, clinic: 45}[room.role] ?? (room.breather ? 70 : 34);
+  const density = {entry: 34, extraction: 34, cache: 45, hazard: 18, elite: 24, armory: 34, clinic: 40}[room.role] ?? (room.breather ? 55 : 28);
   const wanted = Math.max(2, Math.min(9, Math.round(w * h / density)));
   const hardKeys = new Set(hardOut.map(i => key(i.x, i.y)));
   for (let attempt = 0; attempt < 80 && crates.length < wanted; attempt++) {
@@ -344,7 +352,7 @@ function stampRoom(cells, room, seed, ctxExtra) {
   if (!crates.length) for (let y = room.y1; y <= room.y2 && !crates.length; y++) for (let x = room.x1; x <= room.x2 && !crates.length; x++) tryCrate(x, y, true);
 
   Object.assign(room, {
-    template: name, openings, cover: hardOut.map(({x, y, kind}) => ({x, y, kind})), crates,
+    template: name, template2: secondary, openings, cover: hardOut.map(({x, y, kind}) => ({x, y, kind})), crates,
     rewardSpots: rewards.filter(p => cells[p.y]?.[p.x] === 0 && !crateKeys.has(key(p.x, p.y))),
   });
   return {zone, rand};

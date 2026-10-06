@@ -1,5 +1,5 @@
 import {chooseRewardDoor, roomsAvoidableOnRoute, shapeDungeon, shortestFloorPath} from './layout.js';
-import {addFlankLoops, pruneDeadEnds} from './floor-topology.js';
+import {rebuildCorridors} from './floor-topology.js';
 import {stampRoomTemplates} from './room-templates.js';
 import {assignRoomRoles} from './room-roles.js';
 
@@ -33,8 +33,7 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
       };
     });
     if (!generatedRooms.length) continue;
-    const loops = addFlankLoops(cells, generatedRooms, seed, 2).length;
-    pruneDeadEnds(cells, generatedRooms);
+    const {loops} = rebuildCorridors(cells, generatedRooms, seed, 2);
 
     const start = generatedRooms.reduce((best, room) =>
       Math.hypot(room.cx - mapWidth / 2, room.cy - mapHeight / 2) < Math.hypot(best.cx - mapWidth / 2, best.cy - mapHeight / 2) ? room : best,

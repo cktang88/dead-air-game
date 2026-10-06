@@ -13,82 +13,127 @@ export function seededRandom(seed) {
   };
 }
 
-const passable = (cells, x, y) => cells[y]?.[x] === 0 || cells[y]?.[x] === 2;
-const LOOP_MIN_GAP = 4, LOOP_MAX_GAP = 10;
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-function candidateBridges(cells, rooms) {
-  const out = [];
-  for (let i = 0; i < rooms.length; i++) for (let j = i + 1; j < rooms.length; j++) {
-    const a = rooms[i], b = rooms[j];
-    for (const [first, second] of [[a, b], [b, a]]) {
-      // first is left of / above second
-      const yLo = Math.max(first.y1 + 1, second.y1 + 1), yHi = Math.min(first.y2 - 1, second.y2 - 1);
-      const gapX = second.x1 - first.x2 - 1;
-      if (gapX >= LOOP_MIN_GAP && gapX <= LOOP_MAX_GAP && yHi - yLo >= 2) {
-        const line = Math.floor((yLo + yHi) / 2);
-        out.push({a: first, b: second, axis: 'x', line, from: first.x2 + 1, to: second.x1 - 1, gap: gapX});
-      }
-      const xLo = Math.max(first.x1 + 1, second.x1 + 1), xHi = Math.min(first.x2 - 1, second.x2 - 1);
-      const gapY = second.y1 - first.y2 - 1;
-      if (gapY >= LOOP_MIN_GAP && gapY <= LOOP_MAX_GAP && xHi - xLo >= 2) {
-        const line = Math.floor((xLo + xHi) / 2);
-        out.push({a: first, b: second, axis: 'y', line, from: first.y2 + 1, to: second.y1 - 1, gap: gapY});
+class Heap {
+  constructor() { this.a = []; }
+  push(cost, val) {
+    const a = this.a; a.push([cost, val]);
+    let i = a.length - 1;
+    while (i > 0) { const up = (i - 1) >> 1; if (a[up][0] <= a[i][0]) break; [a[up], a[i]] = [a[i], a[up]]; i = up; }
+  }
+  pop() {
+    const a = this.a, top = a[0], last = a.pop();
+    if (a.length) {
+      a[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1; let m = i;
+        if (l < a.length && a[l][0] < a[m][0]) m = l;
+        if (r < a.length && a[r][0] < a[m][0]) m = r;
+        if (m === i) break;
+        [a[m], a[i]] = [a[i], a[m]]; i = m;
       }
     }
+    return top;
   }
-  return out;
+  get size() { return this.a.length; }
 }
 
-function stripTiles(bridge) {
-  const tiles = [];
-  for (let path = bridge.from; path <= bridge.to; path++) for (const side of [0, 1]) {
-    tiles.push(bridge.axis === 'x' ? {x: path, y: bridge.line + side} : {x: bridge.line + side, y: path});
+// Cheapest 1-wide corridor between the wall rings of rooms a and b that never crosses another room.
+// Starts/ends on a non-corner ring cell (the door). Existing corridor cells are cheap so routes merge,
+// turns are expensive so corridors run straight. Returns [{x,y}...] or null.
+function routeCorridor(cells, rooms, a, b) {
+  const h = cells.length, w = cells[0].length;
+  const ring = r => ({x1: r.x1 - 1, x2: r.x2 + 1, y1: r.y1 - 1, y2: r.y2 + 1});
+  const rects = rooms.map(r => ({r, e: ring(r)}));
+  const forbidden = new Uint8Array(w * h);
+  for (const {r, e} of rects) {
+    for (let y = e.y1; y <= e.y2; y++) for (let x = e.x1; x <= e.x2; x++) {
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      const border = x === e.x1 || x === e.x2 || y === e.y1 || y === e.y2;
+      const corner = (x === e.x1 || x === e.x2) && (y === e.y1 || y === e.y2);
+      if (!border || corner || (r !== a && r !== b)) forbidden[y * w + x] = 1;
+    }
   }
-  return tiles;
+  const isDoorOf = (r, x, y) => {
+    const e = ring(r);
+    if (x < e.x1 || x > e.x2 || y < e.y1 || y > e.y2) return false;
+    const border = x === e.x1 || x === e.x2 || y === e.y1 || y === e.y2;
+    return border && !((x === e.x1 || x === e.x2) && (y === e.y1 || y === e.y2));
+  };
+  const key = (x, y, d) => (y * w + x) * 5 + d;
+  const dist = new Map(), prev = new Map(), heap = new Heap();
+  const ea = ring(a);
+  for (let y = ea.y1; y <= ea.y2; y++) for (let x = ea.x1; x <= ea.x2; x++) {
+    if (!isDoorOf(a, x, y) || x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
+    dist.set(key(x, y, 4), 0); heap.push(0, {x, y, d: 4});
+  }
+  while (heap.size) {
+    const [cost, cur] = heap.pop();
+    if (cost > (dist.get(key(cur.x, cur.y, cur.d)) ?? Infinity)) continue;
+    if (isDoorOf(b, cur.x, cur.y) && cost > 0) {
+      const path = [];
+      let k = key(cur.x, cur.y, cur.d);
+      while (k !== undefined) { const c = Math.floor(k / 5); path.push({x: c % w, y: Math.floor(c / w)}); k = prev.get(k); }
+      return path.reverse();
+    }
+    for (let d = 0; d < 4; d++) {
+      const nx = cur.x + DIRS[d][0], ny = cur.y + DIRS[d][1];
+      if (nx < 1 || ny < 1 || nx >= w - 1 || ny >= h - 1 || forbidden[ny * w + nx] && !isDoorOf(b, nx, ny)) continue;
+      const step = (cells[ny][nx] === 0 ? 0.4 : 1) + (cur.d !== 4 && cur.d !== d ? 3 : 0);
+      const nk = key(nx, ny, d), nc = cost + step;
+      if (nc < (dist.get(nk) ?? Infinity)) { dist.set(nk, nc); prev.set(nk, key(cur.x, cur.y, cur.d)); heap.push(nc, {x: nx, y: ny, d}); }
+    }
+  }
+  return null;
 }
 
-// Carves up to maxLoops short connectors between rooms whose current walking route is much longer
-// than the direct hop. Returns the carved bridges. Deterministic for a given seed.
-export function addFlankLoops(cells, rooms, seed, maxLoops = 2) {
+// Discards ROT's own corridors and rebuilds the connections: a minimum spanning tree over nearby rooms
+// (short, straight, 1-wide corridors that never cut through other rooms) plus up to maxLoops flank
+// connections between rooms that are far apart in the graph but physically close.
+// Door cells on room rings are written as 2 (shapeDungeon turns them into doorways).
+// Returns {loops, edges}.
+export function rebuildCorridors(cells, rooms, seed, maxLoops = 2) {
   const random = seededRandom(seed ^ 0x51ed270b);
-  const carved = [];
-  for (let round = 0; round < maxLoops; round++) {
-    const scored = [];
-    for (const bridge of candidateBridges(cells, rooms)) {
-      const tiles = stripTiles(bridge);
-      if (!tiles.every(({x, y}) => cells[y]?.[x] === 1)) continue;
-      const touchesRoom = rooms.some(r => r !== bridge.a && r !== bridge.b && tiles.some(({x, y}) =>
-        x >= r.x1 - 1 && x <= r.x2 + 1 && y >= r.y1 - 1 && y <= r.y2 + 1));
-      if (touchesRoom) continue;
-      const start = {x: bridge.a.cx, y: bridge.a.cy}, goal = {x: bridge.b.cx, y: bridge.b.cy};
-      const route = shortestFloorPath(cells, start, goal, (x, y) => passable(cells, x, y)).length;
-      if (!route) continue;
-      const direct = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y);
-      const saving = route - direct;
-      if (saving < 14) continue;
-      scored.push({bridge, saving: saving + random() * 4});
+  const h = cells.length, w = cells[0].length;
+  const inRect = (x, y) => rooms.some(r => x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!inRect(x, y)) cells[y][x] = 1;
+  const centerDist = (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy);
+  const edges = [], joined = new Set([0]), carve = path => {
+    path.forEach(({x, y}, i) => { cells[y][x] = i === 0 || i === path.length - 1 ? 2 : 0; });
+  };
+  const adjacency = rooms.map(() => new Set());
+  const connect = (i, j, path) => { carve(path); edges.push({a: i, b: j, length: path.length}); adjacency[i].add(j); adjacency[j].add(i); };
+  const attempts = new Set();
+  while (joined.size < rooms.length) {
+    let best = null;
+    for (const i of joined) for (let j = 0; j < rooms.length; j++) {
+      if (joined.has(j) || attempts.has(`${i}-${j}`)) continue;
+      const d = centerDist(rooms[i], rooms[j]);
+      if (!best || d < best.d) best = {i, j, d};
     }
-    if (!scored.length) break;
-    scored.sort((a, b) => b.saving - a.saving);
-    const {bridge} = scored[0];
-    for (const {x, y} of stripTiles(bridge)) cells[y][x] = 0;
-    carved.push(bridge);
+    if (!best) break;
+    const path = routeCorridor(cells, rooms, rooms[best.i], rooms[best.j]);
+    attempts.add(`${best.i}-${best.j}`);
+    if (!path) continue;
+    connect(best.i, best.j, path); joined.add(best.j);
   }
-  return carved;
-}
-
-// Removes dead-end corridor stubs (corridor/door cells outside every room rectangle that touch at most
-// one walkable neighbour), repeatedly, so corridors always connect two rooms. Returns the cells removed.
-export function pruneDeadEnds(cells, rooms) {
-  const inRoom = (x, y) => rooms.some(r => x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2);
-  let removed = 0, changed = true;
-  while (changed) {
-    changed = false;
-    for (let y = 1; y < cells.length - 1; y++) for (let x = 1; x < cells[y].length - 1; x++) {
-      if (!passable(cells, x, y) || inRoom(x, y)) continue;
-      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => passable(cells, x + dx, y + dy)).length;
-      if (open <= 1) { cells[y][x] = 1; removed++; changed = true; }
-    }
+  const hops = from => {
+    const d = new Map([[from, 0]]), q = [from];
+    for (let head = 0; head < q.length; head++) for (const n of adjacency[q[head]]) if (!d.has(n)) { d.set(n, d.get(q[head]) + 1); q.push(n); }
+    return d;
+  };
+  const pairs = [];
+  for (let i = 0; i < rooms.length; i++) for (let j = i + 1; j < rooms.length; j++) pairs.push({i, j, d: centerDist(rooms[i], rooms[j]) + random() * 6});
+  pairs.sort((p, q) => p.d - q.d);
+  let loops = 0;
+  for (const {i, j} of pairs) {
+    if (loops >= maxLoops) break;
+    if (adjacency[i].has(j) || (hops(i).get(j) ?? 9) < 3) continue;
+    const path = routeCorridor(cells, rooms, rooms[i], rooms[j]);
+    if (!path || path.length > 16) continue;
+    connect(i, j, path); loops++;
   }
-  return removed;
+  return {loops, edges};
 }
