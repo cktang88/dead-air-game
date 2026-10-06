@@ -33,3 +33,5 @@ Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It lau
 For a seeded encounter check, open `http://localhost:8000/tests/full-floor-browser-harness.html`. It equips armor, clears the first combat room, checks a fresh ranged-shot dodge, tries an affordable scrap gate, then pauses the run and restores the original save. It is a focused probe, not a full-floor playthrough.
 
 Room Sense reveals nearby room outlines and enemy blips through walls at increasing ranges; Vital Reserve permanently adds up to three health and starts each run fully healed. Progress is saved in this browser, with a reset option in the Safehouse upgrades panel. See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist. Remaining work is focused on full-floor playtesting, balance across seeds, and sustained performance checks.
+
+Art credits and icon licences (game-icons.net, CC BY 3.0) are in [CREDITS.md](./CREDITS.md).

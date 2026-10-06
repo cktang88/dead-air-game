@@ -161,7 +161,7 @@ function renderLoadout(){
   }).join('');
   $('carry-readout').textContent=`WEIGHT ${weight.toFixed(1)} / ${state.carryCapacity.toFixed(1)} · ${state.weaponSlots.length}/${maxWeaponSlots()} SLOTS`;
   const gun=GUNS[state.weaponIndex],installed=attachmentsFor(gun),available=compatibleAttachments(gun,MODS);
-  $('mod-list').innerHTML=available.map(mod=>{const tier=installed.get(mod.id);return `<div class="mod-row ${tier?'equipped':''}" ${tier?`style="--tier:${tierColor(tier)}"`:''}>${strokeIcon('mod','ico')}<span>${mod.name}${tier?` <em class="chip tier">${lootTier(tier).label}</em>`:''}<br><small>${mod.info}</small></span><button data-mod="${mod.id}" ${tier||state.scrap<mod.cost?'disabled':''}>${tier?`INSTALLED · ${lootTier(tier).label}`:`${mod.cost} SCRAP`}</button></div>`}).join('')||'<div class="mod-row"><span>No compatible attachments for this weapon.</span></div>';
+  $('mod-list').innerHTML=available.map(mod=>{const tier=installed.get(mod.id);return `<div class="mod-row ${tier?'equipped':''}" ${tier?`style="--tier:${tierColor(tier)}"`:''}>${strokeIcon(mod.id,'ico')}<span>${mod.name}${tier?` <em class="chip tier">${lootTier(tier).label}</em>`:''}<br><small>${mod.info}</small></span><button data-mod="${mod.id}" ${tier||state.scrap<mod.cost?'disabled':''}>${tier?`INSTALLED · ${lootTier(tier).label}`:`${mod.cost} SCRAP`}</button></div>`}).join('')||'<div class="mod-row"><span>No compatible attachments for this weapon.</span></div>';
   updateThrowableHud();
 }
 function previewLoadoutChange(change){

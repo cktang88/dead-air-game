@@ -3,44 +3,18 @@
 // module can be imported under node.
 
 // ---------------------------------------------------------------- icons
-// Gun silhouettes, 64x24 viewBox, muzzle on the right, filled with currentColor.
-const GUN_SHAPES = {
-  PISTOL: ['M10 5h40v6H10z', 'M12 11h10l-3 11h-8z', 'M50 6h7v3h-7z', 'M23 11h8v3h-8z'],
-  SMG: ['M8 7h38v6H8z', 'M2 8h6v4H2z', 'M24 13h5v9h-5z', 'M13 13h6l-2 8h-5z', 'M46 8h13v3H46z', 'M30 4h9v3h-9z'],
-  SHOTGUN: ['M2 8l11-1v6L2 15z', 'M13 8h45v4H13z', 'M13 6h48v2H13z', 'M33 12h13v3H33z', 'M17 12h7l-2 7h-5z'],
-  'ASSAULT RIFLE': ['M2 8h10v6H2z', 'M12 8h34v5H12z', 'M46 9h12v3H46z', 'M58 9.5h5v2h-5z', 'M26 13h5l2 9h-6z', 'M14 13h5l-2 8h-4z', 'M20 5h20v3H20z'],
-  SNIPER: ['M2 7h14v7H2z', 'M16 8h28v4H16z', 'M44 9.5h19v2H44z', 'M22 2h16v4H22z', 'M28 6h4v2h-4z', 'M28 12h5v5h-5z', 'M17 12h6l-2 8h-5z'],
-  'ANTI-MATERIEL': ['M1 6h15v9H1z', 'M16 7h30v6H16z', 'M46 8.5h11v3H46z', 'M57 6h6v8h-6z', 'M20 1h20v5H20z', 'M28 13h6v6h-6z', 'M18 13h6l-2 9h-5z'],
-};
-const FALLBACK_SHAPE = GUN_SHAPES.SMG;
+// Real glyphs live in icons.js (game-icons.net / MDI, single colour, tinted via currentColor).
+// CSS sizes the <svg> (class names are unchanged), so no width/height attributes are emitted here.
+import { iconSvg, GUN_CATEGORY_ICON, resolveIcon } from './icons.js';
 
 export function gunIcon(gunOrCategory, cls = 'gun-ico') {
   const category = typeof gunOrCategory === 'string' ? gunOrCategory : gunOrCategory?.category;
-  const shapes = GUN_SHAPES[category] || FALLBACK_SHAPE;
-  return `<svg class="${cls}" viewBox="0 0 64 24" aria-hidden="true" fill="currentColor">${shapes.map(d => `<path d="${d}"/>`).join('')}</svg>`;
+  return iconSvg(GUN_CATEGORY_ICON[category] || 'gun-smg', { size: 0, cls });
 }
 
-// 24x24 stroked line icons.
-export const ICON_PATHS = {
-  smoke: 'M7 19h10a4 4 0 0 0 0-8 5.5 5.5 0 0 0-10.5-1.5A4.5 4.5 0 0 0 7 19z',
-  flash: 'M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5L19 19M19 5l-3.5 3.5M8.5 15.5L5 19',
-  frag: 'M6 15a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M10 9V6h4v3M14 6l5-3',
-  incendiary: 'M12 22c-4 0-7-3-7-7 0-4 4-6 4-11 3 2 5 5 5 8 1-1 2-2 2-4 2 2 3 4 3 7 0 4-3 7-7 7z',
-  ammo: 'M8 2h8v6l2 14h-8L8 8zM9.5 7h5M10 11.5h6M10.5 16h6',
-  health: 'M4 4h16v16H4zM12 8v8M8 12h8',
-  upgrade: 'M3 6h18v5H3zM9 11l-1.5 10h4.5l1-10',
-  prototype: 'M12 2l7 10-7 10-5-10zM7 12h10',
-  scrap: 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10',
-  armor: 'M12 2l8 3v7c0 5-4 9-8 10-4-1-8-5-8-10V5z',
-  harness: 'M6 3v18M18 3v18M6 8h12M6 15h12',
-  scanner: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 2v7M12 15v7M2 12h7M15 12h7',
-  mod: 'M3 6h18v5H3zM9 11l-1.5 10h4.5l1-10',
-  coin: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4',
-  gear: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM19 12l2-1-1-3-2 .5-1.5-1.5.5-2-3-1-1 2h-2l-1-2-3 1 .5 2L5 8.5 3 8l-1 3 2 1v2l-2 1 1 3 2-.5 1.5 1.5-.5 2 3 1 1-2h2l1 2 3-1-.5-2 1.5-1.5 2 .5 1-3-2-1z',
-};
+/** Icon for an item / pickup / throwable / mod id (smoke, ammo, health, armor, extended, ...). */
 export function strokeIcon(name, cls = 'ico') {
-  const d = ICON_PATHS[name] || ICON_PATHS.mod;
-  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  return iconSvg(resolveIcon(name, 'pickup-mod'), { size: 0, cls });
 }
 
 // ---------------------------------------------------------------- tiers
