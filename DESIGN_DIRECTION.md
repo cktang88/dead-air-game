@@ -17,6 +17,18 @@ Great small action games are the opposite shape. SUPERHOT is one rule pushed unt
 5. **Fewer, sharper things.** Every gun has a job you can name in two words. Every pickup is obvious at a glance. Every UI element earns its pixels. If two systems do the same job, keep the better one.
 6. **One world, one voice.** DEAD AIR is a dead broadcast: a sealed signal bunker where the transmission cut out. Radio static, warning lights, tape-label UI, interference when time slows. The title, the HUD, the rooms, the sounds and the enemies all come from that place.
 
+## Principles every feature must follow
+
+These come from the canon: Super Mario Bros. 1-1 and Portal (teach by doing), Don Norman's affordances and feedback, Nintendo's kishōtenketsu level structure (introduce, develop, twist, conclude), Celeste and Hades (respect the player and their time), and Jesse Schell's lenses of surprise, fun and the toy.
+
+1. **Teach by doing, not by reading.** Every mechanic is introduced in a safe space where the player discovers it, then tested with mild pressure, then twisted. Text is a fallback, never the lesson. The first floor *is* the tutorial.
+2. **No hidden rules.** If a rule affects the outcome, the player can see it at the moment it matters: the shield arc is drawn, noise radius ripples when you fire, the vision cone shows when an enemy is looking, and damage numbers show bonuses. A pause-menu field manual lists every mechanic the player has met so far, in one line each.
+3. **Affordance and consistency.** Things that look alike behave alike. Interactables glow the same way; hazards share one color; every enemy attack has a wind-up in the same visual language. A new thing is introduced with a name card the first time it appears.
+4. **Feedback for every action.** Every input produces an immediate, proportional response in sight and sound. Every failure tells you why ("KILLED BY MARKSMAN · STOOD IN A LANE").
+5. **Every element earns joy.** Each feature must be fun to use, satisfying to see or hear, or surprising in a way the player can later master. Nothing exists to be different or unusual for its own sake. If a system is just bookkeeping, cut it or make it a toy.
+6. **Respect time.** Instant restarts, no unskippable text, short runs, and checkpoints of knowledge (the field manual and tapes) instead of grind.
+7. **Surprise with rules, not randomness.** Surprises come from systems interacting in ways the player can understand afterward: a ricochet kill, a flash through a door, an enemy shooting its friend. Randomness sets up situations; it never decides outcomes the player could not read.
+
 ## Concrete changes (priority order)
 
 ### 1. The time rule (the hook)
@@ -57,6 +69,16 @@ Great small action games are the opposite shape. SUPERHOT is one rule pushed unt
 - **Death moves the story forward (Hades).** The safehouse has a radio operator who comments on how you died, what you found and what you killed. Recovered tapes play short transmissions that slowly explain what happened to the station. A failed run still ends with something new.
 - **Interference (Hades' heat).** After the first win, players can stack difficulty modifiers for better rewards: armored enemies, faster wind-ups, no slow time below a certain health, and so on.
 - **Mastery tools.** A short dash with invulnerability frames, on a cooldown measured in world time. Gun aspects unlocked in the safehouse change how a gun works, not just its numbers. Seeded daily runs come with a one-line result to share.
+
+### 5c. Onboarding: the Signal Check
+The first run starts on a short, hand-built floor, the "Signal Check", before the generated floors. It has five rooms, each teaching one idea through play:
+1. **Breath:** a frozen room with a bullet hanging in the air. Moving makes it move. The player learns the time rule with no text beyond "MOVE".
+2. **Shot:** one sleeping enemy behind glass. Shooting it teaches aim and shows that a shot spends time.
+3. **Dodge:** a gunner fires a slow, telegraphed shot down a corridor. Standing still makes the dodge trivial, which teaches using stillness to read.
+4. **Door:** peek through a door, see two enemies, choose a route. A flashbang is offered here.
+5. **Choice:** the first reward door pick, then the exit to the real run.
+
+Returning players skip it, and it can be replayed from settings. A pause-menu field manual unlocks entries as mechanics are met.
 
 ### 6. First 60 seconds (what a judge sees)
 - 0–5 s: a broadcast test card glitches into the title, with static, a tone and a dropout.
