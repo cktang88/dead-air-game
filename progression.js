@@ -1,6 +1,11 @@
 import {BASE_CARRY_CAPACITY,TILE} from './catalog.js';
+import {emptyStats} from './goals.js';
+import {KITS, UNLOCK_BY_ID, isUnlocked, kitUnlocked} from './unlocks.js';
+import {freqStats} from './frequencies.js';
+import {COIN_RATES} from './run-loop.js';
 
-export const SAVE_VERSION = 1;
+// v1: coins + 7 flat upgrades. v2 adds unlocks, starting kit, run stats, goals and the daily record.
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = 'dead-air.progress.v1';
 const ROOM_SENSE_RANGE_TILES = [15,25,35];
 
@@ -12,26 +17,56 @@ export const META_UPGRADES = [
   {id:'luckyfind',name:'LUCKY FIND',description:'Find higher-quality attachment drops more often',costs:[30,60,90]},
   {id:'roomsense',name:'ROOM SENSE',description:`Reveal room outlines and enemy blips through walls within ${ROOM_SENSE_RANGE_TILES.join(' / ')} tiles`,costs:[35,65,100]},
   {id:'vitalreserve',name:'VITAL RESERVE',description:'+1 maximum health per level · start each run fully healed',costs:[40,80,130]},
+  // Tradeoff upgrades: unlocked by goals, then bought like any other.
+  {id:'highroller',name:'HIGH ROLLER',description:'+25% coins from every run, but dying keeps only 25% instead of 40%',costs:[60],requires:'upg:highroller'},
+  {id:'adrenal',name:'ADRENAL GLAND',description:'+20% damage, but −1 maximum health',costs:[50],requires:'upg:adrenal'},
+  {id:'stockpile',name:'STOCKPILE',description:'+40 starting scrap per level, but −6% move speed per level',costs:[30,50],requires:'upg:stockpile'},
 ];
+export const UPGRADE_IDS = META_UPGRADES.map(item => item.id);
 
 export function emptyProgress() {
-  return {version:SAVE_VERSION,coins:0,upgrades:{runner:0,stillmind:0,carryrig:0,salvager:0,luckyfind:0,roomsense:0,vitalreserve:0}};
+  return {
+    version:SAVE_VERSION,coins:0,
+    upgrades:Object.fromEntries(UPGRADE_IDS.map(id=>[id,0])),
+    unlocked:[],kit:'standard',stats:emptyStats(),goals:{},
+    daily:{date:'',bestFloor:0,bestKills:0},
+  };
+}
+
+const num=(value,fallback=0)=>Number.isFinite(value)?value:fallback;
+
+// Accepts any saved shape and returns a valid v2 profile. v1 saves (coins + upgrade levels) migrate in place:
+// coins and upgrade levels survive, everything new starts at its default.
+export function migrateProgress(data) {
+  const empty=emptyProgress();
+  if(!data||typeof data!=='object'||!Number.isFinite(data.coins))return empty;
+  if(data.version!==1&&data.version!==SAVE_VERSION)return empty;
+  const upgrades={...empty.upgrades};
+  for(const upgrade of META_UPGRADES){
+    const level=data.upgrades?.[upgrade.id];
+    if(Number.isInteger(level))upgrades[upgrade.id]=Math.max(0,Math.min(upgrade.costs.length,level));
+  }
+  const next={...empty,coins:Math.max(0,Math.floor(data.coins)),upgrades};
+  if(data.version===SAVE_VERSION){
+    if(Array.isArray(data.unlocked))next.unlocked=[...new Set(data.unlocked.filter(id=>UNLOCK_BY_ID.has(id)))];
+    if(typeof data.kit==='string')next.kit=data.kit;
+    const stats=data.stats&&typeof data.stats==='object'?data.stats:{};
+    next.stats=Object.fromEntries(Object.keys(emptyStats()).map(key=>[key,Math.max(0,Math.floor(num(stats[key])))]));
+    if(data.goals&&typeof data.goals==='object')for(const [id,done] of Object.entries(data.goals))if(done===true)next.goals[id]=true;
+    const daily=data.daily&&typeof data.daily==='object'?data.daily:{};
+    next.daily={date:typeof daily.date==='string'?daily.date.slice(0,10):'',bestFloor:Math.max(0,Math.floor(num(daily.bestFloor))),bestKills:Math.max(0,Math.floor(num(daily.bestKills)))};
+  }
+  // A kit that is not owned falls back to standard issue.
+  if(!kitUnlocked(next,next.kit))next.kit='standard';
+  return next;
 }
 
 export function parseProgress(serialized) {
-  const empty=emptyProgress();
-  if(typeof serialized!=='string')return empty;
+  if(typeof serialized!=='string')return emptyProgress();
   try {
-    const data=JSON.parse(serialized);
-    if(data?.version!==SAVE_VERSION||!Number.isFinite(data.coins))return empty;
-    const upgrades={...empty.upgrades};
-    for(const upgrade of META_UPGRADES){
-      const level=data.upgrades?.[upgrade.id];
-      if(Number.isInteger(level))upgrades[upgrade.id]=Math.max(0,Math.min(upgrade.costs.length,level));
-    }
-    return {version:SAVE_VERSION,coins:Math.max(0,Math.floor(data.coins)),upgrades};
+    return migrateProgress(JSON.parse(serialized));
   } catch {
-    return empty;
+    return emptyProgress();
   }
 }
 
@@ -46,6 +81,7 @@ export function awardCoins(progress,amount) {
 export function purchaseUpgrade(progress,id) {
   const definition=META_UPGRADES.find(item=>item.id===id);
   if(!definition)return {progress,purchased:false};
+  if(definition.requires&&!isUnlocked(progress,definition.requires))return {progress,purchased:false};
   const level=progress.upgrades[id];
   const cost=definition.costs[level];
   if(cost===undefined||progress.coins<cost)return {progress,purchased:false};
@@ -55,17 +91,31 @@ export function purchaseUpgrade(progress,id) {
   };
 }
 
-export function progressionStats(progress) {
-  const {runner,stillmind,carryrig,salvager,luckyfind,roomsense,vitalreserve}=progress.upgrades;
+// Meta-upgrade stats, optionally folded with the run's frequencies (an object {upgradeId: rank}).
+export function progressionStats(progress,freqs={}) {
+  const {runner,stillmind,carryrig,salvager,luckyfind,roomsense,vitalreserve,highroller=0,adrenal=0,stockpile=0}=progress.upgrades;
+  const perk=freqStats(freqs);
   return {
-    moveSpeed:112*(1+.06*runner),
-    idleScale:Math.max(.12,.18-.015*stillmind),
-    maxHealth:5+vitalreserve,
+    moveSpeed:112*(1+.06*runner-.06*stockpile)*perk.moveMult,
+    idleScale:Math.max(.06,.18-.015*stillmind+perk.idleScaleDelta),
+    maxHealth:Math.max(1,5+vitalreserve-adrenal),
     carryCapacity:BASE_CARRY_CAPACITY+carryrig,
     maxWeaponSlots:carryrig>=3?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
     roomClearScrap:20+2*salvager,
     luckyFindLevel:luckyfind,
     scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*TILE,
+    // Run-economy and combat modifiers (tradeoff upgrades + perks).
+    damageMult:1+.2*adrenal,
+    startScrap:40+40*stockpile,
+    coinMult:(1+.25*highroller)*perk.coinMult,
+    deathKeep:highroller?.25:COIN_RATES.deathKeep,
   };
+}
+
+// Daily record: keeps the deepest floor / most kills for a given date key.
+export function recordDaily(progress,date,{floor,kills}) {
+  const same=progress.daily?.date===date;
+  const daily={date,bestFloor:Math.max(same?progress.daily.bestFloor:0,floor),bestKills:Math.max(same?progress.daily.bestKills:0,kills)};
+  return {...progress,daily};
 }

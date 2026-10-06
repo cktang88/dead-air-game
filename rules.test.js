@@ -325,6 +325,7 @@ test('an unlocked third slot appends a distinct gun only when weapon and gear we
   assert.deepEqual(current,[0,1]);
 });
 
+const legacyStats=({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange})=>({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange});
 test('run coins reward death and extraction while upgrades persist as capped levels',()=>{
   const deathPayout=runCoinPayout({won:false,roomsCleared:2,kills:4});
   const winPayout=runCoinPayout({won:true,roomsCleared:2,kills:4});
@@ -354,12 +355,12 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(base,{moveSpeed:112,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.carryrig,3);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(progressionStats(restored),{moveSpeed:118.72,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.18,maxHealth:5,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
 });
 
