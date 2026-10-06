@@ -79,17 +79,67 @@ export function wallTile(size = 128, seed = 11) {
   return c;
 }
 
-// Deep rock/void fill with a faint texture so it is not a flat black.
+// Solid bedrock for everything outside the dungeon: faceted dark stone with cracks and a cool rim light, tileable.
 export function voidTile(size = 128, seed = 3) {
   const c = makeCanvas(size, size), g = c.getContext('2d'), rnd = seeded(seed);
-  g.fillStyle = '#0d0b13'; g.fillRect(0, 0, size, size);
-  const area = size * size / 10000;
-  for (let i = 0; i < 10 * area; i++) {
-    const r = 12 + rnd() * 30;
-    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, '70,60,90', 0.05 + rnd() * 0.04));
+  const N = 15, pts = [];
+  for (let i = 0; i < N; i++) pts.push([rnd() * size, rnd() * size, 0.82 + rnd() * 0.36, rnd()]);
+  const img = g.createImageData(size, size), d = img.data;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let d1 = 1e9, d2 = 1e9, k = 0;
+    for (let i = 0; i < N; i++) {
+      for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+        const dx = x - (pts[i][0] + ox), dy = y - (pts[i][1] + oy), dd = dx * dx + dy * dy;
+        if (dd < d1) { d2 = d1; d1 = dd; k = i; } else if (dd < d2) d2 = dd;
+      }
+    }
+    const e = Math.sqrt(d2) - Math.sqrt(d1);
+    const shade = pts[k][2], crack = e < 2.2 ? 0.35 + e * 0.28 : 1, rim = e > 2.2 && e < 4.5 ? 1.18 : 1;
+    const n = 0.93 + ((x * 7 + y * 13 + k * 31) % 11) * 0.011;
+    const v = Math.min(1.4, shade * crack * rim * n);
+    const o = (y * size + x) * 4;
+    d[o] = 24 * v; d[o + 1] = 22 * v; d[o + 2] = 34 * v; d[o + 3] = 255;
   }
-  for (let i = 0; i < 160 * area; i++) { g.fillStyle = '#4d4560'; g.globalAlpha = 0.05 + rnd() * 0.1; g.fillRect(rnd() * size, rnd() * size, 1, 1); }
+  g.putImageData(img, 0, 0);
+  const area = size * size / 10000;
+  for (let i = 0; i < 6 * area; i++) {
+    const r = 14 + rnd() * 30;
+    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, '60,56,90', 0.05));
+  }
+  for (let i = 0; i < 140 * area; i++) { g.fillStyle = rnd() < 0.7 ? '#4d4660' : '#06050a'; g.globalAlpha = 0.08 + rnd() * 0.14; g.fillRect(rnd() * size, rnd() * size, 1, 1); }
   g.globalAlpha = 1;
+  return c;
+}
+
+// Short carpet fibres, tileable, transparent (laid over a flat carpet colour).
+export function carpetTile(size = 64, seed = 4) {
+  const c = makeCanvas(size, size), g = c.getContext('2d'), rnd = seeded(seed);
+  for (let i = 0; i < size * size * 0.5; i++) {
+    const dark = rnd() < 0.5;
+    g.fillStyle = dark ? '#05040a' : '#ffffff';
+    g.globalAlpha = 0.05 + rnd() * 0.1;
+    const x = rnd() * size, y = rnd() * size;
+    g.fillRect(x, y, 1, 1 + (rnd() < 0.4 ? 1 : 0));
+  }
+  g.globalAlpha = 1;
+  return c;
+}
+
+// Rubble / packed dirt speckle, tileable, transparent.
+export function dirtTile(size = 128, seed = 8) {
+  const c = makeCanvas(size, size), g = c.getContext('2d'), rnd = seeded(seed);
+  const area = size * size / 10000;
+  for (let i = 0; i < 12 * area; i++) {
+    const r = 6 + rnd() * 22, light = rnd() < 0.5;
+    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, light ? '230,200,150' : '20,12,6', light ? 0.08 : 0.12));
+  }
+  for (let i = 0; i < 60 * area; i++) {
+    const x = rnd() * size, y = rnd() * size, r = 0.8 + rnd() * 2.2, light = rnd() < 0.45;
+    g.fillStyle = light ? 'rgba(240,215,170,0.35)' : 'rgba(18,10,6,0.45)';
+    g.beginPath(); g.ellipse(x, y, r, r * 0.7, rnd() * 3, 0, 6.3); g.fill();
+    if (!light) { g.fillStyle = 'rgba(240,215,170,0.18)'; g.fillRect(x - r * 0.5, y - r * 0.9, r, 0.7); }
+  }
+  for (let i = 0; i < 300 * area; i++) { g.fillStyle = rnd() < 0.5 ? 'rgba(10,6,4,0.3)' : 'rgba(255,240,210,0.25)'; g.fillRect(rnd() * size, rnd() * size, 1, 1); }
   return c;
 }
 
