@@ -5,7 +5,7 @@ import {createCamera, followStep, lookAheadOffset, resizeCamera, screenToWorld a
 import {Fx} from './fx2d.js';
 import {Lighting} from './lighting2d.js';
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
-import {WorldLayer, drawDecal} from './world2d.js';
+import {WorldLayer} from './world2d.js';
 
 export {hexStr};
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
@@ -643,21 +643,6 @@ export function createRenderer(container, state) {
     return vignette;
   }
 
-  function drawGrade(w, h) {
-    const slow = vis.slow, dead = state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-    // warm at full speed, cold + dim in slow time
-    if (slow < 1) { ctx.fillStyle = `rgba(255,150,70,${0.05 * (1 - slow)})`; ctx.fillRect(0, 0, w, h); }
-    if (slow > 0.01) {
-      ctx.fillStyle = `rgba(34,64,140,${0.13 * slow})`; ctx.fillRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(10,26,58,${0.07 * slow})`; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over';
-    }
-    ctx.globalAlpha = 0.1 + 0.24 * slow + dead * 0.2; ctx.drawImage(ensureVignette(w, h), 0, 0, w, h); ctx.globalAlpha = 1;
-    if (dead > 0) { ctx.fillStyle = `rgba(70,8,20,${0.28 * dead})`; ctx.fillRect(0, 0, w, h); }
-    if (state.mode === 'won') { ctx.fillStyle = 'rgba(120,255,190,0.07)'; ctx.fillRect(0, 0, w, h); }
-    ctx.restore();
-  }
-
   function drawCrosshair(dpr) {
     if (!vis.mouseActive || state.mode !== 'play' || state.paused || state.loadoutOpen || state.merchantOpen || state.cacheOpen || state.pendingGunPickup) return;
     const x = vis.mouseX * dpr, y = vis.mouseY * dpr, s = dpr;
@@ -749,7 +734,6 @@ export function createRenderer(container, state) {
     for (const e of state.enemies) if (e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     drawThrown();
     drawPlayer(now);
-    for (const e of state.enemies) if (e.alive && e.vis?.speed > 40 && e.type !== 'brute') { /* enemies leave only dust */ }
     drawEffects(bp);
     fx.drawSmoke(ctx, bp);
 
@@ -770,10 +754,15 @@ export function createRenderer(container, state) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     fx.drawFloaters(ctx, viewCam, dpr);
+    if (vis.slow > 0.02) {
+      // slow time drains colour (a single 'saturation' blend; skipped at full speed)
+      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.4 * vis.slow; ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    }
     drawCrosshair(dpr);
     const ms = performance.now() - t0;
     stats.drawMs = stats.drawMs * 0.9 + ms * 0.1; stats.frames++; stats.bakeMs = world.bakeMs;
-    void drawDecal;
   }
 
   function hurtFlash() { vis.flashHit = 1; }

@@ -3,6 +3,7 @@
 import {TILE} from './catalog.js';
 import {makeCanvas} from './sprites2d.js';
 
+const FOG_SS = 4;
 const FOG = {current: 0.16, visited: 0.4, unseen: 0.62, corridor: 0.42, rock: 0.9};
 
 let lightSprite = null, vignetteSprite = null;
@@ -47,8 +48,9 @@ export class Lighting {
       around[y * w + x] = list;
     }
     this.level = {w, h, room, floor, around, rooms, cur: new Float32Array(w * h).fill(0.95), tgt: new Float32Array(w * h).fill(0.95)};
-    this.fog.width = w; this.fog.height = h;
-    this.fogData = this.fog.getContext('2d').createImageData(w, h);
+    this.fog.width = w * FOG_SS; this.fog.height = h * FOG_SS;
+    this.fogData = this.fog.getContext('2d').createImageData(w * FOG_SS, h * FOG_SS);
+    for (let i = 0; i < this.fogData.data.length; i += 4) { this.fogData.data[i] = 6; this.fogData.data[i + 1] = 4; this.fogData.data[i + 2] = 14; }
     this.key = ''; this.dirty = true;
   }
 
@@ -79,8 +81,16 @@ export class Lighting {
     for (let i = 0; i < L.w * L.h; i++) {
       const d = L.tgt[i] - L.cur[i];
       if (Math.abs(d) > 0.004) { L.cur[i] += d * k; moving = true; } else L.cur[i] = L.tgt[i];
-      const o = i * 4;
-      data[o] = 6; data[o + 1] = 4; data[o + 2] = 14; data[o + 3] = Math.round(L.cur[i] * 255);
+    }
+    // smooth (bilinear) supersampled fog so room boundaries fade instead of stepping tile by tile
+    const W = L.w * FOG_SS, H = L.h * FOG_SS, cur = L.cur;
+    for (let Y = 0; Y < H; Y++) {
+      const v = (Y + 0.5) / FOG_SS - 0.5, y0 = Math.floor(v), fy = v - y0, ya = Math.max(0, y0), yb = Math.min(L.h - 1, y0 + 1);
+      for (let X = 0; X < W; X++) {
+        const u = (X + 0.5) / FOG_SS - 0.5, x0 = Math.floor(u), fx = u - x0, xa = Math.max(0, x0), xb = Math.min(L.w - 1, x0 + 1);
+        const a = cur[ya * L.w + xa] * (1 - fx) + cur[ya * L.w + xb] * fx, b = cur[yb * L.w + xa] * (1 - fx) + cur[yb * L.w + xb] * fx;
+        data[(Y * W + X) * 4 + 3] = (a * (1 - fy) + b * fy) * 255;
+      }
     }
     this.fog.getContext('2d').putImageData(this.fogData, 0, 0);
     this.dirty = moving;

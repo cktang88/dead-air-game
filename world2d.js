@@ -293,7 +293,7 @@ export class WorldLayer {
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {
       if (kindAt(x, y) !== 1) continue;
       const n = hash2(x, y, L.seed + 5);
-      g.fillStyle = n > 0.5 ? `rgba(255,246,235,${(n - 0.5) * 0.14})` : `rgba(10,6,16,${(0.5 - n) * 0.22})`;
+      g.fillStyle = n > 0.5 ? `rgba(255,246,235,${(n - 0.5) * 0.07})` : `rgba(10,6,16,${(0.5 - n) * 0.12})`;
       g.fillRect(x * TILE, y * TILE, TILE, TILE);
     }
     // inner darkening fading toward the void so walls look thick
