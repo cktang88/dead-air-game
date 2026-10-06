@@ -518,7 +518,7 @@ kbd {
 .build-chip b { margin-left: 3px; color: var(--ink); }
 .build-chip.cross { --st: #ffd27a; background: #2c2314cc; }
 
-#boss-bar { position: absolute; top: 58px; left: 50%; z-index: 4; width: min(560px, 62vw); transform: translateX(-50%); pointer-events: none; }
+#boss-bar { position: absolute; top: 128px; left: 50%; z-index: 4; width: min(560px, 62vw); transform: translateX(-50%); pointer-events: none; }
 #boss-bar .boss-name { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
 #boss-bar small { font: 9px var(--font-mono); letter-spacing: .24em; color: var(--red-soft); }
 #boss-bar strong { font: 800 22px/1 var(--font-display); letter-spacing: .14em; color: #ff9bd0; text-shadow: 0 2px 10px #000b; }

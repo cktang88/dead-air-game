@@ -52,7 +52,7 @@ export function createBoss() {
 
 export function activateBoss(boss) {
   if (boss.active) return boss;
-  boss.active = true; boss.mode = 'intro'; boss.t = 1.6; boss.intro = 1.6; boss.invuln = true;
+  boss.active = true; boss.mode = 'intro'; boss.t = .9; boss.intro = .9; boss.invuln = true;
   return boss;
 }
 

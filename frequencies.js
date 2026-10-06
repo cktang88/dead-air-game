@@ -26,7 +26,7 @@ export const UPGRADES = [
   {id:'dead_channel', station:'static', name:'DEAD CHANNEL', effect:'pulse', unlockCost:60, ranks:[{v:80, desc:'Kills pulse a 2.5 tile stun burst.'}, {v:110, desc:'Kill pulse reaches 3.5 tiles.'}, {v:140, desc:'Kill pulse reaches 4.5 tiles.'}]},
   // DEADLINE: time is a currency
   {id:'borrowed', station:'deadline', name:'BORROWED TIME', effect:'credit', unlockCost:null, ranks:[{v:.6, desc:'Each kill: 0.6 s of walking at half speed.'}, {v:.9, desc:'Each kill: 0.9 s of half-speed walking.'}, {v:1.3, desc:'Each kill: 1.3 s of half-speed walking.'}]},
-  {id:'reload_kill', station:'deadline', name:'CLEAN SLATE', effect:'reloadKill', unlockCost:null, ranks:[{v:.25, desc:'Kills refill 25% of your magazine. Chain kills never reload.'}, {v:.4, desc:'Kills refill 40% of the magazine.'}, {v:.6, desc:'Kills refill 60% of the magazine.'}]},
+  {id:'reload_kill', station:'deadline', name:'CLEAN SLATE', effect:'reloadKill', unlockCost:null, ranks:[{v:.25, desc:'Kills refill 25% of your magazine.'}, {v:.4, desc:'Kills refill 40% of the magazine.'}, {v:.6, desc:'Kills refill 60% of the magazine.'}]},
   {id:'freeze', station:'deadline', name:'FREEZE FRAME', effect:'freeze', unlockCost:45, ranks:[{v:.3, desc:'Every kill freezes time for 0.3 s, even mid-sprint.'}, {v:.45, desc:'Kill freeze lasts 0.45 s.'}, {v:.65, desc:'Kill freeze lasts 0.65 s.'}]},
   {id:'held_breath', station:'deadline', name:'HELD BREATH', effect:'heldBreath', unlockCost:40, ranks:[{v:.25, desc:'After 0.6 s still, your next shot deals +25%.'}, {v:.4, desc:'Held-breath shot +40%.'}, {v:.6, desc:'Held-breath shot +60%.'}]},
   // CARRIER: one clean signal

@@ -764,7 +764,7 @@ function startFloor(n){
   hud();
 }
 function finishRunImpl(result,causeArg){
-  state.paidOut=true;state.mode=result==='dead'?'dead':'won';state.outcome=result;state.runModal=null;$('run-modal').hidden=true;$('boss-bar').hidden=true;
+  state.paidOut=true;state.mode=result==='dead'?'dead':'won';state.outcome=result;state.runModal=null;setHtml($('build-strip'),'');$('run-modal').hidden=true;$('boss-bar').hidden=true;
   if(result!=='dead')playExtraction();
   const st=runStats(),ih=interferenceStats(state.progress),floorsCleared=result==='won'?FINAL_FLOOR-1:state.floorsCleared;
   const settle=settleRun({outcome:result,floorsCleared,roomsCleared:state.runRooms,kills:state.kills,bossKilled:state.bossKilled,coinMult:runCoinMult(),keepFraction:st.deathKeep});

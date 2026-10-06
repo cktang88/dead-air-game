@@ -7,7 +7,10 @@ import {TILE} from './catalog.js';
 const BOSS_BULLET = {color: 0xff6aa8, range: 760};
 
 export function spawnBoss(g, room, hpMult = 1) {
-  const x = (room.cx + .5) * TILE, y = (room.cy + .5) * TILE;
+  // Stand a little off-centre so the exit marker (room centre) stays readable.
+  let tx = room.cx - 3; const ty = room.cy;
+  if (g.state.solidMap[ty]?.[tx] !== 0) tx = room.cx;
+  const x = (tx + .5) * TILE, y = (ty + .5) * TILE;
   const enemy = g.spawnEnemy('boss', x, y, g.state.rooms.indexOf(room));
   enemy.boss = createBoss();
   enemy.hp = enemy.maxHp = Math.round(BOSS.maxHp * hpMult);
