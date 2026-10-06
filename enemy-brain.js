@@ -81,7 +81,7 @@ export function brainState(e, rng = Math.random) {
     windup: 0, windupTotal: 0, aim: {x: 1, y: 0}, cd: between(rng, 0.4, 1.4), sinceFire: 9, sinceStart: 9, shotsLeft: 0,
     strafeDir: rng() < 0.5 ? -1 : 1, strafeT: 0, dodgeT: 0, dodgeCd: 0, dodge: null, dodgeSeen: new WeakSet(),
     path: null, pathT: 0, pathGoal: null, pathVer: -1, stuck: 0, nudge: null, prevX: e.x, prevY: e.y,
-    face: {x: 1, y: 0}, search: null, flank: null, flankT: 0,
+    face: {x: e.face?.x ?? 1, y: e.face?.y ?? 0}, search: null, flank: null, flankT: 0,
     zigT: 0, zigDir: rng() < 0.5 ? -1 : 1, zigPhase: rng() * TAU, circleDir: rng() < 0.5 ? -1 : 1, circleT: 0,
     ambush: 0, ambushUsed: false, brute: {phase: 'advance', t: 0, cd: between(rng, 0.5, 1.5), dir: null},
     suspicion: 0, inView: false, spotted: false, pat: null, dodging: false,

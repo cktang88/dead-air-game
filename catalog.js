@@ -45,17 +45,17 @@ export const GUNS = [
 export const BASE_CARRY_CAPACITY = 7;
 
 export const GEAR = [
-  {id:'armor',name:'ARMOR PLATE',description:'Absorb 2 damage before health · repair for 10 scrap',weight:1.5,cost:25,armorDurability:2,repairCost:10},
+  {id:'armor',name:'ARMOR PLATE',description:'Absorbs one hit (shield pip) · repair for 10 scrap',weight:1.5,cost:25,armorDurability:1,repairCost:10},
   {id:'ammo-harness',name:'AMMO HARNESS',description:'Reload both weapons 15% faster',weight:1,cost:30,reloadMultiplier:.85},
   {id:'loot-scanner',name:'LOOT SCANNER',description:'Reveal nearby loot on the minimap through walls · 7 tiles',weight:1,cost:32,pickupScanRange:224},
 ];
 
 export const ENEMY_TYPES = {
-  chaser:{name:'RUSHER', color:0xe95563, hp:42, speed:72, damage:1, range:19, brain:'rush'},
-  gunner:{name:'GUNNER', color:0xe9a45a, hp:52, speed:40, damage:1, minRange:105, range:300, projectileSpeed:190, brain:'shoot'},
-  brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush'},
-  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:36, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
-  riot:{name:'RIOT', color:0x8aa0b4, hp:78, speed:30, damage:1, range:23, brain:'rush', shield:true, shieldHalfArc:1.15},
-  boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:1100, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
-  guard:{name:'WARDEN', color:0x58aeca, hp:65, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
+  chaser:{name:'RUSHER', color:0xe95563, hp:30, speed:72, damage:1, range:26, brain:'rush', melee:{windup:.48, lunge:true}},
+  gunner:{name:'GUNNER', color:0xe9a45a, hp:40, speed:40, damage:1, minRange:105, range:300, projectileSpeed:190, brain:'shoot'},
+  brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:30, damage:2, range:25, brain:'rush', melee:{windup:.48}},
+  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:30, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
+  riot:{name:'RIOT', color:0x8aa0b4, hp:70, speed:30, damage:1, range:26, brain:'rush', melee:{windup:.48, lunge:true}, shield:true, shieldHalfArc:1.15},
+  boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:700, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
+  guard:{name:'WARDEN', color:0x58aeca, hp:60, speed:28, damage:1, minRange:88, range:210, projectileSpeed:215, brain:'guard'},
 };

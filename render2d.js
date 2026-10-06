@@ -11,6 +11,7 @@ import {drawIcon} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
+import {createStealthLayer} from './stealth2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -82,6 +83,7 @@ export function createRenderer(container, state) {
   const ctx = canvas.getContext('2d', {alpha: false});
   const cam = createCamera();
   const fx = new Fx();
+  const stealth = createStealthLayer();
   const world = new WorldLayer();
   const lighting = new Lighting();
   const trail = new Trail();
@@ -1240,6 +1242,7 @@ export function createRenderer(container, state) {
     drawPickupGlows(bp);
     drawMetaWorld(ctx, state, performance.now() / 1000, TILE);
     drawTelegraphs(bp);
+    stealth.draw(ctx, state, bp, vis.time, dt);
     drawBullets(bp);
     fx.drawAdditive(ctx, bp);
     // coloured light flashes (muzzle, blasts) on top of the dark

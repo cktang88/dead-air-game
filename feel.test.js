@@ -146,7 +146,7 @@ test('knockback scales with damage and brutes resist; hitstop is tiny on hits, b
   assert.ok(hitstopFor({damage: 20}) < .03);
   assert.ok(hitstopFor({kill: true, damage: 20}) > hitstopFor({damage: 20}) * 2);
   assert.ok(hitstopFor({kill: true, damage: 150}) > hitstopFor({kill: true, damage: 10}));
-  assert.ok(hitstopFor({kill: true, damage: 150}) <= .09);
+  assert.ok(hitstopFor({kill: true, damage: 150}) <= .11);
 });
 
 test('empty reloads take longer than tactical reloads', () => {

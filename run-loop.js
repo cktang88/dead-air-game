@@ -7,9 +7,9 @@ export const FINAL_FLOOR = 4;
 // earlier on deeper floors. eliteRooms converts that many ordinary combat rooms into WARDEN rooms.
 export const FLOORS = {
   1: {n:1, name:'THE SPILLWAY', depthShift:0, countBonus:0, eliteRooms:0, hpMult:1, speedMult:1, clearBonus:40, boss:false},
-  2: {n:2, name:'FOUNDRY ROW', depthShift:.3, countBonus:1, eliteRooms:1, hpMult:1.15, speedMult:1.04, clearBonus:70, boss:false},
-  3: {n:3, name:'THE UNDERCROFT', depthShift:.55, countBonus:1, eliteRooms:2, hpMult:1.3, speedMult:1.08, clearBonus:110, boss:false},
-  4: {n:4, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.3, speedMult:1.08, clearBonus:0, boss:true},
+  2: {n:2, name:'FOUNDRY ROW', depthShift:.3, countBonus:1, eliteRooms:1, hpMult:1.08, speedMult:1.04, clearBonus:70, boss:false},
+  3: {n:3, name:'THE UNDERCROFT', depthShift:.55, countBonus:1, eliteRooms:2, hpMult:1.15, speedMult:1.08, clearBonus:110, boss:false},
+  4: {n:4, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.15, speedMult:1.08, clearBonus:0, boss:true},
 };
 
 export function floorConfig(n) {
