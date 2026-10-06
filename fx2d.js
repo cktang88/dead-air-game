@@ -136,14 +136,16 @@ export class Fx {
     this.hitMark = 0.22; this.hitKill = killed;
     this.lights.push({x: e.x, y: e.y, r: 44, age: 0, life: 0.08, strength: 0.3, color: '#ffe0c0'});
   }
+  // Damage numbers scale with the hit: a 1-point graze is readable, a heavy hit or a kill is big and gold.
   damageNumber(e, damage, killed) {
     const text = String(Math.max(1, Math.round(damage)));
+    const sizeFor = (d, k) => Math.min(40, 20 + Math.sqrt(Math.max(1, d)) * 3.2 + (k ? 6 : 0));
     const recent = this.floaters.find((f) => f.tag === e && f.age < 0.28 && !f.kill);
-    if (recent) { recent.sum += Math.round(damage); recent.text = String(recent.sum); recent.age = Math.min(recent.age, 0.1); recent.size = Math.min(26, recent.size + 1.2); recent.kill ||= killed; if (killed) recent.color = '#ffd86e'; return; }
-    this.floaters.push({x: e.x + rand(-5, 5), y: e.y - e.radius - 4, tag: e, text, sum: Math.round(damage), age: 0, life: 0.95, size: killed ? 17 : 13, color: killed ? '#ffd86e' : '#fff4e8', vy: -34, kill: killed});
+    if (recent) { recent.sum += Math.round(damage); recent.text = String(recent.sum); recent.age = Math.min(recent.age, 0.1); recent.kill ||= killed; recent.size = sizeFor(recent.sum, recent.kill); if (killed) recent.color = '#ffd86e'; return; }
+    this.floaters.push({x: e.x + rand(-5, 5), y: e.y - e.radius - 6, tag: e, text, sum: Math.round(damage), age: 0, life: 1.05, size: sizeFor(damage, killed), color: killed ? '#ffd86e' : '#fff4e8', vy: -40, kill: killed});
   }
   floater(x, y, text, color = '#fff', size = 13, life = 1.1) {
-    this.floaters.push({x, y, text, sum: 0, age: 0, life, size, color, vy: -26});
+    this.floaters.push({x, y, text, sum: 0, age: 0, life, size: Math.max(size, 16), color, vy: -30});
   }
   kill(e, vx, vy) {
     const a = Math.atan2(vy, vx);
@@ -368,10 +370,10 @@ export class Fx {
     for (const f of this.floaters) {
       const k = f.age / f.life;
       const sx = ((f.x - cam.x) * cam.scale + cam.w / 2) * dpr, sy = ((f.y - cam.y) * cam.scale + cam.h / 2) * dpr;
-      const pop = 1 + Math.max(0, 1 - f.age * 9) * 0.5;
+      const pop = 1 + Math.max(0, 1 - f.age * 8) * 0.6;
       ctx.font = `800 ${Math.round(f.size * dpr * pop)}px 'Barlow Condensed','DM Mono',system-ui,sans-serif`;
       ctx.globalAlpha = Math.min(1, (1 - k) * 2.4);
-      ctx.lineWidth = 3.4 * dpr; ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.strokeText(f.text, sx, sy);
+      ctx.lineWidth = Math.max(3.6, f.size * 0.2) * dpr; ctx.strokeStyle = 'rgba(14,10,20,0.92)'; ctx.strokeText(f.text, sx, sy);
       ctx.fillStyle = f.color; ctx.fillText(f.text, sx, sy);
     }
     ctx.globalAlpha = 1;

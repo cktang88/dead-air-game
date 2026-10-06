@@ -113,13 +113,16 @@ export function pushFeed(text, tone) {
   const host = $('feed');
   if (!host) return;
   tone = tone || feedTone(text);
-  const first = host.firstElementChild;
-  if (first && first.dataset.text === text && performance.now() - Number(first.dataset.t) < 1200) {
-    const n = Number(first.dataset.n || 1) + 1;
-    first.dataset.n = String(n); first.dataset.t = String(performance.now());
-    first.querySelector('b').textContent = `×${n}`;
-    clearTimeout(first._timer); first._timer = setTimeout(() => first.remove(), FEED_LIFE_MS);
-    first.classList.remove('bump'); void first.offsetWidth; first.classList.add('bump');
+  // coalesce: the same line already on screen (anywhere in the feed, recent) becomes "x2", moves to the top and restarts its life
+  const now = performance.now();
+  const dup = [...host.children].find(el => el.dataset.text === text && now - Number(el.dataset.t) < 6000);
+  if (dup) {
+    const n = Number(dup.dataset.n || 1) + 1;
+    dup.dataset.n = String(n); dup.dataset.t = String(now);
+    dup.querySelector('b').textContent = `×${n}`;
+    clearTimeout(dup._timer); dup.classList.remove('out'); dup._timer = setTimeout(() => { dup.classList.add('out'); setTimeout(() => dup.remove(), 260); }, FEED_LIFE_MS);
+    if (dup !== host.firstElementChild) host.prepend(dup);
+    dup.classList.remove('bump'); void dup.offsetWidth; dup.classList.add('bump');
     return;
   }
   const item = document.createElement('div');
@@ -175,12 +178,16 @@ export function setPauseScreen(visible, info = {}) {
   el.hidden = !visible;
 }
 
-export function runEndHtml({ won, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '' }) {
+export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '' }) {
   const icon = id => iconSvg(id, { size: 0 });
   const cell = (label, value, i, ico, count = null) => `<div class="end-stat" style="--i:${i}"><small>${icon(ico)}${label}</small><b${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</b></div>`;
   const bestLine = best
     ? `<div class="end-best">${icon('status-trophy')}<span>${isNewBest ? 'New best run' : 'Best run'} · <b>${best.won ? 'EXTRACTED' : `${best.rooms} ROOMS`}</b> · <b>${best.kills} KILLS</b> · <b>${formatClock(best.seconds)}</b></span></div>` : '';
-  return `<div class="end-banner ${won ? 'won' : 'dead'}"><span class="end-ico">${icon(won ? 'exit-extraction' : 'status-skull')}</span><div><small>${won ? 'SECTOR EXTRACTED' : 'SIGNAL LOST'}</small><strong>${won ? 'EXTRACTION COMPLETE' : 'RUN OVER'}</strong>${cause && !won ? `<span class="end-cause">${esc(cause)}</span>` : ''}</div>${isNewBest ? '<span class="badge">NEW BEST</span>' : ''}</div>
+  // three distinct moments: the Conductor falls (boss), a bank-out (extract), a death
+  const head = boss ? {cls: 'won boss', ico: 'status-trophy', eyebrow: 'SIGNAL RESTORED', title: 'THE CONDUCTOR IS SILENT'}
+    : won ? {cls: 'won', ico: 'exit-extraction', eyebrow: 'SECTOR EXTRACTED', title: `EXTRACTED · BANKED ${payout}`}
+    : {cls: 'dead', ico: 'status-skull', eyebrow: 'SIGNAL LOST', title: 'RUN OVER'};
+  return `<div class="end-banner ${head.cls}"><span class="end-ico">${icon(head.ico)}</span><div><small>${head.eyebrow}</small><strong>${esc(head.title)}</strong>${cause && !won ? `<span class="end-cause">${esc(cause)}</span>` : ''}${boss ? '<span class="end-cause">THE BROADCAST IS YOURS</span>' : ''}</div>${isNewBest ? '<span class="badge">NEW BEST</span>' : ''}</div>
 <div class="end-grid">${cell('Rooms cleared', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, 0, 'door', rooms)}${cell('Kills', kills, 1, 'status-kills', kills)}${cell('Run time', formatClock(seconds), 2, 'status-clock')}</div>
 <div class="end-coins">${icon('pickup-coin')}<div><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span><small>Coins earned · <span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></small></div><div class="bal"><small>Safehouse balance</small><b data-count="${balance}">${balance}</b></div></div>
 ${bestLine}`;

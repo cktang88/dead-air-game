@@ -25,3 +25,18 @@ test('the beat hint teaches that shots let time through', () => {
   const seen = new Set(['basics', 'still', 'move']);
   assert.equal(pickHint({...base, seen, shots: 1, moved: true}, keys).id, 'beat');
 });
+
+test('a hint is skipped once the player has done the action it teaches', () => {
+  const seen = new Set(['basics', 'still', 'move', 'beat']);
+  const ctx = {...base, seen, runTime: 40, moved: true, hostilesNear: 1, grenades: 1, hasMod: true};
+  assert.equal(pickHint({...ctx, done: new Set()}, keys).id, 'grenade');
+  assert.equal(pickHint({...ctx, done: new Set(['threw'])}, keys).id, 'loadout');
+  assert.equal(pickHint({...ctx, done: new Set(['threw', 'loadout'])}, keys), null);
+});
+
+test('non-urgent hints queue during combat; urgent ones still show', () => {
+  const seen = new Set(['basics', 'still', 'move', 'beat']);
+  const calm = {...base, seen, runTime: 40, moved: true, hostilesNear: 1, grenades: 1};
+  assert.equal(pickHint({...calm, inCombat: true}, keys), null);
+  assert.equal(pickHint({...calm, inCombat: true, magEmpty: true}, keys).id, 'reload');
+});
