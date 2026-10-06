@@ -89,6 +89,7 @@ export function createRenderer(container, state) {
     canvas.style.width = '100%'; canvas.style.height = '100%';
     resizeCamera(cam, w, h);
     setSpriteScale(cam.scale * dpr);
+    world.setScale(cam.scale * dpr);
     vignetteKey = '';
   }
 
@@ -112,16 +113,27 @@ export function createRenderer(container, state) {
   function screenToWorld(sx, sy) { return camScreenToWorld(cam, sx, sy); }
 
   // ------------------------------------------------------------------ events from the game
-  function shot(owner, shooter, angle, gun) {
+  function shot(owner, shooter, angle) {
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    if (owner === 'player') {
-      const m = gunMuzzle(gun);
-      fx.muzzle(shooter.x + dx * m, shooter.y + dy * m, angle, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
-      fx.casing(shooter.x + dx * (m * 0.5), shooter.y + dy * (m * 0.5), angle);
-      vis.kick = 1;
-    } else {
-      fx.muzzle(shooter.x + dx * 18, shooter.y + dy * 18, angle, {color: '#ff7a6a', size: 0.75});
-      shooter.vis ??= {}; shooter.vis.kick = 1;
+    fx.muzzle(shooter.x + dx * 18, shooter.y + dy * 18, angle, {color: '#ff7a6a', size: 0.75});
+    shooter.vis ??= {}; shooter.vis.kick = 1;
+  }
+
+  // Drain the simulation's event queue (muzzle flashes, impacts, hurt feedback).
+  function consume(events) {
+    for (const ev of events) {
+      if (ev.type === 'shot') {
+        const gun = GUNS.find((g) => g.id === ev.gun) || GUNS[0], a = Math.atan2(ev.dy, ev.dx);
+        fx.muzzle(ev.x, ev.y, a, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
+        const p = state.player;
+        if (p) fx.casing(p.x + ev.dx * 8, p.y + ev.dy * 8, a);
+        vis.kick = Math.max(vis.kick, Math.min(1.3, 0.5 + (ev.kick || 0.5)));
+      } else if (ev.type === 'impact' && (ev.surface === 'wall' || ev.surface === 'cover')) {
+        fx.wallImpact(ev.x, ev.y, ev.vx ?? 1, ev.vy ?? 0, ev.owner);
+      } else if (ev.type === 'playerHurt') {
+        fx.playerHit(ev.x, ev.y, ev.armorOnly);
+        vis.flashHit = 1;
+      }
     }
   }
 
@@ -138,7 +150,10 @@ export function createRenderer(container, state) {
       v.kick = Math.max(0, (v.kick || 0) - step * 9);
       if (e.alive) {
         const p = state.player;
-        const target = (e.meleeWindup > 0 || e.aimTimer > 0) ? Math.atan2(e.aim.y, e.aim.x) : p ? Math.atan2(p.y - e.y, p.x - e.x) : v.ang;
+        v.aimMax = e.aimTimer > 0 ? Math.max(v.aimMax || 0, e.aimTimer) : 0;
+        if (e.aware && !v.wasAware) v.alertT = 0.9;
+        v.wasAware = !!e.aware; v.alertT = Math.max(0, (v.alertT || 0) - step);
+        const target = (e.meleeWindup > 0 || e.aimTimer > 0) ? Math.atan2(e.aim.y, e.aim.x) : e.face ? Math.atan2(e.face.y, e.face.x) : p ? Math.atan2(p.y - e.y, p.x - e.x) : v.ang;
         if (v.first === undefined) { v.ang = target; v.first = true; }
         v.ang += angDiff(v.ang, target) * (1 - Math.exp(-16 * step));
         v.dustT -= step;
@@ -455,9 +470,15 @@ export function createRenderer(container, state) {
     }
     if (e.reloadTimer > 0) { ctx.fillStyle = '#ffd27a'; for (let i = 0; i < 3; i++) { ctx.globalAlpha = 0.4 + 0.6 * (Math.sin(vis.time * 8 + i) * 0.5 + 0.5); ctx.beginPath(); ctx.arc(e.x - 5 + i * 5, e.y - look.r - 5, 1.2, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; }
     if (e.elite || (v.barT || 0) > 0 && e.hp < e.maxHp) bar(e.x, e.y - look.r * scale - 8, e.elite ? 34 : 18, e.elite ? 3.6 : 2.4, e.hp / e.maxHp, e.elite ? '#ff9566' : '#e96a78');
+    if (v.alertT > 0 && !(e.aimTimer > 0 || windup)) {
+      ctx.save(); ctx.translate(e.x, e.y - look.r - 10 - (1 - v.alertT / 0.9) * 4); ctx.globalAlpha = Math.min(1, v.alertT * 3);
+      ctx.font = `900 11px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#ffd86e'; ctx.strokeText('!', 0, 0); ctx.fillText('!', 0, 0); ctx.restore();
+    } else if (e.intent === 'search' && !(e.aimTimer > 0 || windup)) {
+      ctx.save(); ctx.translate(e.x, e.y - look.r - 9); ctx.globalAlpha = 0.85; ctx.font = `900 10px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#9fd0ff'; ctx.strokeText('?', 0, 0); ctx.fillText('?', 0, 0); ctx.restore();
+    }
     if (e.aimTimer > 0 || windup) {
       // alert tick above the head
-      const p = windup ? 1 - e.meleeWindup / 0.48 : 1 - e.aimTimer / (e.aimTotal || 0.5);
+      const p = windup ? 1 - e.meleeWindup / 0.48 : 1 - e.aimTimer / (e.vis?.aimMax || 0.5);
       ctx.save(); ctx.translate(e.x, e.y - look.r - (e.elite ? 12 : 8) - Math.sin(p * 9) * 0.8);
       ctx.fillStyle = windup ? '#ffad57' : '#ff4a5e'; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(-3.8, -2.6); ctx.lineTo(3.8, -2.6); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
@@ -477,7 +498,7 @@ export function createRenderer(container, state) {
         ctx.beginPath(); ctx.moveTo(Math.cos(a - half) * 12, Math.sin(a - half) * 12); ctx.lineTo(Math.cos(a - half) * R, Math.sin(a - half) * R); ctx.arc(0, 0, R, a - half, a + half); ctx.lineTo(Math.cos(a + half) * 12, Math.sin(a + half) * 12); ctx.stroke();
         ctx.restore();
       } else if (e.aimTimer > 0) {
-        const p = clamp(1 - e.aimTimer / (e.aimTotal || 0.5), 0, 1), range = Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
+        const p = clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), range = e.type === 'brute' ? 130 : Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
         const gun = ENEMY_GUNS[e.type], m = gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
         const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
         const len = rayWall(e.x, e.y, dx, dy, range);
@@ -531,10 +552,10 @@ export function createRenderer(container, state) {
     }
     ctx.restore(); ctx.globalAlpha = 1;
     // faint aim guide
-    const dx = state.aim.x, dy = state.aim.y, m = gunMuzzle(gun);
+    const dx = state.aim.x, dy = state.aim.y, mz = gunMuzzle(gun);
     const maxLen = Math.min(150, rayWall(p.x, p.y, dx, dy, 150));
     ctx.save(); ctx.strokeStyle = 'rgba(255,240,220,0.16)'; ctx.lineWidth = 0.9; ctx.setLineDash([2, 6]);
-    ctx.beginPath(); ctx.moveTo(p.x + dx * (m + 6), p.y + dy * (m + 6)); ctx.lineTo(p.x + dx * maxLen, p.y + dy * maxLen); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(p.x + dx * (mz + 6), p.y + dy * (mz + 6)); ctx.lineTo(p.x + dx * maxLen, p.y + dy * maxLen); ctx.stroke(); ctx.restore();
   }
 
   function drawThrown() {
@@ -628,15 +649,10 @@ export function createRenderer(container, state) {
     // warm at full speed, cold + dim in slow time
     if (slow < 1) { ctx.fillStyle = `rgba(255,150,70,${0.05 * (1 - slow)})`; ctx.fillRect(0, 0, w, h); }
     if (slow > 0.01) {
-      ctx.fillStyle = `rgba(34,64,140,${0.2 * slow})`; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = `rgba(34,64,140,${0.13 * slow})`; ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(10,26,58,${0.07 * slow})`; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.globalAlpha = 0.5 + 0.42 * slow + dead * 0.2; ctx.drawImage(ensureVignette(w, h), 0, 0, w, h); ctx.globalAlpha = 1;
-    if (fx.hurt > 0) {
-      const k = fx.hurt / 0.55, g = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.85);
-      g.addColorStop(0, 'rgba(255,40,70,0)'); g.addColorStop(1, `rgba(255,40,70,${0.5 * k})`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-    }
+    ctx.globalAlpha = 0.1 + 0.24 * slow + dead * 0.2; ctx.drawImage(ensureVignette(w, h), 0, 0, w, h); ctx.globalAlpha = 1;
     if (dead > 0) { ctx.fillStyle = `rgba(70,8,20,${0.28 * dead})`; ctx.fillRect(0, 0, w, h); }
     if (state.mode === 'won') { ctx.fillStyle = 'rgba(120,255,190,0.07)'; ctx.fillRect(0, 0, w, h); }
     ctx.restore();
@@ -647,7 +663,7 @@ export function createRenderer(container, state) {
     const x = vis.mouseX * dpr, y = vis.mouseY * dpr, s = dpr;
     const hit = fx.hitMark > 0, k = fx.hitMark / 0.22, reloading = state.reloadTimer > 0;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.translate(x, y); ctx.lineCap = 'round';
-    const gap = 6 * s + (hit ? (1 - k) * 3 * s : 0), len = 5 * s;
+    const gap = (5 + (vis.bloom || 0) * 22) * s + (hit ? (1 - k) * 3 * s : 0), len = 5 * s;
     const col = reloading ? '#ffd27a' : '#fff6ea';
     for (const pass of [0, 1]) {
       ctx.strokeStyle = pass === 0 ? 'rgba(14,10,20,0.75)' : col; ctx.lineWidth = (pass === 0 ? 3.4 : 1.6) * s;
@@ -691,7 +707,7 @@ export function createRenderer(container, state) {
     const dt = clamp(frame.dt ?? 1 / 60, 0, 0.1), dpr = vis.dpr, now = performance.now() / 1000;
     const w = cam.w, h = cam.h;
     if (frame.mouseX !== undefined) { vis.mouseX = frame.mouseX; vis.mouseY = frame.mouseY; vis.mouseActive = true; }
-    vis.reloadFrac = frame.reloadFrac ?? 0; vis.exitReady = !!frame.exitReady;
+    vis.reloadFrac = frame.reloadFrac ?? 0; vis.bloom = frame.bloom || 0; vis.exitReady = !!frame.exitReady;
     fx.tick(dt);
     const p = state.player;
     if (!levelReady || !p) { drawAttract(w, h, dt); return; }
@@ -716,7 +732,6 @@ export function createRenderer(container, state) {
     lighting.update(dt, state);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0b0a10'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     world.draw(ctx, viewCam, b, dpr);
     world.idleBake(p.x, p.y, 4);
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
@@ -740,7 +755,7 @@ export function createRenderer(container, state) {
 
     // darkness + light pools
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList(), flicker: vis.flicker});
+    lighting.draw(ctx, viewCam, dpr, {px: p.x, py: p.y, lights: fx.lightList(), flicker: vis.flicker, slow: vis.slow, dead: state.mode === 'dead' ? Math.min(1, vis.deadT * 1.5) : 0, won: state.mode === 'won'});
     ctx.setTransform(sc, 0, 0, sc, (w / 2 - viewCam.x * viewCam.scale) * dpr, (h / 2 - viewCam.y * viewCam.scale) * dpr);
     ctx.lineJoin = 'round';
 
@@ -755,7 +770,6 @@ export function createRenderer(container, state) {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     fx.drawFloaters(ctx, viewCam, dpr);
-    drawGrade(canvas.width, canvas.height);
     drawCrosshair(dpr);
     const ms = performance.now() - t0;
     stats.drawMs = stats.drawMs * 0.9 + ms * 0.1; stats.frames++; stats.bakeMs = world.bakeMs;
@@ -766,7 +780,7 @@ export function createRenderer(container, state) {
 
   resize();
   window.addEventListener('resize', resize);
-  return {canvas, fx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, hurtFlash, cam};
+  return {canvas, fx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
 }
 
 function hexPath(ctx, r) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }

@@ -29,7 +29,7 @@ export function grimeTile(size = 192, seed = 5, strength = 1) {
   const area = size * size / 10000;
   for (let i = 0; i < 9 * area; i++) {
     const r = 10 + rnd() * 34, light = rnd() < 0.42;
-    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, light ? '255,244,230' : '10,8,14', (light ? 0.05 : 0.09) * strength));
+    wrap(size, rnd() * size, rnd() * size, r, (x, y) => blotch(g, x, y, r, light ? '255,244,230' : '10,8,14', (light ? 0.04 : 0.06) * strength));
   }
   for (let i = 0; i < 520 * area; i++) {
     const dark = rnd() < 0.62, fleck = rnd() < 0.05;

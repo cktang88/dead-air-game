@@ -259,9 +259,9 @@ const GUN_ART = {
 };
 
 // Draws a gun lying along +x with the actor's centre at the origin. Returns the muzzle distance.
-export function drawGun(g, gun, {reach = 4, enemy = false, glove = '#2a2530'} = {}) {
+export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530'} = {}) {
   const art = GUN_ART[gun.category] || GUN_ART.SMG;
-  const L = gun.visual.length * 0.82, W = Math.max(3.2, gun.visual.width * 0.78);
+  const L = gun.visual.length * 0.7, W = Math.max(3.2, gun.visual.width * 0.78);
   const body = enemy ? '#2b2530' : '#2a2c33', alt = enemy ? '#3a3039' : '#3d4049', metal = '#8d8b92';
   const accent = enemy ? '#ff5a4a' : '#' + (gun.color & 0xffffff).toString(16).padStart(6, '0');
   g.lineJoin = 'round';
@@ -363,4 +363,4 @@ export function pillarSprite(stage = 0) {
   });
 }
 
-export const gunMuzzle = (gun, reach = 4) => reach + gun.visual.length * 0.82;
+export const gunMuzzle = (gun, reach = 5) => reach + gun.visual.length * 0.7;

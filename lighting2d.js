@@ -3,9 +3,18 @@
 import {TILE} from './catalog.js';
 import {makeCanvas} from './sprites2d.js';
 
-const FOG = {current: 0.1, visited: 0.46, unseen: 0.8, corridor: 0.55, rock: 0.93};
+const FOG = {current: 0.16, visited: 0.4, unseen: 0.62, corridor: 0.42, rock: 0.9};
 
-let lightSprite = null;
+let lightSprite = null, vignetteSprite = null;
+function vignette() {
+  if (vignetteSprite) return vignetteSprite;
+  const c = makeCanvas(128, 72), g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 36, 14, 64, 36, 78);
+  grad.addColorStop(0, 'rgba(6,4,12,0)'); grad.addColorStop(0.55, 'rgba(6,4,12,0.3)'); grad.addColorStop(1, 'rgba(6,4,12,0.95)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 72);
+  return vignetteSprite = c;
+}
+
 function sprite() {
   if (lightSprite) return lightSprite;
   const s = 128, c = makeCanvas(s, s), g = c.getContext('2d');
@@ -34,7 +43,7 @@ export class Lighting {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (floor[y * w + x]) continue;
       const list = [];
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < w && ny < h && floor[ny * w + nx]) list.push(ny * w + nx); }
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < w && ny < h && floor[ny * w + nx]) list.push(ny * w + nx); }
       around[y * w + x] = list;
     }
     this.level = {w, h, room, floor, around, rooms, cur: new Float32Array(w * h).fill(0.95), tgt: new Float32Array(w * h).fill(0.95)};
@@ -87,7 +96,7 @@ export class Lighting {
   }
 
   // Draw the darkness over the already rendered world.
-  draw(ctx, cam, dpr, {px, py, strength = 1, lights = [], flicker = 0}) {
+  draw(ctx, cam, dpr, {px, py, strength = 1, lights = [], flicker = 0, slow = 0, dead = 0, won = false}) {
     const L = this.level;
     if (!L) return;
     const DIV = 5, lw = Math.ceil(cam.w / DIV), lh = Math.ceil(cam.h / DIV);
@@ -100,13 +109,27 @@ export class Lighting {
     g.globalAlpha = 1;
     g.drawImage(this.fog, ox, oy, L.w * TILE * ls, L.h * TILE * ls);
     // outside the map is solid dark
-    g.globalCompositeOperation = 'destination-over';
-    g.fillStyle = 'rgba(6,4,14,0.95)'; g.fillRect(0, 0, lw, lh);
+    // outside the map is solid dark
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = 'rgba(6,4,14,0.95)';
+    const mx0 = ox, my0 = oy, mx1 = ox + L.w * TILE * ls, my1 = oy + L.h * TILE * ls;
+    if (my0 > 0) g.fillRect(0, 0, lw, my0);
+    if (my1 < lh) g.fillRect(0, my1, lw, lh - my1);
+    if (mx0 > 0) g.fillRect(0, 0, mx0, lh);
+    if (mx1 < lw) g.fillRect(mx1, 0, lw - mx1, lh);
     g.globalCompositeOperation = 'destination-out';
     const pool = (x, y, r, a) => { const rr = r * ls; g.globalAlpha = Math.min(1, a); g.drawImage(sprite(), (x - cam.x) * ls + lw / 2 - rr, (y - cam.y) * ls + lh / 2 - rr, rr * 2, rr * 2); };
-    if (px !== undefined) { pool(px, py, 230 + flicker * 6, 0.85 * strength); pool(px, py, 95, 0.4 * strength); }
+    if (px !== undefined) { pool(px, py, 250 + flicker * 6, 0.9 * strength); pool(px, py, 110, 0.5 * strength); }
     for (const l of lights) pool(l.x, l.y, l.r * 1.2, l.a * 0.9);
-    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    // grade (vignette, warm/cool tint) lives in the same buffer so a frame needs only one full-screen blend
+    g.globalCompositeOperation = 'destination-over';
+    g.globalAlpha = 0.1 + 0.24 * slow + dead * 0.2; g.drawImage(vignette(), 0, 0, lw, lh);
+    g.globalAlpha = 1;
+    if (dead > 0) { g.fillStyle = `rgba(70,8,20,${0.28 * dead})`; g.fillRect(0, 0, lw, lh); }
+    if (won) { g.fillStyle = 'rgba(120,255,190,0.07)'; g.fillRect(0, 0, lw, lh); }
+    g.fillStyle = slow > 0.01 ? `rgba(34,64,140,${0.13 * slow})` : 'rgba(0,0,0,0)'; g.fillRect(0, 0, lw, lh);
+    g.fillStyle = `rgba(255,150,70,${0.05 * (1 - slow)})`; g.fillRect(0, 0, lw, lh);
+    g.globalCompositeOperation = 'source-over';
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = true;

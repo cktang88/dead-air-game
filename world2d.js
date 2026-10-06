@@ -6,9 +6,7 @@ import {blotch, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2
 
 export const CHUNK_TILES = 12;
 const CW = CHUNK_TILES * TILE;
-const CS = 1.75; // chunk pixels per world unit (TILE * CS is an integer so tile edges never blur)
-const CPX = CW * CS;
-const FLOOR = '#544c47';
+const FLOOR = '#6a5f56';
 const WALL_LIP = 5;
 const WALL_LIP_E = 3.4;
 const SHADOW_DX = 24, SHADOW_DY = 31;
@@ -28,6 +26,16 @@ export class WorldLayer {
     this.patterns = null;
     this.version = 0;
     this.bakeMs = 0;
+    this.cs = 2; // chunk pixels per world unit, quantised to quarters so TILE * cs is an integer
+  }
+
+  // Bake at (roughly) the on-screen scale so a frame blits chunks 1:1.
+  setScale(pxPerUnit) {
+    const cs = Math.max(1.25, Math.min(2.5, Math.round(pxPerUnit * 4) / 4));
+    if (cs === this.cs) return;
+    if (Math.abs(cs - this.cs) / this.cs < 0.2 && this.chunks.size) return;
+    this.cs = cs;
+    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.level = lv; }
   }
 
   textures() {
@@ -39,7 +47,7 @@ export class WorldLayer {
   pattern(g, name) {
     this.textures();
     const p = g.createPattern(this.sources[name], 'repeat');
-    p.setTransform(new DOMMatrix().scale(1 / CS));
+    p.setTransform(new DOMMatrix().scale(1 / this.cs));
     return p;
   }
 
@@ -52,7 +60,7 @@ export class WorldLayer {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (isFloor(x, y)) { kind[y * w + x] = 0; continue; }
       let near = false;
-      for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (isFloor(x + dx, y + dy)) { near = true; break; }
+      for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) if (isFloor(x + dx, y + dy)) { near = true; break; }
       kind[y * w + x] = near ? 1 : 2;
     }
     rooms.forEach((room, index) => {
@@ -62,7 +70,7 @@ export class WorldLayer {
     const floorTiles = [];
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (kind[y * w + x] === 0) floorTiles.push([x, y]);
     const stains = [];
-    const stainCount = Math.floor(floorTiles.length / 7);
+    const stainCount = Math.floor(floorTiles.length / 15);
     for (let i = 0; i < stainCount; i++) {
       const [tx, ty] = floorTiles[Math.floor(rnd() * floorTiles.length)];
       const t = rnd();
@@ -118,7 +126,7 @@ export class WorldLayer {
   bakeFloor(chunk) {
     const L = this.level, x0 = chunk.cx * CW, y0 = chunk.cy * CW;
     if (!this.chunkHasContent(chunk.cx, chunk.cy)) { chunk.floor = null; return; }
-    const c = makeCanvas(CPX, CPX), g = c.getContext('2d');
+    const CS = this.cs, c = makeCanvas(CW * CS, CW * CS), g = c.getContext('2d');
     g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     const tx0 = chunk.cx * CHUNK_TILES, ty0 = chunk.cy * CHUNK_TILES, tx1 = Math.min(L.w, tx0 + CHUNK_TILES), ty1 = Math.min(L.h, ty0 + CHUNK_TILES);
     const floorAt = (x, y) => x >= 0 && y >= 0 && x < L.w && y < L.h && L.kind[y * L.w + x] === 0;
@@ -136,7 +144,7 @@ export class WorldLayer {
     g.beginPath();
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) if (floorAt(x, y)) g.rect(x * TILE, y * TILE, TILE, TILE);
     g.fillStyle = tint; g.fill();
-    g.globalAlpha = 0.6; g.fillStyle = this.pattern(g, 'grime2'); g.fill(); g.globalAlpha = 1;
+    g.globalAlpha = 0.3; g.fillStyle = this.pattern(g, 'grime2'); g.fill(); g.globalAlpha = 1;
     // clip following details to floor tiles
     g.save();
     g.beginPath();
@@ -144,9 +152,9 @@ export class WorldLayer {
     g.clip();
     for (const s of L.stains) {
       if (s.x + s.r < x0 || s.x - s.r > x0 + CW || s.y + s.r < y0 || s.y - s.r > y0 + CW) continue;
-      if (s.kind === 'oil') { blotch(g, s.x, s.y, s.r, '6,6,12', 0.5); blotch(g, s.x - s.r * 0.15, s.y - s.r * 0.15, s.r * 0.45, '80,90,130', 0.08); }
+      if (s.kind === 'oil') { blotch(g, s.x, s.y, s.r, '6,6,12', 0.36); blotch(g, s.x - s.r * 0.15, s.y - s.r * 0.15, s.r * 0.45, '80,90,130', 0.08); }
       else if (s.kind === 'rust') blotch(g, s.x, s.y, s.r * 1.1, '120,62,30', 0.26);
-      else if (s.kind === 'damp') blotch(g, s.x, s.y, s.r * 1.3, '20,24,40', 0.3);
+      else if (s.kind === 'damp') blotch(g, s.x, s.y, s.r * 1.3, '20,24,40', 0.18);
       else blotch(g, s.x, s.y, s.r, '255,240,220', 0.07);
     }
     // seams: faint grid + heavier slab joints
@@ -252,10 +260,8 @@ export class WorldLayer {
     const kindAt = (x, y) => x < 0 || y < 0 || x >= L.w || y >= L.h ? 2 : L.kind[y * L.w + x];
     // include tiles up-left of the chunk, which can throw shadows into it
     const sx0 = tx0 - 2, sy0 = ty0 - 2;
-    let any = false;
-    for (let y = sy0; y < ty1 && !any; y++) for (let x = sx0; x < tx1; x++) if (kindAt(x, y) !== 0) { any = true; break; }
-    if (!any) { chunk.walls = null; return; }
-    const c = makeCanvas(CPX, CPX), g = c.getContext('2d');
+    if (!chunk.floor) return;
+    const CS = this.cs, g = chunk.floor.getContext('2d');
     g.setTransform(CS, 0, 0, CS, -x0 * CS, -y0 * CS);
     const hasFilter = 'filter' in g;
     // soft long shadow + contact occlusion on the floor
@@ -355,7 +361,6 @@ export class WorldLayer {
     }
     // door frames
     for (const door of L.doors) this.paintDoor(g, door, x0, y0);
-    chunk.walls = c;
   }
 
   paintDoor(g, door, x0, y0) {
@@ -387,7 +392,11 @@ export class WorldLayer {
       if (!chunk.baked) this.bake(chunk);
       if (!chunk.floor) continue;
       const g = chunk.floor.getContext('2d');
-      g.save(); g.setTransform(CS, 0, 0, CS, -cx * CW * CS, -cy * CW * CS); draw(g); g.restore();
+      const CS = this.cs, L = this.level;
+      g.save(); g.setTransform(CS, 0, 0, CS, -cx * CW * CS, -cy * CW * CS);
+      g.beginPath();
+      for (let ty = Math.floor(bounds.y0 / TILE); ty <= Math.floor(bounds.y1 / TILE); ty++) for (let tx = Math.floor(bounds.x0 / TILE); tx <= Math.floor(bounds.x1 / TILE); tx++) if (L.kind[ty * L.w + tx] === 0) g.rect(tx * TILE, ty * TILE, TILE, TILE);
+      g.clip(); draw(g); g.restore();
     }
   }
 
@@ -408,17 +417,20 @@ export class WorldLayer {
     const s = cam.scale * dpr, ox = cam.w / 2 * dpr - cam.x * s, oy = cam.h / 2 * dpr - cam.y * s;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    for (const layer of ['floor', 'walls']) {
-      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
-        const chunk = this.chunkAt(cx, cy);
-        if (!chunk) continue;
-        if (!chunk.baked) this.bake(chunk);
-        const img = chunk[layer];
-        if (!img) continue;
-        const l = Math.round(ox + cx * CW * s), t = Math.round(oy + cy * CW * s), r = Math.round(ox + (cx + 1) * CW * s), b = Math.round(oy + (cy + 1) * CW * s);
-        ctx.drawImage(img, 0, 0, img.width, img.height, l, t, r - l, b - t);
-      }
+    ctx.imageSmoothingEnabled = Math.abs(s - this.cs) > 0.02;
+    let covered = bounds.x0 >= 0 && bounds.y0 >= 0 && bounds.x1 <= L.w * TILE && bounds.y1 <= L.h * TILE;
+    const draws = [];
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+      const chunk = this.chunkAt(cx, cy);
+      if (!chunk) { covered = false; continue; }
+      if (!chunk.baked) this.bake(chunk);
+      const img = chunk.floor;
+      if (!img) { covered = false; continue; }
+      draws.push([img, Math.round(ox + cx * CW * s), Math.round(oy + cy * CW * s), Math.round(ox + (cx + 1) * CW * s), Math.round(oy + (cy + 1) * CW * s)]);
     }
+    if (!covered) { ctx.fillStyle = '#0b0a10'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); }
+    for (const [img, l, t, r, b] of draws) ctx.drawImage(img, 0, 0, img.width, img.height, l, t, r - l, b - t);
+    ctx.imageSmoothingEnabled = true;
     ctx.restore();
   }
 }

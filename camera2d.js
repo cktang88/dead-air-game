@@ -1,5 +1,5 @@
 // Pure camera math for the Canvas 2D renderer: follow, aim look-ahead and screen <-> world mapping.
-export const VIEW_HALF_HEIGHT = 230;
+export const VIEW_HALF_HEIGHT = 200;
 
 export function createCamera() {
   return {x: 0, y: 0, w: 1, h: 1, scale: 1, snap: true};
