@@ -88,8 +88,20 @@ test('bloom builds with sustained fire, holds while firing, and recovers', () =>
   assert.equal(registerShot(b, feel), true, 'accuracy is back after a pause');
 });
 
+test('STEADY guns do not widen while walking; every other family does', () => {
+  const b = newBloom();
+  for (const id of ['ar_ash', 'rifle', 'ar_bastion']) {
+    const feel = gunFeel(GUNS.find(g => g.id === id));
+    assert.equal(effectiveSpread(.02, b, feel, 1), effectiveSpread(.02, b, feel, 0), `${id} is steady on the move`);
+  }
+  for (const id of ['machine', 'smg_burst', 'pistol_45', 'shotgun', 'sniper_lynx']) {
+    const feel = gunFeel(GUNS.find(g => g.id === id));
+    assert.ok(effectiveSpread(.02, b, feel, 1) > effectiveSpread(.02, b, feel, 0), `${id} widens on the move`);
+  }
+});
+
 test('moving widens spread and the first shot is tighter than a bloomed one', () => {
-  const feel = gunFeel(GUNS.find(g => g.id === 'rifle')), b = newBloom();
+  const feel = gunFeel(GUNS.find(g => g.id === 'machine')), b = newBloom();
   const still = effectiveSpread(.02, b, feel, 0), moving = effectiveSpread(.02, b, feel, 1);
   assert.ok(moving > still);
   assert.ok(effectiveSpread(.02, b, feel, 0, true) < still);

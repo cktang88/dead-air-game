@@ -4,14 +4,14 @@ import {grantUnlock, UNLOCK_BY_ID} from './unlocks.js';
 
 export const GOALS = [
   {id:'first_blood', name:'FIRST BLOOD', desc:'Down any enemy.', metric:'totalKills', goal:1, reward:{coins:10}},
-  {id:'still_life', name:'STILL LIFE', desc:'Clear a room without moving more than 3 tiles.', metric:'stillRooms', goal:1, reward:{coins:30, unlock:['gun:smg_vector']}},
+  {id:'still_life', name:'STILL LIFE', desc:'Clear a room without moving more than 3 tiles.', metric:'stillRooms', goal:1, reward:{coins:30, unlock:['gun:pistol_45']}},
   {id:'slow_triple', name:'THREE IN ONE BREATH', desc:'Kill 3 enemies without moving: one slow-mo window.', metric:'slowTriples', goal:1, reward:{coins:40, unlock:['gun:smg_burst']}},
   {id:'floor_2', name:'GOING DOWN', desc:'Reach floor 2.', metric:'deepestFloor', goal:2, reward:{coins:40}},
   {id:'floor_3', name:'DEEP CUT', desc:'Reach floor 3.', metric:'deepestFloor', goal:3, reward:{coins:80, unlock:['throw:frag']}},
   {id:'untouched', name:'UNTOUCHED', desc:'Clear a whole floor without taking damage.', metric:'noHitFloors', goal:1, reward:{coins:60, unlock:['upg:adrenal']}},
   {id:'speed_floor', name:'DEAD SPRINT', desc:'Clear floor 1 in under 4 minutes.', metric:'fastestFloor1', goal:240, cmp:'lte', reward:{coins:50, unlock:['upg:stockpile']}},
   {id:'runs_5', name:'REGULAR', desc:'Start 5 runs.', metric:'runs', goal:5, reward:{coins:30}},
-  {id:'extract_3', name:'GET OUT ALIVE', desc:'Extract with your loot 3 times.', metric:'extracts', goal:3, reward:{coins:50, unlock:['throw:incendiary']}},
+  {id:'extract_3', name:'GET OUT ALIVE', desc:'Extract with your loot 3 times.', metric:'extracts', goal:3, reward:{coins:50, unlock:['gun:launcher']}},
   {id:'kills_100', name:'CLEANER', desc:'Down 100 enemies across all runs.', metric:'totalKills', goal:100, reward:{coins:60, unlock:['freq:dead_channel']}},
   {id:'daily_1', name:'DAILY GRIND', desc:'Finish a daily seed run.', metric:'dailyRuns', goal:1, reward:{coins:40}},
   {id:'boss_slayer', name:'THE LAST NOTE', desc:'Defeat THE CONDUCTOR.', metric:'bossKills', goal:1, reward:{coins:300, unlock:['gun:sniper_mule']}},

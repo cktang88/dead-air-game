@@ -16,12 +16,6 @@ export function nextLoadedSlot(slots, activeSlot, ammo, reserve) {
   return -1;
 }
 
-/** Scrap price to top a reserve up by `missing` rounds (a real sink, but never a rip-off). */
-export function refillCost(missing) {
-  if (missing <= 0) return 0;
-  return Math.min(40, Math.max(8, 6 + Math.ceil(missing * 0.5)));
-}
-
 /** Rounds a universal ammo pickup adds to the active gun's reserve: a % of its reserve cap, never fewer than 4. */
 export function ammoPickupRounds(maxReserve, pct) {
   return Math.max(4, Math.ceil(maxReserve * pct));
@@ -48,15 +42,10 @@ export function clearHealAmount({health, maxHealth}) {
   return health <= 1 ? 2 : 1;
 }
 
-export const REGEN_DELAY = 9;
-/** Out-of-combat regen: +1 HP after `REGEN_DELAY` calm seconds, only up to ~60% of max so it never replaces medkits. */
-export const regenCap = maxHealth => Math.max(1, Math.ceil(maxHealth * 0.6));
-export function shouldRegen({health, maxHealth, calm, roomClear}) {
-  return roomClear && calm >= REGEN_DELAY && health > 0 && health < regenCap(maxHealth);
-}
+/** There is no passive regeneration: healing is the room-clear medkit above plus rare drops (`supplyDrop`) and SUPPLY DROPs. */
 
-/** Should a locker spawn in a freshly cleared room? Always when ammo is low, otherwise about one room in three. */
-export function lockerSpawns(roll, {ammoLow}) { return ammoLow || roll < 0.34; }
+/** A cleared room pays a guaranteed ammo pickup when any carried gun is running dry (the old locker, minus the shop). */
+export function clearAmmoDrop({ammoLow}) { return Boolean(ammoLow); }
 
 /** Dedupe helper: returns true (and records the time) when `key` has not fired within `gap` seconds. */
 export function cooldownReady(map, key, now, gap) {

@@ -28,7 +28,7 @@ test('gunStatRows normalises against the catalog maxima and compares to the curr
   const sniper=GUNS.find(g=>g.id==='sniper_lynx');
   const rows=Object.fromEntries(gunStatRows(sniper,GUNS[0],GUNS).map(r=>[r.id,r]));
   assert.equal(rows.damage.verdict,'up');
-  assert.equal(rows.weight.verdict,'down');
+  assert.equal(rows.weight,undefined,'weight is not a stat any more');
   assert.equal(gunStatRows(GUNS[0],GUNS[0],GUNS).every(r=>r.verdict==='same'),true);
   assert.equal(weaponCycleRpm({rate:.5}),120);
 });

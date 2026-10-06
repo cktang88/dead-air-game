@@ -5,15 +5,15 @@ import {KITS, UNLOCKS, UNLOCK_BY_ID, STARTER_GUNS, grantUnlock, isUnlocked, kitT
 import {UPGRADES, STATIONS, CROSSFADES, MAX_RANK, activeCrossfades, availableUpgrades, crossfadesCompletedBy, freqStats, offerFrequencies, pickFrequency, stationLevel} from './frequencies.js';
 import {GOALS, GOAL_BY_ID, emptyStats, goalProgress, recordRun, updateStats} from './goals.js';
 import {dailyShareLine, COIN_RATES, FINAL_FLOOR, dailySeed, dateKey, encounterDepth, floorConfig, floorSeed, grossCoins, settleRun} from './run-loop.js';
-import {GUNS, BASE_CARRY_CAPACITY} from './catalog.js';
-import {chooseEncounterTypes, eligibleRecipes, weaponReplacement} from './rules.js';
+import {GUNS, BASE_GUN_IDS} from './catalog.js';
+import {chooseEncounterTypes, eligibleRecipes, gunPickupPlan} from './rules.js';
 import {BOSS, BOSS_PATTERNS, PATTERN_SPECS, activateBoss, bossDamageMult, bossPhaseFor, bossVulnerable, createBoss, stepBoss} from './boss.js';
 
 /* ------------------------------------------------------------------ save migration */
-test('save version is 2 and a v1 save migrates keeping coins and upgrade levels', () => {
-  assert.equal(SAVE_VERSION, 2);
+test('save version is 3 and a v1 save migrates keeping coins and upgrade levels', () => {
+  assert.equal(SAVE_VERSION, 3);
   const migrated = parseProgress(JSON.stringify({version: 1, coins: 137, upgrades: {runner: 2, vitalreserve: 3, bogus: 9}}));
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.equal(migrated.coins, 137);
   assert.equal(migrated.upgrades.runner, 2);
   assert.equal(migrated.upgrades.vitalreserve, 3);
@@ -31,14 +31,14 @@ test('unknown future versions and garbage fall back to a fresh profile', () => {
   assert.deepEqual(migrateProgress(null), emptyProgress());
 });
 
-test('a v2 profile round-trips and is sanitized', () => {
+test('a v3 profile round-trips and is sanitized', () => {
   let progress = {...emptyProgress(), coins: 300};
-  progress = grantUnlock(progress, 'gun:smg_vector');
+  progress = grantUnlock(progress, 'gun:smg_burst');
   progress = grantUnlock(progress, 'kit:duelist');
   progress = {...selectKit(progress, 'duelist'), goals: {first_blood: true}};
   assert.deepEqual(parseProgress(JSON.stringify(progress)), progress);
-  const dirty = parseProgress(JSON.stringify({...progress, unlocked: ['nope', 'gun:smg_vector', 'gun:smg_vector'], kit: 'marksman', stats: {runs: -3, totalKills: 'x', deepestFloor: 2.9}, goals: {a: true, b: 1}}));
-  assert.deepEqual(dirty.unlocked, ['gun:smg_vector']);
+  const dirty = parseProgress(JSON.stringify({...progress, unlocked: ['nope', 'gun:smg_burst', 'gun:smg_burst'], kit: 'marksman', stats: {runs: -3, totalKills: 'x', deepestFloor: 2.9}, goals: {a: true, b: 1}}));
+  assert.deepEqual(dirty.unlocked, ['gun:smg_burst']);
   assert.equal(dirty.kit, 'standard', 'unowned kit falls back');
   assert.equal(dirty.stats.runs, 0);
   assert.equal(dirty.stats.deepestFloor, 2);
@@ -50,29 +50,46 @@ test('starter guns are pooled; bought guns and kit guns join the pool', () => {
   let progress = emptyProgress();
   assert.deepEqual([...unlockedGunIds(progress)].sort(), [...STARTER_GUNS].sort());
   progress = {...progress, coins: 500};
-  const bought = purchaseUnlock(progress, 'gun:smg_vector');
+  const bought = purchaseUnlock(progress, 'gun:smg_burst');
   assert.equal(bought.purchased, true);
-  assert.equal(bought.progress.coins, 500 - UNLOCK_BY_ID.get('gun:smg_vector').cost);
-  assert.equal(unlockedGunIds(bought.progress).has('smg_vector'), true);
-  assert.equal(purchaseUnlock(bought.progress, 'gun:smg_vector').purchased, false, 'cannot rebuy');
+  assert.equal(bought.progress.coins, 500 - UNLOCK_BY_ID.get('gun:smg_burst').cost);
+  assert.equal(unlockedGunIds(bought.progress).has('smg_burst'), true);
+  assert.equal(purchaseUnlock(bought.progress, 'gun:smg_burst').purchased, false, 'cannot rebuy');
   const kit = purchaseUnlock(progress, 'kit:marksman');
-  assert.equal(unlockedGunIds(kit.progress).has('sniper_quill'), true);
+  assert.equal(unlockedGunIds(kit.progress).has('sniper_lynx'), true);
 });
 
 test('goal-only unlocks cannot be bought and too-poor purchases fail', () => {
   const rich = {...emptyProgress(), coins: 9999};
   assert.equal(purchaseUnlock(rich, 'gun:sniper_mule').purchased, false);
-  assert.equal(purchaseUnlock({...emptyProgress(), coins: 1}, 'gun:smg_vector').purchased, false);
+  assert.equal(purchaseUnlock({...emptyProgress(), coins: 1}, 'gun:smg_burst').purchased, false);
   assert.equal(purchaseUnlock(rich, 'nope').purchased, false);
 });
 
-test('every kit fits the base carry rig and its guns exist', () => {
+test('every kit is two distinct base-roster verbs that exist and can be held at once', () => {
   for (const kit of KITS) {
     const indices = kit.guns.map(id => GUNS.findIndex(gun => gun.id === id));
     assert.ok(indices.every(i => i >= 0), kit.id);
-    const result = weaponReplacement([indices[0]], 1, indices[1], GUNS, BASE_CARRY_CAPACITY, 0);
-    assert.equal(result.canCarry, true, `${kit.id} overweight`);
+    assert.ok(kit.guns.every(id => BASE_GUN_IDS.includes(id)), `${kit.id} uses a run-only variant`);
+    assert.equal(new Set(kit.guns.map(id => GUNS[GUNS.findIndex(g => g.id === id)].verb)).size, 2, `${kit.id} has two different verbs`);
+    assert.equal(gunPickupPlan([indices[0]], indices[1], 2, 0).slot, 1);
+    assert.equal(kit.throwables.incendiary, undefined);
   }
+});
+
+test('a v2 save with removed ids is migrated gracefully: refunds, no dead ids, carry rig becomes third slot', () => {
+  const old = {version: 2, coins: 100, upgrades: {carryrig: 3, runner: 1}, unlocked: ['gun:smg_vector', 'gun:rifle', 'throw:incendiary', 'gun:smg_burst', 'kit:duelist'], kit: 'bruiser'};
+  const migrated = parseProgress(JSON.stringify(old));
+  assert.deepEqual(migrated.unlocked.sort(), ['gun:smg_burst', 'kit:duelist']);
+  // refunds: 40 + 70 + 60 for the removed unlocks, 35+60+95 for the rig, minus the free third slot (95)
+  assert.equal(migrated.coins, 100 + 40 + 70 + 60 + (35 + 60 + 95) - 95);
+  assert.equal(migrated.upgrades.thirdslot, 1);
+  assert.equal(migrated.upgrades.carryrig, undefined);
+  assert.equal(migrated.kit, 'standard', 'an unowned kit falls back');
+  const low = parseProgress(JSON.stringify({version: 2, coins: 0, upgrades: {carryrig: 2}}));
+  assert.equal(low.coins, 35 + 60); assert.equal(low.upgrades.thirdslot, 0);
+  assert.equal(progressionStats(migrated).maxWeaponSlots, 3);
+  assert.equal(progressionStats(low).maxWeaponSlots, 2);
 });
 
 test('kit selection needs ownership and throwables respect unlocks', () => {
@@ -81,7 +98,7 @@ test('kit selection needs ownership and throwables respect unlocks', () => {
   progress = purchaseUnlock(progress, 'kit:marksman').progress;
   assert.equal(kitUnlocked(progress, 'marksman'), true);
   assert.equal(selectKit(progress, 'marksman').kit, 'marksman');
-  assert.deepEqual(kitThrowables(emptyProgress(), 'standard'), {smoke: 1, flash: 1, frag: 0, incendiary: 0});
+  assert.deepEqual(kitThrowables(emptyProgress(), 'standard'), {smoke: 1, flash: 1, frag: 0});
   const withFrag = grantUnlock(emptyProgress(), 'throw:frag');
   assert.equal(kitThrowables(withFrag, 'standard').frag, 2);
   assert.equal(unlockedThrowableIds(withFrag).has('frag'), true);
@@ -116,9 +133,10 @@ test('high roller trades safety for coin income and stockpile trades speed for s
 /* ------------------------------------------------------------------ frequencies */
 const seq = (seed = .3) => { let v = seed; return () => (v = (v * 9301 + .49297) % 1); };
 
-test('there are five stations of four upgrades with three ranks each', () => {
+test('there are five stations of four or more upgrades (FEEDBACK gained KINDLING, the old incendiary) with three ranks each', () => {
   assert.equal(STATIONS.length, 5);
-  for (const s of STATIONS) assert.equal(UPGRADES.filter(u => u.station === s.id).length, 4, s.id);
+  for (const s of STATIONS) assert.ok(UPGRADES.filter(u => u.station === s.id).length >= 4, s.id);
+  assert.equal(UPGRADES.find(u => u.id === 'kindle').station, 'feedback');
   for (const u of UPGRADES) assert.equal(u.ranks.length, MAX_RANK, u.id);
   assert.ok(CROSSFADES.length >= 4);
   for (const c of CROSSFADES) assert.ok(c.stations.every(id => STATIONS.some(s => s.id === id)));
@@ -201,7 +219,7 @@ test('completing goals pays coins once and grants unlocks', () => {
   const first = recordRun(emptyProgress(), {kills: 3, floorReached: 3, outcome: 'extract', seconds: 500, stillRooms: 1, slowTriples: 1, floor1Seconds: 200});
   const ids = first.completed.map(goal => goal.id);
   for (const id of ['first_blood', 'still_life', 'slow_triple', 'floor_2', 'floor_3', 'speed_floor']) assert.ok(ids.includes(id), id);
-  assert.equal(isUnlocked(first.progress, 'gun:smg_vector'), true);
+  assert.equal(isUnlocked(first.progress, 'gun:smg_burst'), true);
   assert.equal(isUnlocked(first.progress, 'throw:frag'), true);
   assert.equal(isUnlocked(first.progress, 'upg:stockpile'), true);
   assert.equal(first.progress.coins, 10 + 30 + 40 + 40 + 80 + 50);

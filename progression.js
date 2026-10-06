@@ -1,21 +1,23 @@
-import {BASE_CARRY_CAPACITY,TILE} from './catalog.js';
+import {TILE} from './catalog.js';
 import {emptyStats} from './goals.js';
-import {KITS, UNLOCK_BY_ID, isUnlocked, kitUnlocked} from './unlocks.js';
+import {KITS, UNLOCK_BY_ID, LEGACY_UNLOCK_COSTS, isUnlocked, kitUnlocked} from './unlocks.js';
 import {COIN_RATES} from './run-loop.js';
 import {TAPE_BY_ID} from './story.js';
 import {INTERFERENCE_BY_ID} from './interference.js';
 
 // v1: coins + 7 flat upgrades. v2 adds unlocks, starting kit, run stats, goals and the daily record.
-export const SAVE_VERSION = 2;
+// v3 is the behavior rework: removed gun/throwable unlocks are refunded and CARRY RIG became THIRD SLOT.
+export const SAVE_VERSION = 3;
+const CARRY_RIG_COSTS = [35,60,95];
 export const SAVE_KEY = 'dead-air.progress.v1';
 const ROOM_SENSE_RANGE_TILES = [15,25,35];
 
 export const META_UPGRADES = [
   {id:'runner',name:'RUNNER’S LEGS',description:'+6% movement speed per level',costs:[25,50,80]},
   {id:'stillmind',name:'STILL MIND',description:'Standing-still time drops 0.01× per level (0.08× → 0.05×)',costs:[30,55,85]},
-  {id:'carryrig',name:'CARRY RIG',description:'+1 carry weight per level · tier III unlocks a third weapon slot',costs:[35,60,95]},
+  {id:'thirdslot',name:'THIRD SLOT',description:'Carry a third gun (key 3) · every gun swap takes 0.4 s longer',costs:[95]},
   {id:'salvager',name:'SALVAGER',description:'+10% crate scrap chance and +2 room-clear scrap per level',costs:[20,45,75]},
-  {id:'luckyfind',name:'LUCKY FIND',description:'Find higher-quality attachment drops more often',costs:[30,60,90]},
+  {id:'luckyfind',name:'LUCKY FIND',description:'Rare gun variants and mod drops turn up more often',costs:[30,60,90]},
   {id:'roomsense',name:'ROOM SENSE',description:`Reveal room outlines and enemy blips through walls within ${ROOM_SENSE_RANGE_TILES.join(' / ')} tiles`,costs:[35,65,100]},
   {id:'vitalreserve',name:'VITAL RESERVE',description:'+1 maximum health per level · start each run fully healed',costs:[40,80,130]},
   // Tradeoff upgrades: unlocked by goals, then bought like any other.
@@ -41,15 +43,25 @@ const num=(value,fallback=0)=>Number.isFinite(value)?value:fallback;
 export function migrateProgress(data) {
   const empty=emptyProgress();
   if(!data||typeof data!=='object'||!Number.isFinite(data.coins))return empty;
-  if(data.version!==1&&data.version!==SAVE_VERSION)return empty;
+  if(data.version!==1&&data.version!==2&&data.version!==SAVE_VERSION)return empty;
   const upgrades={...empty.upgrades};
   for(const upgrade of META_UPGRADES){
     const level=data.upgrades?.[upgrade.id];
     if(Number.isInteger(level))upgrades[upgrade.id]=Math.max(0,Math.min(upgrade.costs.length,level));
   }
   const next={...empty,coins:Math.max(0,Math.floor(data.coins)),upgrades};
-  if(data.version===SAVE_VERSION){
-    if(Array.isArray(data.unlocked))next.unlocked=[...new Set(data.unlocked.filter(id=>UNLOCK_BY_ID.has(id)))];
+  // v1/v2 -> v3: CARRY RIG levels are refunded; level III (the third slot) becomes THIRD SLOT for free.
+  const rig=Number.isInteger(data.upgrades?.carryrig)?Math.max(0,Math.min(3,data.upgrades.carryrig)):0;
+  if(data.version<SAVE_VERSION&&rig>0){
+    next.coins+=CARRY_RIG_COSTS.slice(0,rig).reduce((a,b)=>a+b,0);
+    if(rig>=3){next.upgrades.thirdslot=1;next.coins-=META_UPGRADES.find(item=>item.id==='thirdslot').costs[0];}
+  }
+  if(data.version>=2){
+    if(Array.isArray(data.unlocked)){
+      next.unlocked=[...new Set(data.unlocked.filter(id=>UNLOCK_BY_ID.has(id)))];
+      // Unlocks that no longer exist (variants became run-only drops, incendiary became a mod) refund their price.
+      for(const id of new Set(data.unlocked))if(!UNLOCK_BY_ID.has(id)&&LEGACY_UNLOCK_COSTS[id])next.coins+=LEGACY_UNLOCK_COSTS[id];
+    }
     if(typeof data.kit==='string')next.kit=data.kit;
     const stats=data.stats&&typeof data.stats==='object'?data.stats:{};
     next.stats=Object.fromEntries(Object.keys(emptyStats()).map(key=>[key,Math.max(0,Math.floor(num(stats[key])))]));
@@ -96,13 +108,12 @@ export function purchaseUpgrade(progress,id) {
 
 // Meta-upgrade stats. Frequencies are behaviors, not stats, so they live in frequencies.js / freqStats().
 export function progressionStats(progress) {
-  const {runner,stillmind,carryrig,salvager,luckyfind,roomsense,vitalreserve,highroller=0,adrenal=0,stockpile=0}=progress.upgrades;
+  const {runner,stillmind,thirdslot=0,salvager,luckyfind,roomsense,vitalreserve,highroller=0,adrenal=0,stockpile=0}=progress.upgrades;
   return {
     moveSpeed:112*(1+.06*runner-.06*stockpile),
     idleScale:Math.max(.03,.08-.01*stillmind),
     maxHealth:Math.max(1,3+vitalreserve-adrenal),
-    carryCapacity:BASE_CARRY_CAPACITY+carryrig,
-    maxWeaponSlots:carryrig>=3?3:2,
+    maxWeaponSlots:thirdslot>=1?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
     roomClearScrap:20+2*salvager,
     luckyFindLevel:luckyfind,

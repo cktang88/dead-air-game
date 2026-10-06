@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BASE_CARRY_CAPACITY, ENEMY_TYPES, GEAR, GUNS, SHOTGUN_SHELLS, TILE} from './catalog.js';
-import {absorbArmorDamage, canCarryWeapons, chooseEncounterTypes, chooseWeaponReplacementSlot, compatibleAttachments, consumePenetration, crateDamageStage, damageDurability, distanceToRect, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, timeScale, unlockRewardGate, weaponLoadoutWeight, weaponPenetration, weaponReplacement, weaponStats, withinWorldView} from './rules.js';
+import {BASE_GUN_IDS, ENEMY_TYPES, GEAR, GUNS, MODS, MOD_BY_ID, SHOTGUN_SHELLS, TILE, modFits} from './catalog.js';
+import {absorbArmorDamage, chooseEncounterTypes, consumePenetration, crateDamageStage, damageDurability, distanceToRect, eligibleRecipes, gunPickupPlan, minimapContactVisible, minimapPickupVisible, reloadSeconds, segmentBlockedTiles, segmentCircleHitTime, segmentIntersectsCircle, segmentWallRuns, shotgunShellStats, swapSeconds, timeScale, unlockRewardGate, weaponPenetration, weaponStats, withinWorldView} from './rules.js';
 import {META_UPGRADES, awardCoins, emptyProgress, parseProgress, progressionStats, purchaseUpgrade, runCoinPayout} from './progression.js';
 
 test('world time follows actual speed (see time-rule.test.js for the full rule), and menus pause',()=>{
@@ -41,104 +41,92 @@ test('ranged aim starts only when its tell is inside the camera view',()=>{
   assert.equal(withinWorldView({x:400,y:300},player,halfWidth,-1),false);
 });
 
-test('gun mods change the weapon values consumed by combat',()=>{
-  const base=weaponStats(GUNS[0],new Map());
-  const mods=new Map(['extended','hollow','stabilizer','longbarrel','suppressor'].map(id=>[id,'common']));
-  const upgraded=weaponStats(GUNS[0],mods);
-  assert.equal(base.magazine,18);
-  assert.equal(upgraded.magazine,27);
-  assert.equal(upgraded.damage,29.700000000000003);
-  assert.equal(upgraded.fireRate,0.1394);
-  assert.equal(upgraded.projectileSpeed,690);
-  assert.equal(upgraded.range,GUNS[0].range*1.35);
-  assert.equal(upgraded.spread,0.0385);
-  assert.equal(reloadSeconds(new Map()),1.65);
-  assert.equal(reloadSeconds(new Map([['extended','common']])),1.85);
-  assert.equal(reloadSeconds(new Map([['stabilizer','common']])),1.25);
+test('each mod is a behavior with its own numbers, and mod text matches the code',()=>{
+  const gun=GUNS[0];
+  const base=weaponStats(gun,null);
+  assert.equal(base.magazine,18);assert.equal(base.noise,1);assert.equal(base.bounces,0);assert.equal(base.burn,null);
+  assert.equal(weaponStats(gun,'extended').magazine,27);
+  assert.equal(reloadSeconds(gun,'extended'),gun.reload*1.2);
+  assert.equal(weaponStats(gun,'suppressor').noise,.5);
+  assert.equal(weaponStats(gun,'ricochet').bounces,1);
+  assert.deepEqual(weaponStats(gun,'incendiary').burn,{seconds:3,dps:7});
+  assert.equal(weaponStats(gun,'longbarrel').range,gun.range*1.25);
+  assert.equal(weaponPenetration(gun,'longbarrel').enemies,1);
+  assert.equal(weaponPenetration(gun,null).enemies,0);
+  // a mod changes only what it says: nothing else moves
+  for(const id of ['suppressor','ricochet','incendiary','quickdraw'])assert.equal(weaponStats(gun,id).magazine,18,id);
+  assert.equal(weaponStats(gun,'suppressor').damage,gun.damage);
+  assert.equal(MODS.length,6);
+  for(const mod of MODS){assert.equal(typeof mod.info,'string');assert.equal(mod.tier,undefined,'no tiers');assert.equal(mod.cost,undefined,'mods are found, not bought');}
+  assert.match(MOD_BY_ID.get('suppressor').info,/halved/);assert.match(MOD_BY_ID.get('ricochet').info,/bounce once/);
+  assert.match(MOD_BY_ID.get('extended').info,/\+50%.*20% longer/);assert.match(MOD_BY_ID.get('longbarrel').info,/pierce 1 enemy.*\+25% range/);
+  assert.match(MOD_BY_ID.get('quickdraw').info,/instant.*double damage/);assert.match(MOD_BY_ID.get('incendiary').info,/3 s.*panic/);
 });
 
-test('attachment rarity is retained in weapon stats and strengthens the installed mod',()=>{
-  const gun=GUNS[0],common=new Map([['extended','common']]),prototype=new Map([['extended','prototype']]);
-  assert.equal(weaponStats(gun,common).magazine,27);
-  assert.equal(weaponStats(gun,prototype).magazine,32);
-  assert.equal(weaponPenetration(gun,new Map([['longbarrel','common']])).enemies,1);
-  assert.equal(weaponPenetration(gun,new Map([['longbarrel','prototype']])).enemies,2);
-  assert.ok(reloadSeconds(new Map([['stabilizer','prototype']]),gun)<reloadSeconds(new Map([['stabilizer','common']]),gun));
+test('swap time: base per gun, instant with QUICK-DRAW, slower on every swap with a third slot',()=>{
+  const sidearm=GUNS.find(g=>g.id==='pistol_9'),breach=GUNS.find(g=>g.id==='sniper_mule');
+  assert.ok(swapSeconds(sidearm,null,2)<swapSeconds(breach,null,2),'a sidearm draws faster than a rifle');
+  assert.equal(swapSeconds(breach,'quickdraw',2),0);
+  assert.equal(swapSeconds(breach,'quickdraw',3),0,'QUICK-DRAW beats the third-slot penalty');
+  assert.ok(Math.abs(swapSeconds(sidearm,null,3)-swapSeconds(sidearm,null,2)-.4)<1e-9);
+  assert.equal(swapSeconds(sidearm,'ricochet',2),sidearm.swap);
 });
 
-test('the weighted ammo harness speeds reloads for every carried gun and stacks with mods',()=>{
-  const harness=GEAR.find(item=>item.id==='ammo-harness');
-  assert.ok(harness);
-  assert.equal(harness.weight,1);
-  assert.equal(harness.reloadMultiplier,.85);
-  for(const gun of GUNS){
-    const normal=reloadSeconds(new Map(),gun);
-    assert.ok(Math.abs(reloadSeconds(new Map(),gun,harness.reloadMultiplier)-normal*.85)<1e-10,`${gun.name} should reload 15% faster`);
-    if(gun.attachments.includes('stabilizer'))assert.ok(Math.abs(reloadSeconds(new Map([['stabilizer','common']]),gun,harness.reloadMultiplier)-1.25*.85)<1e-10,`${gun.name} should combine the harness and stabilizer`);
-  }
+test('a mod the gun cannot take is ignored everywhere',()=>{
+  const launcher=GUNS.find(g=>g.id==='launcher');
+  assert.equal(modFits(launcher,'suppressor'),false);assert.equal(modFits(launcher,'ricochet'),true);
+  assert.equal(weaponStats(launcher,'suppressor').noise,launcher.noise);
+  assert.equal(weaponPenetration(launcher,'longbarrel').enemies,0);
+  assert.equal(modFits(GUNS[0],'nope'),false);
 });
-
 test('armor durability absorbs incoming damage separately from health',()=>{
   const armor=GEAR.find(item=>item.id==='armor');
-  assert.equal(armor.armorDurability,1);assert.equal(armor.repairCost,10);assert.equal(armor.healthBonus,undefined);
+  assert.equal(armor.armorDurability,1);assert.equal(armor.weight,undefined,'no carry weight');assert.equal(GEAR.length,1);
   assert.deepEqual(absorbArmorDamage(2,1),{armor:1,healthDamage:0,absorbed:1});
   assert.deepEqual(absorbArmorDamage(1,3),{armor:0,healthDamage:2,absorbed:1});
   assert.deepEqual(absorbArmorDamage(0,1),{armor:0,healthDamage:1,absorbed:0});
   assert.deepEqual(absorbArmorDamage(-1,-2),{armor:0,healthDamage:0,absorbed:0});
 });
 
-test('the roster covers the requested classes with distinct, complete weapon profiles',()=>{
-  const counts=Object.groupBy(GUNS,gun=>gun.category);
-  assert.equal(counts['ASSAULT RIFLE'].length,3);
-  assert.equal(counts.SMG.length,4);
-  assert.equal(counts.PISTOL.length,2);
-  assert.equal(counts.SNIPER.length+counts['ANTI-MATERIEL'].length,3);
+test('the roster is nine verbs plus rare variants, each with its own voice, recoil and silhouette',()=>{
+  const base=GUNS.filter(g=>!g.variantOf),variants=GUNS.filter(g=>g.variantOf);
+  assert.equal(base.length,9);
+  assert.deepEqual(base.map(g=>g.verb).sort(),['BREACH','BURST','LAUNCH','PIERCE','PUNCH','SIDEARM','SPRAY','STEADY','SWEEP']);
+  assert.equal(new Set(base.map(g=>g.verb)).size,9,'one gun per verb');
+  assert.deepEqual(BASE_GUN_IDS,base.map(g=>g.id));
   assert.equal(new Set(GUNS.map(gun=>gun.id)).size,GUNS.length);
+  for(const v of variants){const parent=GUNS.find(g=>g.id===v.variantOf);assert.ok(parent&&!parent.variantOf,`${v.id} extends a base gun`);assert.equal(v.verb,parent.verb,`${v.id} keeps its base verb`);}
   for(const gun of GUNS){
-    for(const field of ['damage','rate','speed','range','mag','reserve','spread','reload','weight','color'])
+    for(const field of ['damage','rate','speed','range','mag','reserve','spread','reload','swap','color'])
       assert.ok(Number.isFinite(gun[field])&&gun[field]>0,`${gun.id} needs positive ${field}`);
-    assert.ok(gun.visual.length>0&&gun.visual.width>0,`${gun.id} needs a readable weapon profile`);
-    assert.ok(gun.attachments.length>0,`${gun.id} needs compatible attachments`);
-    assert.ok(gun.attachments.every(id=>['extended','suppressor','hollow','stabilizer','longbarrel'].includes(id)));
+    assert.equal(gun.weight,undefined,`${gun.id} has no carry weight`);assert.equal(gun.attachments,undefined);
+    assert.ok(gun.visual.length>0&&gun.visual.width>0&&gun.visual.art,`${gun.id} needs a readable weapon profile`);
+    assert.ok(gun.feel&&Number.isFinite(gun.feel.kick),`${gun.id} has its own recoil`);
+    assert.ok(gun.short.startsWith(gun.verb),`${gun.id} says its verb first`);
   }
-  assert.deepEqual(GUNS.slice(0,3).map(gun=>gun.id),['machine','shotgun','rifle']);
-  assert.ok(new Set(GUNS.map(gun=>`${gun.damage}/${gun.rate}/${gun.mag}/${gun.spread}`)).size===GUNS.length,
-    'each gun should have its own combat tradeoff profile');
+  assert.ok(new Set(GUNS.map(gun=>`${gun.damage}/${gun.rate}/${gun.mag}/${gun.spread}`)).size===GUNS.length,'each gun should have its own combat tradeoff profile');
+  assert.equal(new Set(base.map(g=>JSON.stringify(g.feel))).size,9,'every base gun kicks differently');
+  assert.ok(GUNS.find(g=>g.id==='launcher').lob,'the launcher lobs');
+  assert.ok(GUNS.find(g=>g.id==='pistol_45').stun>0,'PUNCH staggers');
+  assert.equal(GUNS.find(g=>g.id==='sniper_mule').penetration.walls,1,'BREACH goes through a wall');
+  assert.equal(GUNS.find(g=>g.id==='sniper_lynx').penetration.walls,0);
+  assert.ok(GUNS.find(g=>g.id==='sniper_lynx').penetration.enemies>=3,'PIERCE goes through enemies');
+  assert.ok(GUNS.find(g=>g.id==='smg_vector').noise>1,'VECTOR 9 is louder');
 });
-
-test('attachment compatibility gates the actual weapon stats and shop options',()=>{
-  const mule=GUNS.find(gun=>gun.id==='sniper_mule');
-  const owned=new Set(['extended','hollow','longbarrel','suppressor']);
-  const stats=weaponStats(mule,new Map([...owned].map(id=>[id,'common'])));
-  assert.equal(stats.magazine,mule.mag,'Mule cannot take an extended magazine');
-  assert.equal(stats.damage,mule.damage*1.35);
-  assert.equal(stats.spread,mule.spread,'Mule cannot take a suppressor');
-  assert.equal(stats.projectileSpeed,mule.speed);
-  assert.equal(stats.range,mule.range*1.35);
-  assert.deepEqual(compatibleAttachments(mule,[
-    {id:'extended'},{id:'hollow'},{id:'suppressor'},{id:'longbarrel'}
-  ]).map(item=>item.id),['hollow','longbarrel']);
-  assert.equal(reloadSeconds(new Map(),mule),mule.reload);
-  assert.equal(reloadSeconds(new Map([['stabilizer','common']]),GUNS[0]),1.25);
-});
-
-test('shotgun shells trade pellet count, spread, damage, and range',()=>{
-  const gun=GUNS.find(item=>item.id==='shotgun'),base=weaponStats(gun,new Map());
+test('shotgun shells are a real choice: wide buckshot or a long slug',()=>{
+  const gun=GUNS.find(item=>item.id==='shotgun'),base=weaponStats(gun,null);
+  assert.deepEqual(SHOTGUN_SHELLS.map(s=>s.id),['buckshot','slug']);
   const buck=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='buckshot'),base);
-  const bird=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='birdshot'),base);
   const slug=shotgunShellStats(SHOTGUN_SHELLS.find(item=>item.id==='slug'),base);
   assert.equal(buck.pellets,9);assert.equal(buck.damage,base.damage*.42);
-  assert.equal(bird.pellets,16);assert.ok(bird.spread>buck.spread);assert.ok(bird.range<buck.range);
-  assert.equal(slug.pellets,1);assert.ok(slug.spread<buck.spread);assert.ok(slug.range>buck.range);
-  assert.ok(buck.damage*buck.pellets<base.damage*gun.count,'buckshot should stay below the old five-pellet volley total');
+  assert.equal(slug.pellets,1);assert.ok(slug.spread<buck.spread);assert.ok(slug.range>buck.range);assert.ok(slug.damage>buck.damage*3);
 });
-
 test('snipers pierce multiple enemies and crates; anti-materiel adds one wall',()=>{
-  const mods=new Map(),lynx=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_lynx'),mods),quill=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_quill'),mods),mule=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_mule'),mods);
+  const mods=null,lynx=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_lynx'),mods),quill=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_quill'),mods),mule=weaponPenetration(GUNS.find(gun=>gun.id==='sniper_mule'),mods);
   for(const rifle of [lynx,quill]){assert.ok(rifle.enemies>=3);assert.ok(rifle.crates>=2);assert.equal(rifle.walls,0);}
   assert.ok(mule.enemies>=3);assert.ok(mule.crates>=2);assert.equal(mule.walls,1);
-  assert.equal(weaponPenetration(GUNS[0],new Map()).enemies,0);
-  assert.equal(weaponPenetration(GUNS[0],new Map([['longbarrel','common']])).enemies,1);
+  assert.equal(weaponPenetration(GUNS[0],null).enemies,0);
+  assert.equal(weaponPenetration(GUNS[0],'longbarrel').enemies,1);
   let budget={enemies:2,crates:1,walls:1};
   budget=consumePenetration(budget,'enemies');assert.deepEqual(budget,{enemies:1,crates:1,walls:1});
   budget=consumePenetration(budget,'walls');assert.equal(budget.walls,0);assert.equal(consumePenetration(budget,'walls'),null);
@@ -245,15 +233,6 @@ test('loot scanner reveals only available nearby pickups and keeps undiscovered 
   assert.equal(minimapPickupVisible({available:true,distance:20,scanRange:224,hiddenSecret:false}),true);
 });
 
-test('loot scanner is a one-weight, seven-tile gear choice',()=>{
-  const scanner=GEAR.find(item=>item.id==='loot-scanner');
-  assert.ok(scanner);
-  assert.equal(scanner.weight,1);
-  assert.equal(scanner.cost,32);
-  assert.equal(scanner.pickupScanRange,7*TILE);
-  assert.equal(weaponLoadoutWeight([0,1],GUNS)+scanner.weight,6.5);
-});
-
 test('room scan distance measures from the full outer tile edge, including the last tile',()=>{
   const room={left:32,top:64,right:128,bottom:160};
   assert.equal(distanceToRect({x:80,y:100},room),0);
@@ -272,74 +251,36 @@ test('cover circles intersect a sight or blast path, including endpoints and edg
   assert.equal(segmentIntersectsCircle(start,end,{x:50,y:1},-1),false);
 });
 
-test('weapon choices use a visible carry budget',()=>{
-  assert.equal(weaponLoadoutWeight([0,1],GUNS),5.5);
-  assert.equal(canCarryWeapons([0,1],GUNS,BASE_CARRY_CAPACITY),true);
-  assert.equal(canCarryWeapons([1,2],GUNS,BASE_CARRY_CAPACITY),false);
-  assert.equal(canCarryWeapons([0,1],GUNS,BASE_CARRY_CAPACITY-1.5),true);
-  assert.equal(canCarryWeapons([0,2],GUNS,BASE_CARRY_CAPACITY-1.5),false);
+test('picking up a gun adds it with a free slot, swaps the gun in hand when full, and never duplicates',()=>{
+  assert.deepEqual(gunPickupPlan([0],5,2,0),{slot:1,replaces:null});
+  assert.deepEqual(gunPickupPlan([0,1],5,2,0),{slot:0,replaces:0},'full hands swap the active gun');
+  assert.deepEqual(gunPickupPlan([0,1],5,2,1),{slot:1,replaces:1});
+  assert.deepEqual(gunPickupPlan([0,1],5,3,1),{slot:2,replaces:null},'the third slot adds instead of swapping');
+  assert.deepEqual(gunPickupPlan([0,1,2],5,3,2),{slot:2,replaces:2});
+  assert.equal(gunPickupPlan([0,1],1,2,0),null,'you cannot carry the same gun twice');
+  const hands=[0,1];gunPickupPlan(hands,5,2,0);assert.deepEqual(hands,[0,1],'planning does not mutate');
 });
-
-test('weapon replacement preview includes gear weight without mutating the current loadout',()=>{
-  const current=[0,1],rifle=GUNS.findIndex(gun=>gun.id==='rifle');
-  const primary=weaponReplacement(current,0,rifle,GUNS,BASE_CARRY_CAPACITY,1.5);
-  assert.deepEqual(primary.weapons,[rifle,1]);
-  assert.equal(primary.totalWeight,9);
-  assert.equal(primary.canCarry,false);
-  const secondary=weaponReplacement(current,1,rifle,GUNS,BASE_CARRY_CAPACITY,1.5);
-  assert.deepEqual(secondary.weapons,[0,rifle]);
-  assert.equal(secondary.totalWeight,7.5);
-  assert.equal(secondary.canCarry,false);
-  assert.deepEqual(current,[0,1]);
-  assert.equal(weaponReplacement(current,1,rifle,GUNS,BASE_CARRY_CAPACITY+1,1.5).canCarry,true);
-});
-
-test('weapon replacement selection shares append and replacement priorities',()=>{
-  const pistol=GUNS.findIndex(gun=>gun.id==='pistol_9');
-  const heavy=GUNS.findIndex(gun=>gun.id==='sniper_mule');
-  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,2,0,GUNS,BASE_CARRY_CAPACITY,1.5),1);
-  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,3,0,GUNS,BASE_CARRY_CAPACITY+2),2);
-  assert.equal(chooseWeaponReplacementSlot([0,1],pistol,2,0,GUNS,BASE_CARRY_CAPACITY),1);
-  assert.equal(chooseWeaponReplacementSlot([0,1,2],pistol,3,2,GUNS,BASE_CARRY_CAPACITY+4),2);
-  assert.equal(chooseWeaponReplacementSlot([0,1,2],pistol,3,2,GUNS,BASE_CARRY_CAPACITY+4,1),2);
-  assert.equal(chooseWeaponReplacementSlot([0,1],heavy,3,0,GUNS,BASE_CARRY_CAPACITY+1.5),undefined);
-  assert.equal(chooseWeaponReplacementSlot([0,1],0,3,0,GUNS,BASE_CARRY_CAPACITY+3),undefined);
-});
-
-test('weapon pickup cannot equip the same gun in both slots',()=>{
-  const current=[0,1];
-  assert.equal(weaponReplacement(current,1,current[0],GUNS,BASE_CARRY_CAPACITY).canCarry,false);
-  assert.equal(weaponReplacement(current,0,current[0],GUNS,BASE_CARRY_CAPACITY).canCarry,false);
-  assert.deepEqual(weaponReplacement(current,0,2,GUNS,BASE_CARRY_CAPACITY).weapons,[2,1]);
-});
-
-test('an unlocked third slot appends a distinct gun only when weapon and gear weight fit',()=>{
-  const current=[0,1],lightPistol=GUNS.findIndex(gun=>gun.id==='pistol_9'),third=weaponReplacement(current,2,lightPistol,GUNS,BASE_CARRY_CAPACITY+3,1.5);
-  assert.deepEqual(third.weapons,[0,1,lightPistol]);
-  assert.equal(third.canCarry,true);
-  assert.equal(third.totalWeight,8.1);
-  assert.equal(weaponReplacement(current,2,lightPistol,GUNS,8,1.5).canCarry,false);
-  assert.equal(weaponReplacement(current,2,0,GUNS,BASE_CARRY_CAPACITY+3).canCarry,false);
-  assert.deepEqual(current,[0,1]);
-});
-
-const legacyStats=({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange})=>({moveSpeed,idleScale,maxHealth,carryCapacity,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange});
+const legacyStats=({moveSpeed,idleScale,maxHealth,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange})=>({moveSpeed,idleScale,maxHealth,maxWeaponSlots,crateDropChance,roomClearScrap,luckyFindLevel,scannerRange});
 test('run coins reward death and extraction while upgrades persist as capped levels',()=>{
   const deathPayout=runCoinPayout({won:false,roomsCleared:2,kills:4});
   const winPayout=runCoinPayout({won:true,roomsCleared:2,kills:4});
   assert.equal(deathPayout,29);
   assert.equal(winPayout,79);
   let progress=awardCoins(emptyProgress(),winPayout);
-  const purchase=purchaseUpgrade(progress,'carryrig');
+  const purchase=purchaseUpgrade(progress,'salvager');
   assert.equal(purchase.purchased,true);
   progress=purchase.progress;
-  assert.equal(progress.coins,44);
-  assert.equal(progressionStats(progress).carryCapacity,8);
+  assert.equal(progress.coins,59);
   assert.equal(progressionStats(progress).maxWeaponSlots,2);
   const restored=parseProgress(JSON.stringify(progress));
   assert.deepEqual(restored,progress);
   assert.equal(parseProgress('{bad json').coins,0);
-  assert.equal(META_UPGRADES.find(item=>item.id==='carryrig').costs.length,3);
+  assert.equal(META_UPGRADES.find(item=>item.id==='salvager').costs.length,3);
+  assert.equal(META_UPGRADES.some(item=>item.id==='carryrig'),false,'carry weight is gone');
+  const third=purchaseUpgrade({...emptyProgress(),coins:200},'thirdslot');
+  assert.equal(third.purchased,true);assert.equal(progressionStats(third.progress).maxWeaponSlots,3);
+  assert.equal(META_UPGRADES.find(item=>item.id==='thirdslot').costs.length,1);
+  assert.match(META_UPGRADES.find(item=>item.id==='thirdslot').description,/0\.4 s longer/);
 });
 
 test('an upgrade purchase cannot spend too few coins or go past its final tier',()=>{
@@ -353,13 +294,13 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:3,carryCapacity:BASE_CARRY_CAPACITY,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
-  const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,carryrig:99,unknown:3}}));
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:3,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,thirdslot:99,unknown:3}}));
   assert.equal(restored.coins,0);
-  assert.equal(restored.upgrades.carryrig,3);
+  assert.equal(restored.upgrades.thirdslot,1);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:3,carryCapacity:BASE_CARRY_CAPACITY+3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
-  assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,carryrig:2}}).maxWeaponSlots,2);
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,thirdslot:0}}).maxWeaponSlots,2);
 });
 
 test('Vital Reserve raises saved starting health by one per capped tier',()=>{

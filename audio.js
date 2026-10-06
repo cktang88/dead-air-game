@@ -89,12 +89,13 @@ const GUN_FAMILIES={
   'ASSAULT RIFLE':{family:'rifle',crack:3100,body:190,bodyDur:.08,crackDur:.075,tail:.3,wet:.2,vol:.95,rattle:false},
   SHOTGUN:{family:'shotgun',crack:2000,body:110,bodyDur:.24,crackDur:.15,tail:.38,wet:.26,vol:1.1,rattle:false},
   SNIPER:{family:'sniper',crack:4300,body:120,bodyDur:.2,crackDur:.09,tail:.55,wet:.4,vol:1.05,rattle:false},
+  LAUNCHER:{family:'launcher',crack:900,body:90,bodyDur:.16,crackDur:.08,tail:.3,wet:.35,vol:1,rattle:false},
   'ANTI-MATERIEL':{family:'antimateriel',crack:1900,body:62,bodyDur:.55,crackDur:.18,tail:1.0,wet:.55,vol:1.3,rattle:false}
 };
 
 /** Choose the synth profile for a gun definition ({id,category,damage}). Unknown categories fall back to a mid rifle-ish crack. */
 export function gunProfile(gun,{suppressed=false}={}){
-  const base=GUN_FAMILIES[gun?.category]||GUN_FAMILIES['ASSAULT RIFLE'];
+  const base={...(GUN_FAMILIES[gun?.category]||GUN_FAMILIES['ASSAULT RIFLE']),...(gun?.sound||{})}; // per-gun voice overrides (catalog `sound`)
   const personality=.9+hashUnit(gun?.id??gun?.name??'gun')*.2; // stable +-10% pitch per gun
   const damage=Number.isFinite(gun?.damage)?gun.damage:30;
   const loud=clamp(.8+damage/220,.8,1.35);
@@ -267,6 +268,10 @@ export function playGunshot(gun,opts){
       noise(context,out,{filter:'lowpass',f0:2200,f1:60,dur:.9,vol:v*.7,brown:true});
       noise(context,out,{filter:'bandpass',f0:700,f1:150,q:.5,dur:.7,vol:v*.4,delay:.03});
       tone(context,out,{type:'sawtooth',f0:2100*pm,f1:200,dur:.12,vol:v*.15});
+    }else if(p.family==='launcher'){
+      tone(context,out,{type:'sine',f0:140*pm,f1:50,dur:.22,vol:v*.9}); // thump of the shell leaving the tube
+      noise(context,out,{filter:'bandpass',f0:600,f1:200,q:.8,dur:.25,vol:v*.5,delay:.01});
+      tone(context,out,{type:'triangle',f0:420*pm,f1:900*pm,dur:.18,vol:v*.18,delay:.06}); // rising whistle
     }else if(p.rattle){
       noise(context,out,{filter:'bandpass',f0:2400,f1:1500,q:2,dur:.02,vol:v*.25,delay:.035}); // bolt rattle
     }

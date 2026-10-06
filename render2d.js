@@ -8,7 +8,7 @@ import {createTimeFx} from './timefx.js';
 import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inOutCubic, lerp, moveAmount, newSpring, outBack, outBounce, outCubic, outQuad, reloadPose, springDamping, stepSpring, swapPose, walkPhase, walkPose} from './anim.js';
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
-import {drawIcon} from './icons.js';
+import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
@@ -148,7 +148,7 @@ export function createRenderer(container, state) {
     for (const ev of events) {
       if (ev.type === 'shot') {
         const gun = GUNS.find((g) => g.id === ev.gun) || GUNS[0], a = Math.atan2(ev.dy, ev.dx);
-        fx.muzzle(ev.x, ev.y, a, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
+        fx.muzzle(ev.x, ev.y, a, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' || gun.category === 'LAUNCHER' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
         const p = state.player;
         if (p) fx.casing(p.x + ev.dx * 8, p.y + ev.dy * 8, a);
         vis.kick = Math.max(vis.kick, Math.min(1.3, 0.5 + (ev.kick || 0.5)));
@@ -179,7 +179,7 @@ export function createRenderer(container, state) {
 
   // ------------------------------------------------------------------ per-simulation-step update
   const STRIDE = {player: 40, chaser: 30, gunner: 36, brute: 34, guard: 34, sniper: 36, riot: 34, elite: 38};
-  const AUTO_PICK = new Set(['scrap', 'heal', 'ammo', 'armor', 'mod']);
+  const AUTO_PICK = new Set(['scrap', 'heal', 'ammo', 'armor']);
   const kindOf = (e) => (e.elite ? 'elite' : e.type);
 
   function springXY(o, k, c, dt) {
@@ -567,11 +567,13 @@ export function createRenderer(container, state) {
         const gun = GUNS[pk.gunIndex]; const s = 0.82; ctx.scale(s, s);
         ctx.translate(-gun.visual.length * 0.41 - 2, 0); drawGun(ctx, gun, {reach: 0});
       } else if (pk.kind === 'mod') {
-        ctx.rotate(Math.PI / 4 + spin);
-        ctx.fillStyle = INK; ctx.fillRect(-7.4, -7.4, 14.8, 14.8);
-        const g = lgrad(ctx, -6, -6, 6, 6, tint(color, 0.5), shade(color, 0.65));
-        ctx.fillStyle = g; ctx.fillRect(-6, -6, 12, 12);
-        ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(-3, -3, 6, 6); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(-4.5, -4.5, 3, 1);
+        // a mod shows ITS OWN glyph before you pick it up (no random install): coloured tile, icon, and the glow ring
+        ctx.strokeStyle = rgba(color, 0.55); ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]); ctx.lineDashOffset = -t * 8; ctx.beginPath(); ctx.arc(0, 1, 13, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        ctx.rotate(spin * 0.4);
+        ctx.fillStyle = INK; rrectPath(ctx, -9.4, -9.4, 18.8, 18.8, 4); ctx.fill();
+        const g = lgrad(ctx, -8, -8, 8, 8, shade(color, 0.5), shade(color, 0.28));
+        ctx.fillStyle = g; rrectPath(ctx, -8.2, -8.2, 16.4, 16.4, 3.4); ctx.fill();
+        drawIcon(ctx, MOD_ICON[pk.modId] || 'pickup-mod', 0, 0, 12.5, '#fff');
       } else if (pk.kind === 'heal') {
         ctx.fillStyle = INK; rrectPath(ctx, -8.6, -8.6, 17.2, 17.2, 3.5); ctx.fill();
         const g = lgrad(ctx, -7, -7, 7, 7, '#f4fff9', '#bde8d2');
@@ -593,14 +595,14 @@ export function createRenderer(container, state) {
         ctx.fillStyle = INK; ctx.fillRect(-0.6, -11.8, 1.2, 22.6);
         ctx.fillStyle = '#8fe0ff'; ctx.fillRect(-7, -9, 5.2, 2); ctx.fillRect(1.8, -9, 5.2, 2);
         ctx.fillStyle = '#d9b45a'; ctx.fillRect(-6.2, -2, 2.6, 6); ctx.fillRect(-2.4, -2, 2.6, 6); ctx.fillRect(2.4, -2, 2.6, 6); ctx.fillRect(6.2 - 2.6, -2, 2.6, 6);
-      } else if (pk.kind === 'cache' && pk.claimed) {
+      } else if (pk.kind === 'supply' && pk.claimed) {
         ctx.globalAlpha = 0.7;
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
         ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-8.4, -6.4, 16.8, 12.8);
         ctx.fillStyle = '#17120d'; ctx.fillRect(-6.4, -4.4, 12.8, 8.8);
         { const lid = clamp(outBack(clamp((vis.time - (pk.vis ? pk.vis.claimAt : -99)) / 0.45), 2.6), 0, 1.2); ctx.fillStyle = '#6c5636'; ctx.fillRect(-8.6, -7.6 - 3.4 * lid, 17.2, 15.2 - 11.2 * Math.min(1, lid)); ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.strokeRect(-8.6, -7.6 - 3.4 * lid, 17.2, 15.2 - 11.2 * Math.min(1, lid)); }
         ctx.globalAlpha = 1;
-      } else if (pk.kind === 'cache') {
+      } else if (pk.kind === 'supply') {
         ctx.fillStyle = INK; ctx.fillRect(-9.6, -7.6, 19.2, 15.2);
         const g = lgrad(ctx, 0, -7, 0, 7, '#d9a04a', '#7c5528');
         ctx.fillStyle = g; ctx.fillRect(-8.4, -6.4, 16.8, 12.8);
@@ -1137,7 +1139,7 @@ export function createRenderer(container, state) {
   }
 
   function drawCrosshair(dpr) {
-    if (!vis.mouseActive || state.mode !== 'play' || state.paused || state.loadoutOpen || state.merchantOpen || state.cacheOpen || state.pendingGunPickup) return;
+    if (!vis.mouseActive || state.mode !== 'play' || state.paused || state.loadoutOpen || state.supplyOpen) return;
     const x = vis.mouseX * dpr, y = vis.mouseY * dpr, s = dpr;
     const hit = fx.hitMark > 0, k = fx.hitMark / 0.22, reloading = state.reloadTimer > 0;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.translate(x, y); ctx.lineCap = 'round';

@@ -12,7 +12,7 @@ export const REWARDS = {
 };
 
 const ORDINARY_WEIGHTS = [['freq', 34], ['scrap', 24], ['heal', 14], ['gun', 12], ['supply', 16]];
-const ROLE_REWARD = {elite: 'elite', armory: 'gun', clinic: 'heal', merchant: 'supply'};
+const ROLE_REWARD = {elite: 'elite', armory: 'gun', clinic: 'heal'};
 
 function weightedPick(weights, rng) {
   const total = weights.reduce((sum, [, w]) => sum + w, 0);

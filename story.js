@@ -60,7 +60,7 @@ const pick = (list, seed) => list[Math.abs(Math.floor(seed)) % list.length];
 // ctx: {outcome:'dead'|'extract'|'won', cause (enemy type or 'boss'), floor, firstBossKill, newUnlocks:[names], newTape, runs, seed, kills}
 export function operatorLines(ctx) {
   const lines = [], seed = ctx.seed || 0;
-  if (ctx.runs === 1) lines.push(FIRST_RUN);
+  if (ctx.runs === 1 && ctx.outcome !== 'won') lines.push(FIRST_RUN);   // only the real first run, never a later win
   if (ctx.outcome === 'won') lines.push(ctx.firstBossKill ? FIRST_BOSS : pick(WIN_LINES, seed));
   else if (ctx.outcome === 'extract') lines.push(pick(EXTRACT_LINES, seed));
   else {

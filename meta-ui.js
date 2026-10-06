@@ -15,29 +15,46 @@ export const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': 
 const roman = n => ['', 'I', 'II', 'III'][n] || String(n);
 
 /* ------------------------------------------------------------------ descend / extract */
+const SVG = (body, vb = '0 0 24 24') => `<svg viewBox="${vb}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+/** One small glyph per radio station so a card reads by colour + shape before the text. */
+export const STATION_GLYPH = {
+  static: SVG('<path d="M13 2 5 13h6l-1 9 8-12h-6z"/>'),
+  deadline: SVG('<circle cx="12" cy="13" r="8"/><path d="M12 8v5l3 2M9 2h6"/>'),
+  carrier: SVG('<path d="M3 12h13M12 7l5 5-5 5M20 5v14"/>'),
+  nightshift: SVG('<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>'),
+  feedback: SVG('<path d="M3 12h4l2-6 4 12 2-6h6"/>'),
+};
+const PORTAL_CLASSES = 'dlg-card dlg-xl run-card';
+
 export function decisionHtml({floor, gross, kept, deathKeep, nextClear, hp, maxHp, build = [], interference = 0}) {
   const next = floorConfig(floor + 1), here = floorConfig(floor);
-  const atRisk = gross - Math.floor(gross * deathKeep);
+  const lossPct = Math.round((1 - deathKeep) * 100), atRisk = gross - Math.floor(gross * deathKeep);
   const boss = next.boss;
-  const threats = floor + 1 === 2 ? 'Marksmen and riot squads arrive. One more warden room.' : floor + 1 === 3 ? 'Larger squads, two warden rooms, tougher enemies.' : 'THE CONDUCTOR waits at the end of the hall.';
-  return `<div class="merchant-card decision-card">
-  <div class="eyebrow">FLOOR ${String(floor).padStart(2, '0')} CLEARED · ${esc(here.name)}</div>
-  <h2>BANK IT, OR <em>GO DEEPER?</em></h2>
-  <p class="merchant-copy">Coins you carry are only safe once you extract. Die on the way down and you keep ${Math.round(deathKeep * 100)}%.</p>
+  const threats = floor + 1 === 2 ? 'Marksmen and riot squads arrive.' : floor + 1 === 3 ? 'Bigger squads, two warden rooms.' : 'THE CONDUCTOR waits at the end of the hall.';
+  return `<div class="${PORTAL_CLASSES} decision-card" style="--acc:var(--slow)">
+  <header class="dlg-head center">
+    <div class="eyebrow">FLOOR ${String(floor).padStart(2, '0')} CLEARED · ${esc(here.name)}</div>
+    <h2>BANK IT, OR <em>GO DEEPER?</em></h2>
+    <p class="dlg-sub">Coins are only safe once you extract.</p>
+  </header>
   <div class="decision-grid">
     <button class="decision-opt extract" data-act="extract" type="button">
-      <small>SAFE</small><strong>EXTRACT NOW</strong>
-      <b class="decision-coins">+${kept} COINS</b>
-      <span>Bank the whole haul and end the run. Goals and unlocks still count.</span>
+      <span class="opt-key"><kbd>1</kbd></span>
+      <small>SAFE · END THE RUN</small>
+      <strong>EXTRACT</strong>
+      <b class="opt-big"><i>BANK</i>${kept}<em>COINS</em></b>
+      <span class="opt-line">Everything you carry is yours. Goals and unlocks still count.</span>
     </button>
     <button class="decision-opt descend ${boss ? 'boss' : ''}" data-act="descend" type="button">
-      <small>${boss ? 'FINAL FLOOR' : `FLOOR ${String(floor + 1).padStart(2, '0')}`}</small><strong>${boss ? 'FACE THE CONDUCTOR' : 'DESCEND'}</strong>
-      <b class="decision-coins">+${nextClear || 0} COINS CLEAR BONUS${boss ? ' · +250 BOSS' : ''}</b>
-      <span>${threats} At risk if you fall: <i>${atRisk} coins</i>.</span>
+      <span class="opt-key"><kbd>2</kbd></span>
+      <small>${boss ? 'FINAL FLOOR' : 'GREED'} · FLOOR ${floor + 1}</small>
+      <strong>${boss ? 'FACE THE CONDUCTOR' : 'DESCEND'}</strong>
+      <b class="opt-big gold"><i>BONUS</i>+${nextClear || 0}<em>COINS${boss ? ' · +250 BOSS' : ''}</em></b>
+      <span class="opt-line">${threats}</span>
+      <span class="opt-risk">DIE AND LOSE ${lossPct}% OF UNBANKED · <b>-${atRisk}</b></span>
     </button>
   </div>
-  <div class="decision-foot"><span>VITALS ${hp} / ${maxHp}</span><span>${build.length ? build.map(b => `${esc(b.name)} ${roman(b.rank)}`).join(' · ') : 'NO FREQUENCIES YET'}</span>${interference ? `<span class="heat">INTERFERENCE +${Math.round(interference * 100)}%</span>` : ''}</div>
-  <div class="merchant-footer"><kbd>1</kbd> EXTRACT &nbsp; <kbd>2</kbd> DESCEND</div>
+  <footer class="dlg-foot"><span class="keyhints"><span class="keyhint"><kbd>1</kbd>Extract</span><span class="keyhint"><kbd>2</kbd>Descend</span></span><span class="decision-meta">VITALS ${hp}/${maxHp} · ${build.length ? build.map(b => `${esc(b.name)} ${roman(b.rank)}`).join(' · ') : 'NO FREQUENCIES YET'}${interference ? ` · <i class="heat">INTERFERENCE +${Math.round(interference * 100)}%</i>` : ''}</span></footer>
 </div>`;
 }
 
@@ -45,26 +62,26 @@ export function decisionHtml({floor, gross, kept, deathKeep, nextClear, hp, maxH
 export function freqOfferHtml({offers, owned, title = 'TUNE IN.', eyebrow = 'FREQUENCY FOUND · PICK ONE', note = ''}) {
   const cards = offers.map((offer, index) => {
     const station = STATION_BY_ID.get(offer.station);
-    const pips = Array.from({length: MAX_RANK}, (_, i) => `<i class="${i < offer.rank ? 'on' : ''}"></i>`).join('');
+    const pips = Array.from({length: MAX_RANK}, (_, i) => `<i class="${i < offer.rank ? (i === offer.rank - 1 && !offer.isNew ? 'on fresh' : 'on') : ''}"></i>`).join('');
     const cross = offer.crossfades.map(id => CROSSFADES.find(c => c.id === id)).filter(Boolean);
-    return `<button class="freq-card rarity-${offer.rarity}" style="--st:${station.color}" data-freq="${esc(offer.id)}" type="button">
-      <span class="freq-station">${esc(station.name)}</span>
+    const partner = c => { const other = c.stations.find(s => s !== offer.station); return STATION_BY_ID.get(other)?.name || ''; };
+    return `<button class="freq-card rarity-${offer.rarity}${cross.length ? ' has-cross' : ''}" style="--st:${station.color}" data-freq="${esc(offer.id)}" type="button">
+      <span class="freq-top"><span class="freq-glyph">${STATION_GLYPH[offer.station] || ''}</span><span class="freq-station">${esc(station.name)}</span><kbd>${index + 1}</kbd></span>
       <strong>${esc(offer.name)}</strong>
-      <span class="freq-rank">${offer.isNew ? 'NEW' : `RANK ${roman(offer.rank)}`} · ${offer.rarity.toUpperCase()}</span>
-      <span class="freq-pips">${pips}</span>
+      <span class="freq-rankline"><span class="freq-pips" aria-hidden="true">${pips}</span><span class="freq-rank">${offer.isNew ? 'NEW' : `RANK ${roman(offer.rank)}`}</span></span>
       <span class="freq-desc">${esc(offer.desc)}</span>
-      ${cross.map(c => `<span class="freq-cross">CROSSFADE · ${esc(c.name)}<br><em>${esc(c.desc)}</em></span>`).join('')}
-      <kbd>${index + 1}</kbd>
+      ${cross.map(c => `<span class="freq-cross"><b>CROSSFADE · ${esc(c.name)}</b><em>${esc(partner(c))} + ${esc(station.name)} · ${esc(c.desc)}</em></span>`).join('')}
     </button>`;
   }).join('');
   const crossActive = activeCrossfades(owned);
-  return `<div class="merchant-card freq-modal">
-  <div class="eyebrow">${esc(eyebrow)}</div>
-  <h2>${esc(title.replace(/\.$/, ''))}<em>.</em></h2>
-  <p class="merchant-copy">${esc(note || 'Each station plays differently. Stack one station, or blend two for a crossfade.')}</p>
+  return `<div class="${PORTAL_CLASSES} freq-modal" style="--acc:var(--coin)">
+  <header class="dlg-head center">
+    <div class="eyebrow">${esc(eyebrow)}</div>
+    <h2>${esc(title.replace(/\.$/, ''))}<em>.</em></h2>
+    <p class="dlg-sub">${esc(note || 'Each station plays differently. Stack one, or blend two for a crossfade.')}</p>
+  </header>
   <div class="freq-grid">${cards}</div>
-  <div class="decision-foot">${crossActive.length ? crossActive.map(c => `<span class="heat">CROSSFADE ON · ${esc(c.name)}</span>`).join('') : '<span>NO CROSSFADE YET · TWO STATIONS AT LEVEL 2 TURN ON A SYNERGY</span>'}</div>
-  <div class="merchant-footer">CHOOSE ONE · <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
+  <footer class="dlg-foot"><span class="decision-meta">${crossActive.length ? crossActive.map(c => `<i class="heat">CROSSFADE ON · ${esc(c.name)}</i>`).join(' ') : 'TWO STATIONS AT LEVEL 2 TURN ON A CROSSFADE'}</span><span class="keyhints"><span class="keyhint"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>Choose</span></span></footer>
 </div>`;
 }
 

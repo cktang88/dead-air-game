@@ -2,16 +2,17 @@
 // Both the in-world prompt renderer (affordances2d.js) and game.js interact() read this list so the
 // prompt shown on screen and the thing that happens when E is pressed can never disagree.
 import {roomHasLivingEnemies} from './room-roles.js';
-import {refillCost} from './economy.js';
+import {GUNS, MOD_BY_ID, modFits} from './catalog.js';
+import {gunPickupPlan} from './rules.js';
 import {DOOR_RANGE, isClosed} from './doors.js';
 
 export const TILE_PX = 32;
 /** Distances (px) at which each interactable becomes usable. Mirrors the legacy interact() thresholds. */
-export const RANGE = Object.freeze({gate: 38, cache: 36, market: 90, gun: 36, station: 110, exit: 70, locker: 44, door: DOOR_RANGE});
+export const RANGE = Object.freeze({gate: 38, supply: 40, gun: 36, mod: 34, exit: 70, door: DOOR_RANGE});
 /** Within this distance an out-of-range interactable shows a small name tag so you know what it is. */
 export const LABEL_RANGE = 300;
 /** Lower number wins when several targets are in range at once (same order interact() always used). */
-export const PRIORITY = Object.freeze({gate: 0, door: 0.5, cache: 1, market: 2, gun: 3, locker: 3.5, station: 4, exit: 5, pickup: 6});
+export const PRIORITY = Object.freeze({gate: 0, door: 0.5, supply: 1, gun: 3, mod: 3, exit: 5, pickup: 6});
 const prio = k => PRIORITY[k] ?? 9;
 
 import {dist} from './util.js';
@@ -24,21 +25,22 @@ export const needScrapText = (cost, have) => `NEED ${cost} SCRAP · HAVE ${Math.
 function livingIn(roomIndex, enemies) { return enemies.filter(e => e.alive && e.roomIndex === roomIndex).length; }
 function livingOnRoute(rooms, enemies) { return enemies.filter(e => e.alive && rooms[e.roomIndex]?.branch !== true).length; }
 
-const GUN_ICON = {'PISTOL': 'gun-pistol', 'SMG': 'gun-smg', 'SHOTGUN': 'gun-shotgun', 'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel'};
+const GUN_ICON = {'PISTOL': 'gun-pistol', 'SMG': 'gun-smg', 'SHOTGUN': 'gun-shotgun', 'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel', 'LAUNCHER': 'gun-launcher'};
 export const gunIconId = gun => GUN_ICON[gun?.category] || 'gun-rifle';
-export const pickupIconId = pk => ({scrap: 'pickup-scrap', heal: 'pickup-heal', mod: 'pickup-mod', ammo: 'pickup-ammo', armor: 'pickup-armor'}[pk.kind] || 'pickup-crate');
+const MOD_ICON_ID = {suppressor: 'mod-suppressor', ricochet: 'mod-ricochet', incendiary: 'mod-incendiary', extended: 'mod-extended', quickdraw: 'mod-quickdraw', longbarrel: 'mod-longbarrel'};
+export const pickupIconId = pk => ({scrap: 'pickup-scrap', heal: 'pickup-heal', mod: (pk.modId && MOD_ICON_ID[pk.modId]) || 'pickup-mod', ammo: 'pickup-ammo', armor: 'pickup-armor'}[pk.kind] || 'pickup-crate');
 export function pickupName(pk) {
   if (pk.kind === 'scrap') return `${pk.value || 12} SCRAP`;
   if (pk.kind === 'heal') return 'MEDKIT';
   if (pk.kind === 'ammo') return 'AMMO';
   if (pk.kind === 'armor') return 'ARMOR PLATE';
-  if (pk.kind === 'mod') return `${(pk.rarity || 'common').toUpperCase()} MOD`;
+  if (pk.kind === 'mod') return MOD_BY_ID.get(pk.modId)?.name || 'MOD';
   return String(pk.kind || 'ITEM').toUpperCase();
 }
 
 /**
  * Build every nearby interactable with its distance, affordability and reason.
- * @param {object} s {player, scrap, gates, pickups, rooms, enemies, workbench?, guns?, tile?}
+ * @param {object} s {player, scrap, gates, pickups, rooms, enemies, guns?, hand?: {gun, modId, weapons, maxSlots, activeSlot}, tile?}
  * @returns {Array} targets sorted by priority then distance; `inRange` marks the usable ones.
  */
 export function collectInteractables(s) {
@@ -63,20 +65,23 @@ export function collectInteractables(s) {
   for (const pk of s.pickups || []) {
     if (!pk.available) continue;
     const at = {x: pk.x, y: pk.y};
-    if (pk.kind === 'cache' && pk.claimed) {
-      add({id: `claimed:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'claimed', ref: pk, ...at, range: 0, keyed: false, icon: 'station-cache-open', verb: '', subject: 'CACHE · CLAIMED', enabled: false, reason: '', color: '#8d8a96'});
-    } else if (pk.kind === 'locker') {
-      const a = s.ammo || {reserve: 0, maxReserve: 0}, missing = Math.max(0, a.maxReserve - a.reserve), cost = refillCost(missing), ok = missing > 0 && scrap >= cost;
-      add({id: `locker:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'locker', ref: pk, ...at, range: RANGE.locker, keyed: true, icon: 'pickup-ammo', verb: 'BUY', subject: 'AMMO', cost: missing > 0 ? cost : undefined,
-        enabled: ok, reason: missing <= 0 ? 'AMMO FULL' : ok ? `+${missing} ROUNDS · SUPPLY LOCKER` : needScrapText(cost, scrap), color: '#8fe0ff'});
-    } else if (pk.kind === 'cache') {
+    if (pk.kind === 'supply' && pk.claimed) {
+      add({id: `claimed:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'claimed', ref: pk, ...at, range: 0, keyed: false, icon: 'station-cache-open', verb: '', subject: 'SUPPLY DROP · TAKEN', enabled: false, reason: '', color: '#8d8a96'});
+    } else if (pk.kind === 'supply') {
       const n = livingIn(pk.roomIndex, enemies), ok = n === 0;
-      add({id: `cache:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'cache', ref: pk, ...at, range: RANGE.cache, keyed: true, icon: 'station-cache',
-        verb: 'OPEN', subject: 'CACHE', enabled: ok, reason: ok ? '' : `CLEAR ROOM FIRST (${hostilesText(n)})`, color: '#f4c66d'});
+      add({id: `supply:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'supply', ref: pk, ...at, range: RANGE.supply, keyed: true, icon: 'station-cache',
+        verb: 'OPEN', subject: 'SUPPLY DROP', enabled: ok, reason: ok ? 'PICK ONE OF THREE' : `CLEAR ROOM FIRST (${hostilesText(n)})`, color: '#f4c66d'});
+    } else if (pk.kind === 'mod') {
+      const mod = MOD_BY_ID.get(pk.modId), hand = s.hand || {}, worn = hand.modId ? MOD_BY_ID.get(hand.modId) : null, same = hand.modId === pk.modId;
+      add({id: `mod:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'mod', ref: pk, ...at, range: RANGE.mod, keyed: true, icon: pickupIconId(pk),
+        verb: 'FIT', subject: mod?.name || 'MOD', enabled: !same && !!hand.gun && modFits(hand.gun, pk.modId), note: mod?.info,
+        reason: same ? 'ALREADY FITTED' : !hand.gun || !modFits(hand.gun, pk.modId) ? `DOES NOT FIT ${hand.gun?.name || 'YOUR GUN'}` : `ON ${hand.gun?.name || 'YOUR GUN'}${worn ? ` · REPLACES ${worn.name}` : ''}`, color: pk.color || '#d38ff5'});
     } else if (pk.kind === 'gun') {
-      const gun = s.guns?.[pk.gunIndex];
+      const gun = s.guns?.[pk.gunIndex] || GUNS[pk.gunIndex], hand = s.hand || {}, plan = hand.weapons ? gunPickupPlan(hand.weapons, pk.gunIndex, hand.maxSlots || 2, hand.activeSlot || 0) : null;
+      const swaps = plan?.replaces != null ? (s.guns || GUNS)[plan.replaces] : null;
       add({id: `gun:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'gun', ref: pk, ...at, range: RANGE.gun, keyed: true, icon: gunIconId(gun),
-        verb: 'TAKE', subject: gun?.name || 'WEAPON', enabled: true, reason: '', color: pk.color || '#74c9ed'});
+        verb: swaps ? 'SWAP' : 'TAKE', subject: gun?.name || 'WEAPON', enabled: plan !== null || !hand.weapons, note: gun?.short,
+        reason: swaps ? `${gun?.verb || ''} · REPLACES ${swaps.name}`.replace(/^ · /, '') : gun?.verb || '', color: pk.color || '#74c9ed'});
     } else if (pk.kind === 'exit') {
       const n = livingOnRoute(rooms, enemies), ok = n === 0;
       add({id: 'exit', kind: 'exit', ref: pk, ...at, range: RANGE.exit, keyed: ok, icon: 'exit-extraction', verb: 'EXTRACT', subject: '',
@@ -85,16 +90,6 @@ export function collectInteractables(s) {
       add({id: `${pk.kind}:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'pickup', pickupKind: pk.kind, ref: pk, ...at, range: 0, keyed: false,
         icon: pickupIconId(pk), verb: 'AUTO', subject: pickupName(pk), enabled: true, reason: '', color: pk.color || '#f4c66d', rarity: pk.rarity || null});
     }
-  }
-  for (const r of rooms) {
-    if (r.role !== 'merchant') continue;
-    add({id: `market:${r.cx},${r.cy}`, kind: 'market', ref: r, x: (r.cx + .5) * T, y: (r.cy + .5) * T, range: RANGE.market, keyed: true, icon: 'station-merchant',
-      verb: 'TRADE', subject: 'BLACK MARKET', enabled: true, reason: '', color: '#ffd27a'});
-  }
-  if (rooms[0]) {
-    const anchor = {x: rooms[0].cx * T, y: rooms[0].cy * T}, wb = s.workbench || anchor;
-    add({id: 'station', kind: 'station', ref: rooms[0], x: wb.x, y: wb.y, anchor, range: RANGE.station, keyed: true, icon: 'station-workbench',
-      verb: 'OPEN', subject: 'WORKBENCH', enabled: true, reason: '', color: '#8fe0ff', note: 'LOADOUT & ATTACHMENTS'});
   }
   out.sort((a, b) => prio(a.kind) - prio(b.kind) || a.distance - b.distance);
   return out;

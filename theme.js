@@ -23,10 +23,6 @@ export const COLORS = Object.freeze({
   danger: '#ff6a78',
   sprint: '#ff8a4c',
   ammo: '#f2cf8a',
-  'tier-common': '#d38ff5',
-  'tier-uncommon': '#71d49b',
-  'tier-rare': '#66b9f2',
-  'tier-prototype': '#f4c66d',
   'key-top': '#2c2638',
   'key-bottom': '#211c2b',
   'key-edge': '#4a4254',
@@ -44,9 +40,6 @@ export const SPACE = Object.freeze({ 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 
 export const TYPE = Object.freeze({ micro: 11, label: 12, body: 13, lead: 15, num: 22, title: 34 });
 export const MOTION = Object.freeze({ fast: 120, base: 200, slow: 360, easeOut: 'cubic-bezier(.2,.8,.2,1)', easeSpring: 'cubic-bezier(.34,1.56,.64,1)' });
 
-export const TIER_COLORS = Object.freeze({
-  common: COLORS['tier-common'], uncommon: COLORS['tier-uncommon'], rare: COLORS['tier-rare'], prototype: COLORS['tier-prototype'],
-});
 
 /** '#rrggbb' + alpha (0..1) -> 'rgba(r,g,b,a)'. Non-hex input is returned unchanged. */
 export function withAlpha(hex, alpha) {

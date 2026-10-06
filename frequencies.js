@@ -43,6 +43,7 @@ export const UPGRADES = [
   {id:'rage', station:'feedback', name:'RED LINE', effect:'missingHp', unlockCost:null, ranks:[{v:.08, desc:'+8% damage per health point missing.'}, {v:.14, desc:'+14% per missing health.'}, {v:.2, desc:'+20% per missing health.'}]},
   {id:'loop', station:'feedback', name:'FEEDBACK LOOP', effect:'loop', unlockCost:null, ranks:[{v:.04, desc:'Hit streak: each hit within 1.5 s speeds your fire 4% (5 stacks).'}, {v:.07, desc:'7% per hit.'}, {v:.1, desc:'10% per hit.'}]},
   {id:'adrenaline', station:'feedback', name:'ADRENALINE', effect:'hitCredit', unlockCost:50, ranks:[{v:1.5, desc:'Taking damage grants 1.5 s of half-speed walking.'}, {v:2.5, desc:'Taking damage: 2.5 s.'}, {v:3.5, desc:'Taking damage: 3.5 s.'}]},
+  {id:'kindle', station:'feedback', name:'KINDLING', effect:'burnKill', unlockCost:55, ranks:[{v:70, desc:'Kills set fire to enemies within 2 tiles: they burn for 3 s and panic.'}, {v:100, desc:'Kill fire reaches 3 tiles.'}, {v:130, desc:'Kill fire reaches 4 tiles.'}]},
   {id:'last_stand', station:'feedback', name:'LAST STAND', effect:'lastStand', unlockCost:70, ranks:[{v:.25, desc:'At 1 health: +25% damage and walking runs at half time.'}, {v:.5, desc:'At 1 health: +50% damage.'}, {v:.75, desc:'At 1 health: +75% damage.'}]},
 ];
 export const UPGRADE_BY_ID = new Map(UPGRADES.map(u => [u.id, u]));
@@ -93,7 +94,7 @@ export function freqStats(owned = {}) {
     bounceDamage: x.bounceDamage || 0,
     noiseMult: clamp(1 - valueOf(owned, 'noise'), .1, 1), unawareDamage: valueOf(owned, 'unaware'), smokeReload: valueOf(owned, 'smokeReload'),
     unawareScrap: valueOf(owned, 'unawareScrap'),
-    missingHpDamage: valueOf(owned, 'missingHp'), loopPerStack: valueOf(owned, 'loop'), hitCredit: valueOf(owned, 'hitCredit'), lastStand: valueOf(owned, 'lastStand'),
+    missingHpDamage: valueOf(owned, 'missingHp'), burnKill: valueOf(owned, 'burnKill'), loopPerStack: valueOf(owned, 'loop'), hitCredit: valueOf(owned, 'hitCredit'), lastStand: valueOf(owned, 'lastStand'),
     stunKillCredit: x.stunKillCredit || 0, hitPulse: x.hitPulse || 0, unawareHeal: x.unawareHeal || 0, unawareStunMult: x.unawareStunMult || 1,
   };
 }

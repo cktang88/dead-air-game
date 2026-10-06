@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ammoStatus, nextLoadedSlot, refillCost, ammoPickupRounds, supplyDrop, clearHealAmount, shouldRegen, regenCap, lockerSpawns, cooldownReady, objectiveText} from './economy.js';
+import {ammoStatus, nextLoadedSlot, ammoPickupRounds, supplyDrop, clearHealAmount, clearAmmoDrop, cooldownReady, objectiveText} from './economy.js';
 
 test('ammoStatus flags dry, last mag and ok', () => {
   assert.equal(ammoStatus({mag: 0, reserve: 0, magSize: 6}), 'dry');
@@ -14,12 +14,6 @@ test('nextLoadedSlot skips dry guns and wraps', () => {
   assert.equal(nextLoadedSlot([0, 1, 2], 2, ammo, reserve), 1);
   assert.equal(nextLoadedSlot([0, 2], 0, ammo, reserve), -1);
   assert.equal(nextLoadedSlot([0], 0, ammo, reserve), -1);
-});
-test('refillCost scales and is bounded', () => {
-  assert.equal(refillCost(0), 0);
-  assert.equal(refillCost(2), 8);
-  assert.equal(refillCost(30), 21);
-  assert.equal(refillCost(500), 40);
 });
 test('ammoPickupRounds is a percent with a floor', () => {
   assert.equal(ammoPickupRounds(30, 0.35), 11);
@@ -44,17 +38,14 @@ test('clearHealAmount only helps at half health or below', () => {
   assert.equal(clearHealAmount({health: 2, maxHealth: 5}), 1);
   assert.equal(clearHealAmount({health: 1, maxHealth: 5}), 2);
 });
-test('regen needs calm time, a clear room and stays below the cap', () => {
-  assert.equal(regenCap(5), 3);
-  assert.equal(shouldRegen({health: 1, maxHealth: 5, calm: 10, roomClear: true}), true);
-  assert.equal(shouldRegen({health: 1, maxHealth: 5, calm: 10, roomClear: false}), false);
-  assert.equal(shouldRegen({health: 1, maxHealth: 5, calm: 3, roomClear: true}), false);
-  assert.equal(shouldRegen({health: 3, maxHealth: 5, calm: 30, roomClear: true}), false);
+test('a cleared room pays ammo only when a gun is running dry', () => {
+  assert.equal(clearAmmoDrop({ammoLow: true}), true);
+  assert.equal(clearAmmoDrop({ammoLow: false}), false);
 });
-test('lockerSpawns is guaranteed when ammo is low', () => {
-  assert.equal(lockerSpawns(0.9, {ammoLow: true}), true);
-  assert.equal(lockerSpawns(0.9, {ammoLow: false}), false);
-  assert.equal(lockerSpawns(0.1, {ammoLow: false}), true);
+test('there is no regeneration export: one healing system', async () => {
+  const economy = await import('./economy.js');
+  assert.equal(economy.shouldRegen, undefined);
+  assert.equal(economy.regenCap, undefined);
 });
 test('cooldownReady dedupes by key', () => {
   const m = {};

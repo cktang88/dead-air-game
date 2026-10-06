@@ -276,12 +276,15 @@ const GUN_ART = {
   'SHOTGUN': {parts: [[-0.12, 0.8, 0.2, 'a'], [0.2, 1.02, 0.46, 'b'], [0.46, 0.8, 1, 'm']], pump: [0.5, 0.2, 1.22], twin: true},
   'ASSAULT RIFLE': {parts: [[-0.14, 0.8, 0.16, 'a'], [0.14, 1, 0.52, 'b'], [0.52, 0.72, 0.84, 'a'], [0.84, 0.3, 1, 'm']], mag: [0.3, 0.14, 0.9]},
   'SNIPER': {parts: [[-0.12, 0.8, 0.2, 'a'], [0.16, 0.95, 0.46, 'b'], [0.46, 0.3, 1, 'm']], scope: [0.2, 0.34, 0.62], bipod: true},
+  'BURST': {parts: [[-0.1, 0.5, 0.04, 'a'], [0, 1, 0.6, 'b'], [0.6, 0.34, 1, 'm']], mag: [0.3, 0.1, 0.9], scope: [0.12, 0.2, 0.5]},
+  'CARBINE': {parts: [[-0.16, 0.9, 0.2, 'a'], [0.16, 1, 0.56, 'b'], [0.56, 0.58, 0.9, 'a'], [0.9, 0.34, 1, 'm']], mag: [0.34, 0.12, 0.85], scope: [0.18, 0.22, 0.46]},
+  'LAUNCHER': {parts: [[-0.12, 0.7, 0.18, 'a'], [0.18, 1.5, 0.84, 'b'], [0.84, 1.7, 1, 'm']], scope: [0.3, 0.16, 0.8]},
   'ANTI-MATERIEL': {parts: [[-0.1, 1, 0.22, 'a'], [0.2, 1.35, 0.5, 'b'], [0.5, 0.52, 0.93, 'm'], [0.93, 0.95, 1, 'm']], scope: [0.24, 0.3, 0.6], mag: [0.3, 0.2, 1], bipod: true},
 };
 
 // Draws a gun lying along +x with the actor's centre at the origin. Returns the muzzle distance.
 export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530', slide = 0, rack = 0, noMag = false} = {}) {
-  const art = GUN_ART[gun.category] || GUN_ART.SMG;
+  const art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
   const L = gun.visual.length * 0.7, W = Math.max(3.2, gun.visual.width * 0.78);
   const body = enemy ? '#2b2530' : '#2a2c33', alt = enemy ? '#3a3039' : '#3d4049', metal = '#8d8b92';
   const accent = enemy ? '#ff5a4a' : '#' + (gun.color & 0xffffff).toString(16).padStart(6, '0');
