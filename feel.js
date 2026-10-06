@@ -94,12 +94,13 @@ const FEEL = {
   'ASSAULT RIFLE': { perShot: .16, settle: .18, recover: 2.2, bloomMul: 2.0, bloomAdd: .018, moveMul: 1.3,  moveAdd: .012, firstMul: .35, kick: .7,  shake: 2.4, nudge: 20 },
   SHOTGUN:         { perShot: .45, settle: .30, recover: 2.0, bloomMul: 1.25, bloomAdd: .020, moveMul: 1.1, moveAdd: .0,   firstMul: 1,   kick: 1.0, shake: 4.0, nudge: 70 },
   SNIPER:          { perShot: .8,  settle: .35, recover: 1.4, bloomMul: 1.0, bloomAdd: .035, moveMul: 1.0,  moveAdd: .045, firstMul: .3,  kick: 1.0, shake: 3.2, nudge: 55 },
+  LAUNCHER:        { perShot: .9,  settle: .4,  recover: 1.3, bloomMul: 1.0, bloomAdd: .02,  moveMul: 1.0,  moveAdd: .03,  firstMul: .5,  kick: 1.1, shake: 3.4, nudge: 60 },
   'ANTI-MATERIEL': { perShot: 1,   settle: .45, recover: 1.1, bloomMul: 1.0, bloomAdd: .045, moveMul: 1.0,  moveAdd: .06,  firstMul: .3,  kick: 1.4, shake: 5.0, nudge: 110 },
 };
 const DEFAULT_FEEL = FEEL.PISTOL;
 
 export function gunFeel(gun) {
-  const base = FEEL[gun?.category] || DEFAULT_FEEL;
+  const base = { ...(FEEL[gun?.category] || DEFAULT_FEEL), ...(gun?.feel || {}) }; // per-gun overrides (catalog `feel`)
   // Heavier hitters kick harder: scale kick a little with damage/rate (cheap proxy for "caliber").
   const power = clamp(((gun?.damage ?? 25) * (gun?.count || 1)) / 45, .6, 1.8);
   const kick = base.kick * (0.75 + 0.25 * power);

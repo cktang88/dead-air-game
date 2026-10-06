@@ -13,11 +13,11 @@ export const hasIcon = id => Object.prototype.hasOwnProperty.call(ICON_DATA, id)
 /** Gun categories (catalog.js `category`) -> icon id. */
 export const GUN_CATEGORY_ICON = {
   'PISTOL': 'gun-pistol', 'SMG': 'gun-smg', 'SHOTGUN': 'gun-shotgun',
-  'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel',
+  'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel', 'LAUNCHER': 'gun-launcher',
 };
 /** Throwable ids (smoke / flash / frag / incendiary). */
 export const THROWABLE_ICON = {
-  smoke: 'throw-smoke', flash: 'throw-flash', frag: 'throw-frag', incendiary: 'throw-incendiary',
+  smoke: 'throw-smoke', flash: 'throw-flash', frag: 'throw-frag',
 };
 /** Enemy type ids from ENEMY_TYPES (chaser = RUSHER, guard = WARDEN). */
 export const ENEMY_ICON = {
@@ -25,12 +25,12 @@ export const ENEMY_ICON = {
 };
 /** Weapon attachment ids from MODS in catalog.js. */
 export const MOD_ICON = {
-  extended: 'mod-extended', suppressor: 'mod-suppressor', hollow: 'mod-hollow',
-  stabilizer: 'mod-stabilizer', longbarrel: 'mod-longbarrel',
+  extended: 'mod-extended', suppressor: 'mod-suppressor', ricochet: 'mod-ricochet',
+  incendiary: 'mod-incendiary', quickdraw: 'mod-quickdraw', longbarrel: 'mod-longbarrel',
 };
 /** Legacy short names used by the HUD (hud-ui strokeIcon) -> icon id. */
 export const LEGACY_ICON = {
-  smoke: 'throw-smoke', flash: 'throw-flash', frag: 'throw-frag', incendiary: 'throw-incendiary',
+  smoke: 'throw-smoke', flash: 'throw-flash', frag: 'throw-frag', incendiary: 'mod-incendiary', supply: 'pickup-supply',
   ammo: 'pickup-ammo', health: 'pickup-heal', upgrade: 'pickup-upgrade', prototype: 'pickup-prototype',
   scrap: 'pickup-scrap', armor: 'pickup-armor', harness: 'pickup-harness', scanner: 'pickup-scanner',
   mod: 'pickup-mod', coin: 'pickup-coin', gear: 'settings',

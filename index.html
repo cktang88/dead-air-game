@@ -54,10 +54,10 @@
       <div id="hud-right">
         <section id="run-stats" class="run-stats panel" aria-label="Run stats">
           <div class="stat" title="Hostiles downed this run."><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="kills">00</b></div>
-          <div class="stat scrap" data-tip="Scrap: run currency. Spend it on vault gates, mods and gear at the Black Market. Lost when you die."><small><span class="ico sm" data-icon="pickup-scrap"></span>SCRAP</small><b id="scrap">000</b></div>
+          <div class="stat scrap" data-tip="Scrap: run currency. Spend it on vault gates and on tuning a frequency at a supply drop. Lost when you die."><small><span class="ico sm" data-icon="pickup-scrap"></span>SCRAP</small><b id="scrap">000</b></div>
           <div class="stat" title="Rooms cleared out of total rooms on this floor."><small><span class="ico sm" data-icon="door"></span>ROOMS</small><b id="sector-count">01 / 10</b></div>
         </section>
-        <div id="minimap-wrap" class="panel"><canvas id="minimap" width="156" height="117"></canvas><div class="mm-legend"><span style="--c:var(--slow)">EXIT</span><span style="--c:var(--coin)">CACHE</span><span style="--c:var(--scrap)">SHOP</span><span style="--c:var(--armor)">CLINIC</span><span style="--c:var(--tier-rare)">BENCH</span><span style="--c:var(--sprint)">GATE</span></div></div>
+        <div id="minimap-wrap" class="panel"><canvas id="minimap" width="156" height="117"></canvas><div class="mm-legend"><span style="--c:var(--slow)">EXIT</span><span style="--c:var(--coin)">SUPPLY</span><span style="--c:var(--armor)">CLINIC</span><span style="--c:var(--sprint)">GATE</span></div></div>
       </div>
       <div id="tutor-hint" role="status" aria-live="polite"></div>
       <div id="toast" role="status"></div>
@@ -135,75 +135,37 @@
       </section>
       <section id="loadout" class="dlg" role="dialog" aria-modal="true" aria-labelledby="loadout-title" aria-hidden="true">
         <div class="dlg-card dlg-xl loadout-card">
-          <button id="close-loadout" class="close" aria-label="Close workbench"><span data-icon="status-close"></span></button>
+          <button id="close-loadout" class="close" aria-label="Close loadout"><span data-icon="status-close"></span></button>
           <header class="dlg-head">
-            <span class="dlg-icon" data-icon="station-workbench"></span>
+            <span class="dlg-icon" data-icon="station-loadout"></span>
             <div>
-              <div class="eyebrow">FIELD MODIFICATION STATION</div>
+              <div class="eyebrow">LOADOUT</div>
               <h2 id="loadout-title">MAKE IT <em>YOURS.</em></h2>
-              <p class="dlg-sub loadout-copy">Spend scrap between fights. Mods change the way your gun feels.</p>
+              <p class="dlg-sub loadout-copy">Two guns, one mod each. Pick up a gun to swap the one in your hand; pick up a mod to refit it.</p>
             </div>
             <div id="carry-readout" class="carry-readout"></div>
           </header>
-          <div class="loadout-columns"><div><div class="eyebrow sec">WEAPON SLOTS · CHOOSE A GUN TO ADD OR REPLACE</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow sec">ARMOR AND GEAR</div><div id="gear-list" class="mod-list"></div></div><div><div class="eyebrow sec">AVAILABLE MODS <span class="term" data-tip="Rarity tiers, weakest to strongest: Common, Uncommon, Rare, Prototype. Higher tiers roll stronger bonuses.">RARITY ?</span></div><div id="mod-list" class="mod-list"></div></div></div>
-          <footer class="dlg-foot"><span id="loadout-scrap" class="dlg-balance" data-tip="Scrap is run currency. It is lost if you die, so spend it.">000 SCRAP</span><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd><kbd data-action="weaponTwo">2</kbd>Slots</span><span class="keyhint dim">Rig III adds <kbd data-action="weaponThree">3</kbd></span><span class="keyhint"><kbd>ESC</kbd>Return</span></span></footer>
-          <section id="loadout-confirm" class="loadout-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="loadout-change-title">
-            <div class="loadout-confirm-card">
-              <div class="eyebrow">CHECK YOUR FIELD LOADOUT</div>
-              <h3 id="loadout-change-title"></h3>
-              <p id="loadout-change-copy"></p>
-              <div id="loadout-change-summary" class="loadout-change-summary"></div>
-              <div class="loadout-confirm-actions"><button id="loadout-cancel" class="btn secondary" type="button">KEEP CURRENT</button><button id="loadout-accept" class="btn primary" type="button">CONFIRM CHANGE</button></div>
-            </div>
-          </section>
+          <div class="loadout-columns"><div><div class="eyebrow sec">CARRIED GUNS · CLICK TO DRAW</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow sec">EXTRAS</div><div id="extras-list" class="mod-list"></div></div><div><div class="eyebrow sec">MOD ON YOUR ACTIVE GUN</div><div id="mod-list" class="mod-list"></div></div></div>
+          <footer class="dlg-foot"><span id="loadout-scrap" class="dlg-balance" data-tip="Scrap is run currency: it opens vault gates and tunes frequencies at supply drops. Lost if you die.">000 SCRAP</span><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd><kbd data-action="weaponTwo">2</kbd>Draw</span><span class="keyhint dim">Third slot adds <kbd data-action="weaponThree">3</kbd></span><span class="keyhint"><kbd>ESC</kbd>Return</span></span></footer>
+
         </div>
       </section>
-      <section id="merchant-panel" class="merchant-panel dlg" hidden aria-hidden="true" aria-labelledby="merchant-title" role="dialog" aria-modal="true">
-        <div class="dlg-card dlg-md merchant-card">
-          <button id="close-merchant" class="close" type="button" aria-label="Close merchant"><span data-icon="status-close"></span></button>
-          <header class="dlg-head">
-            <span class="dlg-icon" data-icon="station-merchant"></span>
-            <div>
-              <div class="eyebrow">RARE FIELD TRADER · RUN SCRAP</div>
-              <h2 id="merchant-title">BLACK <em>MARKET.</em></h2>
-              <p class="dlg-sub merchant-copy">Spend <span class="term" data-tip="Scrap is run currency: it buys gear here and opens vault gates. Coins are different: they are earned when a run ends and buy permanent Safehouse upgrades.">scrap</span> to prepare for the next room.</p>
-            </div>
-          </header>
-          <div id="merchant-stock" class="merchant-stock" aria-live="polite"></div>
-          <footer class="dlg-foot"><span class="keyhints"><span class="keyhint"><kbd data-action="interact">E</kbd><kbd>ESC</kbd>Leave</span></span></footer>
-        </div>
-      </section>
-      <section id="cache-panel" class="merchant-panel dlg" hidden aria-hidden="true" aria-labelledby="cache-title" role="dialog" aria-modal="true">
-        <div class="dlg-card dlg-md merchant-card cache-card">
-          <button id="close-cache" class="close" type="button" aria-label="Close room cache"><span data-icon="status-close"></span></button>
+      <section id="supply-panel" class="merchant-panel dlg" hidden aria-hidden="true" aria-labelledby="supply-title" role="dialog" aria-modal="true">
+        <div class="dlg-card dlg-md merchant-card cache-card supply-card">
+          <button id="close-supply" class="close" type="button" aria-label="Close supply drop"><span data-icon="status-close"></span></button>
           <header class="dlg-head">
             <span class="dlg-icon" data-icon="station-cache-open"></span>
             <div>
-              <div class="eyebrow">ROOM CLEAR · PICK ONE REWARD</div>
-              <h2 id="cache-title">FIELD <em>CACHE.</em></h2>
-              <p class="dlg-sub merchant-copy">Choose what helps this run most. Prototype gear costs one health.</p>
+              <div class="eyebrow">PICK ONE OF THREE</div>
+              <h2 id="supply-title">SUPPLY <em>DROP.</em></h2>
+              <p class="dlg-sub merchant-copy">Every option is shown before you take it. The signal costs scrap.</p>
             </div>
           </header>
-          <div id="cache-options" class="merchant-stock" aria-live="polite"></div>
-          <footer class="dlg-foot"><span class="dim">The cache stays sealed until you take a reward.</span><span class="keyhints"><span class="keyhint"><kbd>ESC</kbd>Close</span></span></footer>
+          <div id="supply-options" class="merchant-stock" aria-live="polite"></div>
+          <footer class="dlg-foot"><span class="dim">The drop stays sealed until you take one.</span><span class="keyhints"><span class="keyhint"><kbd>ESC</kbd>Close</span></span></footer>
         </div>
       </section>
-      <section id="weapon-pickup" class="weapon-pickup dlg" hidden aria-hidden="true" aria-labelledby="weapon-pickup-name" role="dialog" aria-modal="true">
-        <div class="dlg-card dlg-md weapon-pickup-card">
-          <header class="dlg-head">
-            <div>
-              <div class="eyebrow">FIELD WEAPON · FRESH MAGAZINE</div>
-              <h2 id="weapon-pickup-name"></h2>
-            </div>
-          </header>
-          <div id="weapon-pickup-hero" class="weapon-pickup-hero"></div>
-          <div id="weapon-pickup-compare" class="weapon-pickup-compare"></div>
-          <p id="weapon-pickup-stats"></p>
-          <div id="weapon-swap-options" class="weapon-swap-options"></div>
-          <button id="decline-weapon-pickup" class="btn ghost block decline-pickup" type="button">LEAVE IT HERE <kbd>ESC</kbd></button>
-          <footer class="dlg-foot center"><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd>Primary</span><span class="keyhint"><kbd data-action="weaponTwo">2</kbd>Secondary</span><span class="keyhint dim"><kbd data-action="weaponThree">3</kbd>Tertiary if unlocked</span></span></footer>
-        </div>
-      </section>
+
       <section id="run-modal" class="merchant-panel" hidden aria-hidden="true" role="dialog" aria-modal="true"></section>
       <div id="tip" role="tooltip" hidden></div>
     </main>

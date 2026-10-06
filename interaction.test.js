@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {activeInteraction, collectInteractables, collectPopup, promptParts, nearestHostileRoom, RANGE} from './interaction.js';
 import {HINT_DEFS, pickHint, loadSeen, saveSeen} from './hints.js';
 
-const rooms = [{cx: 5, cy: 5, role: 'entry'}, {cx: 20, cy: 5, role: 'merchant'}, {cx: 40, cy: 5, role: 'combat'}];
-const base = (o = {}) => ({player: {x: 100, y: 100}, scrap: 10, gates: [], pickups: [], rooms, enemies: [], guns: [{name: 'HARDLINE', category: 'ASSAULT RIFLE'}], tile: 32, ...o});
+const rooms = [{cx: 5, cy: 5, role: 'entry'}, {cx: 20, cy: 5, role: 'combat'}, {cx: 40, cy: 5, role: 'combat'}];
+const base = (o = {}) => ({player: {x: 100, y: 100}, scrap: 10, gates: [], pickups: [], rooms, enemies: [], guns: [{name: 'HARDLINE', verb: 'STEADY', category: 'ASSAULT RIFLE'}, {name: 'KITE BURST', verb: 'BURST', category: 'SMG'}, {name: 'TALON .45', verb: 'PUNCH', category: 'PISTOL'}], tile: 32, ...o});
 
 test('gate is unaffordable with a reason, affordable once scrap suffices', () => {
   const gate = {x: 3, y: 3, cost: 30, opened: false};
@@ -17,12 +17,12 @@ test('gate is unaffordable with a reason, affordable once scrap suffices', () =>
 test('opened gates are not interactable', () => {
   assert.equal(collectInteractables(base({gates: [{x: 3, y: 3, cost: 5, opened: true}]})).some(x => x.kind === 'gate'), false);
 });
-test('cache is blocked while its room has hostiles', () => {
-  const pickups = [{kind: 'cache', x: 110, y: 100, roomIndex: 2, available: true}];
+test('supply drop is blocked while its room has hostiles', () => {
+  const pickups = [{kind: 'supply', x: 110, y: 100, roomIndex: 2, available: true}];
   const enemies = [{alive: true, roomIndex: 2}, {alive: true, roomIndex: 2}, {alive: false, roomIndex: 2}];
-  const t = collectInteractables(base({pickups, enemies})).find(x => x.kind === 'cache');
+  const t = collectInteractables(base({pickups, enemies})).find(x => x.kind === 'supply');
   assert.equal(t.enabled, false); assert.match(t.reason, /CLEAR ROOM FIRST \(2 HOSTILES\)/);
-  assert.equal(collectInteractables(base({pickups})).find(x => x.kind === 'cache').enabled, true);
+  assert.equal(collectInteractables(base({pickups})).find(x => x.kind === 'supply').enabled, true);
 });
 test('gun pickup names the gun; auto pickups are not keyed', () => {
   const pickups = [{kind: 'gun', gunIndex: 0, x: 110, y: 100, available: true}, {kind: 'scrap', value: 12, x: 105, y: 100, available: true}];
@@ -31,8 +31,8 @@ test('gun pickup names the gun; auto pickups are not keyed', () => {
   assert.equal(ts.find(x => x.kind === 'pickup').keyed, false);
   assert.equal(activeInteraction(ts).kind, 'gun');
 });
-test('priority: gate beats cache beats station when overlapping', () => {
-  const ts = collectInteractables(base({player: {x: 160, y: 160}, gates: [{x: 4, y: 4, cost: 1}], pickups: [{kind: 'cache', x: 165, y: 160, roomIndex: 0, available: true}]}));
+test('priority: gate beats supply drop when overlapping', () => {
+  const ts = collectInteractables(base({player: {x: 160, y: 160}, gates: [{x: 4, y: 4, cost: 1}], pickups: [{kind: 'supply', x: 165, y: 160, roomIndex: 0, available: true}]}));
   assert.equal(activeInteraction(ts).kind, 'gate');
 });
 test('out of range targets are labelled but not active; far ones omitted', () => {
@@ -40,10 +40,29 @@ test('out of range targets are labelled but not active; far ones omitted', () =>
   assert.equal(ts.find(x => x.id === 'gate:10,3').inRange, false);
   assert.equal(ts.some(x => x.id === 'gate:100,100'), false);
 });
-test('market and workbench prompts', () => {
-  const m = collectInteractables(base({player: {x: 20 * 32 + 16, y: 5 * 32 + 16}})).find(x => x.kind === 'market');
-  assert.equal(m.inRange, true); assert.equal(promptParts(m, 'F').head, 'TRADE BLACK MARKET'); assert.equal(promptParts(m, 'F').key, 'F');
-  assert.equal(RANGE.station, 110);
+test('supply drop prompt says what to expect', () => {
+  const t = collectInteractables(base({pickups: [{kind: 'supply', x: 110, y: 100, roomIndex: 2, available: true}]})).find(x => x.kind === 'supply');
+  assert.equal(promptParts(t, 'F').head, 'OPEN SUPPLY DROP'); assert.equal(t.reason, 'PICK ONE OF THREE'); assert.equal(RANGE.market, undefined);
+});
+test('mod pickups name the mod, say what they replace, and are never auto-collected', () => {
+  const pickups = [{kind: 'mod', modId: 'ricochet', x: 110, y: 100, available: true}];
+  const hand = {gun: {id: 'machine', name: 'MACHINE PISTOL'}, modId: 'suppressor'};
+  let t = collectInteractables(base({pickups, hand})).find(x => x.kind === 'mod');
+  assert.equal(t.subject, 'RICOCHET'); assert.equal(t.keyed, true); assert.equal(promptParts(t).head, 'FIT RICOCHET');
+  assert.equal(t.reason, 'ON MACHINE PISTOL · REPLACES SUPPRESSOR'); assert.equal(t.icon, 'mod-ricochet'); assert.equal(t.enabled, true);
+  t = collectInteractables(base({pickups, hand: {...hand, modId: 'ricochet'}})).find(x => x.kind === 'mod');
+  assert.equal(t.enabled, false); assert.equal(t.reason, 'ALREADY FITTED');
+  t = collectInteractables(base({pickups: [{...pickups[0], modId: 'longbarrel'}], hand: {gun: {id: 'launcher', name: 'CORK LAUNCHER'}}})).find(x => x.kind === 'mod');
+  assert.equal(t.enabled, false); assert.match(t.reason, /DOES NOT FIT/);
+});
+test('gun pickups swap the gun in hand when full and show which', () => {
+  const pickups = [{kind: 'gun', gunIndex: 1, x: 110, y: 100, available: true}];
+  let t = collectInteractables(base({pickups, hand: {weapons: [0, 2], maxSlots: 2, activeSlot: 1}})).find(x => x.kind === 'gun');
+  assert.equal(t.verb, 'SWAP'); assert.match(t.reason, /BURST · REPLACES/); 
+  t = collectInteractables(base({pickups, hand: {weapons: [0], maxSlots: 2, activeSlot: 0}})).find(x => x.kind === 'gun');
+  assert.equal(t.verb, 'TAKE');
+  t = collectInteractables(base({pickups, hand: {weapons: [0, 1], maxSlots: 2, activeSlot: 0}})).find(x => x.kind === 'gun');
+  assert.equal(t.enabled, false);
 });
 test('exit reports hostiles on the route', () => {
   const t = collectInteractables(base({pickups: [{kind: 'exit', x: 120, y: 100, available: true}], enemies: [{alive: true, roomIndex: 2}]})).find(x => x.kind === 'exit');
@@ -72,19 +91,10 @@ test('hint storage tolerates failures', () => {
   saveSeen({setItem() { throw new Error('x'); }}, new Set(['a']));
 });
 
-test('claimed cache is shown as CLAIMED and cannot be activated', () => {
-  const pickups = [{kind: 'cache', x: 110, y: 100, roomIndex: 2, available: true, claimed: true}];
+test('claimed supply drop is shown as TAKEN and cannot be activated', () => {
+  const pickups = [{kind: 'supply', x: 110, y: 100, roomIndex: 2, available: true, claimed: true}];
   const ts = collectInteractables(base({pickups}));
-  assert.equal(ts.some(x => x.kind === 'cache'), false);
-  assert.equal(ts.find(x => x.kind === 'claimed').subject, 'CACHE · CLAIMED');
+  assert.equal(ts.some(x => x.kind === 'supply'), false);
+  assert.equal(ts.find(x => x.kind === 'claimed').subject, 'SUPPLY DROP · TAKEN');
   assert.notEqual(activeInteraction(ts)?.kind, 'claimed');
-});
-test('supply locker prompt reads BUY AMMO with a scrap cost, and disables when full or broke', () => {
-  const pickups = [{kind: 'locker', x: 110, y: 100, available: true}];
-  let t = collectInteractables(base({pickups, scrap: 50, ammo: {reserve: 0, maxReserve: 30}})).find(x => x.kind === 'locker');
-  assert.equal(t.enabled, true); assert.equal(promptParts(t).head, 'BUY AMMO'); assert.equal(promptParts(t).cost, '21 SCRAP');
-  t = collectInteractables(base({pickups, scrap: 5, ammo: {reserve: 0, maxReserve: 30}})).find(x => x.kind === 'locker');
-  assert.equal(t.enabled, false); assert.match(t.reason, /NEED 21 SCRAP/);
-  t = collectInteractables(base({pickups, scrap: 50, ammo: {reserve: 30, maxReserve: 30}})).find(x => x.kind === 'locker');
-  assert.equal(t.enabled, false); assert.equal(t.reason, 'AMMO FULL'); assert.equal(promptParts(t).cost, '');
 });

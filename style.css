@@ -33,11 +33,6 @@
   --danger: #ff6a78;
   --sprint: #ff8a4c;
   --ammo: #f2cf8a;
-  /* loot tiers (same as loot.js / world pickups) */
-  --tier-common: #d38ff5;
-  --tier-uncommon: #71d49b;
-  --tier-rare: #66b9f2;
-  --tier-prototype: #f4c66d;
   /* keycap */
   --key-top: #2c2638;
   --key-bottom: #211c2b;
@@ -111,7 +106,6 @@ kbd {
 /* chips / tags */
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font: 600 var(--fs-micro)/1 var(--font-body); letter-spacing: .1em; font-style: normal; color: var(--c, var(--text-mid)); border: 1px solid color-mix(in srgb, var(--c, #8a8492) 55%, transparent); background: color-mix(in srgb, var(--c, #8a8492) 12%, transparent); border-radius: 999px; vertical-align: middle; white-space: nowrap; }
 .chip.on { --c: var(--slow); }
-.chip.tier { --c: var(--tier, var(--tier-common)); }
 .coin-chip { color: var(--coin); font: 700 var(--fs-label)/1 var(--font-body); letter-spacing: .08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* tooltips (shared, driven by hud-ui.js; [data-tip] on any element) */
@@ -572,8 +566,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 .loadout-weapon:disabled { cursor: not-allowed; opacity: .6; }
 .mod-row { grid-template-columns: 28px 1fr auto; }
 .mod-row > .ico { width: 24px; height: 24px; color: var(--text-low); }
-.mod-row.equipped { box-shadow: inset 3px 0 0 var(--tier, var(--slow)); }
-.mod-row.equipped > .ico { color: var(--tier, var(--slow)); }
+.mod-row.equipped { box-shadow: inset 3px 0 0 var(--slow); }
+.mod-row.equipped > .ico { color: var(--slow); }
 .mod-row:not(:has(> .ico)) { grid-template-columns: 1fr; }
 .mod-row.off { opacity: .85; }
 .mod-row .term { cursor: help; }
@@ -592,7 +586,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 .merchant-stock { display: grid; gap: var(--s-2); }
 .merchant-row { grid-template-columns: auto 1fr auto; gap: var(--s-4); }
 .merchant-row .ico.big { color: var(--scrap); }
-.cache-row.ammo .ico { color: var(--ammo); } .cache-row.health .ico { color: var(--health); } .cache-row.upgrade .ico { color: var(--armor); } .cache-row.prototype .ico { color: var(--tier-prototype); } .cache-row.scrap .ico { color: var(--scrap); }
+.cache-row.ammo .ico { color: var(--ammo); } .cache-row.health .ico { color: var(--health); } .cache-row.upgrade .ico { color: var(--armor); } .cache-row.scrap .ico { color: var(--scrap); }
 .mr-icon { display: grid; place-items: center; min-width: 56px; color: var(--scrap); }
 .merchant-row.sold { opacity: .5; }
 .merchant-row.poor .cost { color: var(--danger); }

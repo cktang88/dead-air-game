@@ -15,7 +15,7 @@ const REQUIRED = [
   'item-key', 'exit-extraction', 'door',
   'enemy-rusher', 'enemy-gunner', 'enemy-brute', 'enemy-warden',
   'status-heart', 'status-shield', 'status-reload', 'status-slowmo', 'status-sprint', 'status-warning', 'status-search',
-  'mod-extended', 'mod-suppressor', 'mod-hollow', 'mod-stabilizer', 'mod-longbarrel',
+  'mod-extended', 'mod-suppressor', 'mod-ricochet', 'mod-incendiary', 'mod-quickdraw', 'mod-longbarrel', 'gun-launcher', 'pickup-supply',
 ];
 
 test('every required icon id exists with a viewBox and path data', () => {
@@ -30,7 +30,7 @@ test('every game id maps to an existing icon', () => {
   for (const gun of GUNS) assert.ok(hasIcon(GUN_CATEGORY_ICON[gun.category]), gun.category);
   for (const mod of MODS) assert.ok(hasIcon(MOD_ICON[mod.id]), mod.id);
   for (const id of Object.keys(ENEMY_TYPES)) assert.ok(hasIcon(ENEMY_ICON[id]), id);
-  for (const id of ['smoke', 'flash', 'frag', 'incendiary']) assert.ok(hasIcon(THROWABLE_ICON[id]), id);
+  for (const id of ['smoke', 'flash', 'frag']) assert.ok(hasIcon(THROWABLE_ICON[id]), id);
   for (const [name, id] of Object.entries(LEGACY_ICON)) assert.ok(hasIcon(id), name);
   assert.equal(resolveIcon('nope'), 'status-warning');
   assert.equal(resolveIcon('SNIPER'), 'gun-sniper');

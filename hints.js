@@ -9,8 +9,8 @@ export const HINT_DEFS = Object.freeze([
   {id: 'reload', text: k => `[${k.reload}] RELOAD`, when: c => c.magEmpty && c.reserve > 0},
   {id: 'swap', text: k => `[1] / [2] SWAP GUNS — THIS ONE IS DRY`, when: c => c.magEmpty && c.reserve <= 0 && c.otherHasAmmo},
   {id: 'grenade', text: k => `[${k.throwableCycle}] PICK GRENADE · [${k.throwableUse}] THROW`, when: c => c.hostilesNear > 0 && c.runTime > 20 && c.grenades > 0},
-  {id: 'loadout', text: k => `[${k.loadout}] LOADOUT — SWAP ATTACHMENTS`, when: c => c.runTime > 12 && c.hasMod},
-  {id: 'scrap', text: k => 'SCRAP BUYS GATES, GUNS & HEALS AT THE MARKET', when: c => c.scrap >= 25 && c.runTime > 30},
+  {id: 'loadout', text: k => `[${k.loadout}] LOADOUT — YOUR GUNS AND MODS`, when: c => c.runTime > 12 && c.hasMod},
+  {id: 'scrap', text: k => 'SCRAP OPENS GATES AND TUNES SIGNALS AT SUPPLY DROPS', when: c => c.scrap >= 25 && c.runTime > 30},
 ]);
 
 /** Pick the next hint to show (or null). Never repeats a seen hint; one at a time. */

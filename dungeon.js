@@ -58,8 +58,8 @@ export function generateDungeon(ROT, seed, width = 96, height = 72) {
     const cacheIndex=roleRooms.findIndex(room=>room.role==='cache'&&room.secret),lockedDoor=cacheIndex>=0?chooseRewardDoor(shaped.cells,shaped.doors,roleRooms,cacheIndex):null;
     roleRooms[0].visited = true;
     for(const room of roleRooms.slice(1,-1))if(room.role!=='combat'){
-      room.name=room.secret?'UNMARKED ROOM':({cache:'CONTRABAND CACHE',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX',elite:'WARDEN'})[room.role];
-      if(room.secret)room.revealedName='SIDE CACHE';
+      room.name=room.secret?'UNMARKED ROOM':({cache:'SUPPLY ROOM',armory:'ARMORY',clinic:'FIELD CLINIC',hazard:'KILLBOX',elite:'WARDEN'})[room.role];
+      if(room.secret)room.revealedName='SIDE SUPPLY';
     }
     // Stamp cover layouts, themes, spawn plans and pacing; hard cover becomes solid tiles in `cells`.
     stampRoomTemplates({cells: shaped.cells, rooms: roleRooms, start: {cx: start.cx, cy: start.cy}, seed});

@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {COLORS, RADII, TYPE, contrast, withAlpha, TIER_COLORS} from './theme.js';
-import {LOOT_TIERS} from './loot.js';
+import {COLORS, RADII, TYPE, contrast, withAlpha} from './theme.js';
 
 const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
 const rootBlock = css.slice(css.indexOf(':root {'), css.indexOf('font-family: var(--font-body)'));
@@ -21,10 +20,6 @@ test('radii and type scale mirror the CSS tokens', () => {
   for (const [k, v] of Object.entries(RADII)) assert.equal(cssVar(`r-${k}`), `${v}px`, `r-${k}`);
   assert.equal(cssVar('fs-micro'), `${TYPE.micro}px`);
   assert.ok(TYPE.micro >= 11, 'no text under 11px');
-});
-
-test('tier colours match the loot tiers used by world pickups', () => {
-  for (const tier of LOOT_TIERS) assert.equal(TIER_COLORS[tier.id], `#${tier.color.toString(16)}`, tier.id);
 });
 
 test('body text meets 4.5:1 on the panel and raised surfaces', () => {

@@ -17,13 +17,10 @@ export function strokeIcon(name, cls = 'ico') {
   return iconSvg(resolveIcon(name, 'pickup-mod'), { size: 0, cls });
 }
 
-// ---------------------------------------------------------------- tiers
-import { TIER_COLORS as THEME_TIERS, COLORS } from './theme.js';
-export const TIER_COLORS = THEME_TIERS;
-export const tierColor = id => TIER_COLORS[id] || TIER_COLORS.common;
+import { COLORS } from './theme.js';
 
 const CATEGORY_COLORS = {
-  PISTOL: COLORS.scrap, SMG: '#ffc66d', SHOTGUN: '#ff9a72', 'ASSAULT RIFLE': '#7ee0b8', SNIPER: '#8bc8ff', 'ANTI-MATERIEL': '#b0a2ff',
+  PISTOL: COLORS.scrap, SMG: '#ffc66d', SHOTGUN: '#ff9a72', 'ASSAULT RIFLE': '#7ee0b8', SNIPER: '#8bc8ff', 'ANTI-MATERIEL': '#b0a2ff', LAUNCHER: '#ff9a50',
 };
 export const categoryColor = category => CATEGORY_COLORS[category] || COLORS.scrap;
 
@@ -38,7 +35,6 @@ export const STAT_DEFS = [
   { id: 'damage', label: 'DAMAGE', lowerBetter: false, value: gun => Math.round(gun.damage * (gun.count || 1)) },
   { id: 'rate', label: 'RATE', lowerBetter: false, value: weaponCycleRpm },
   { id: 'range', label: 'RANGE', lowerBetter: false, value: gun => gun.range },
-  { id: 'weight', label: 'WEIGHT', lowerBetter: true, value: gun => gun.weight },
 ];
 
 export function statMaxima(guns) {
@@ -66,7 +62,7 @@ export function gunStatRows(gun, versus, guns) {
   });
 }
 
-const fmtStat = (id, v) => (id === 'weight' ? v.toFixed(1) : String(v));
+const fmtStat = (id, v) => String(v);
 
 export function statBarsHtml(gun, versus, guns, { compact = false } = {}) {
   return `<div class="stat-bars${compact ? ' compact' : ''}">${gunStatRows(gun, versus, guns).map(row => {
@@ -93,7 +89,7 @@ export function tempoView({ moving = false, firing = false, sprinting = false, s
 // ---------------------------------------------------------------- feed tone
 export function feedTone(text) {
   const t = String(text).toUpperCase();
-  if (/OUT OF|FIRST|NEED|COULD NOT|NO AMMO|TOO HEAVY|CAN'T|VAULT LOCK/.test(t)) return 'warn';
+  if (/OUT OF|FIRST|NEED|COULD NOT|NO AMMO|CAN'T|VAULT LOCK/.test(t)) return 'warn';
   if (/HIT|TAGGED|BRUTAL|BROKEN|-1 HEALTH|RUN OVER|DEAD/.test(t)) return 'bad';
   if (/HEALTH|PATCHED|VITALS|MEDKIT/.test(t)) return 'good';
   if (/SCRAP|COIN|CACHE|FOUND|EQUIPPED|RESTOCK|ATTACHMENT/.test(t)) return 'loot';

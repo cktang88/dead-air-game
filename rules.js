@@ -1,21 +1,22 @@
-import {lootTier} from './loot.js';
+import {MOD_BY_ID, modFits} from './catalog.js';
 
-export function weaponStats(gun, mods) {
-  const compatible=new Set(gun.attachments||[]);
-  const tierFor=id=>{
-    if(!compatible.has(id))return null;
-    const tier=mods.get(id);
-    return tier?lootTier(tier):null;
-  };
-  const strength=id=>tierFor(id)?.strength||0;
+// A gun carries at most one mod (a mod id string, or null). Mods are behaviors, not stat tiers; a mod the gun
+// cannot take is ignored everywhere so stale state can never apply it.
+export const activeMod = (gun, modId) => (modId && modFits(gun, modId) ? MOD_BY_ID.get(modId) : null);
+
+export function weaponStats(gun, modId = null) {
+  const mod = activeMod(gun, modId);
   return {
-    magazine: Math.ceil(gun.mag * (1 + .5*strength('extended'))),
-    damage: gun.damage * (1 + .35*strength('hollow')),
-    fireRate: gun.rate * (.82 - .18*(strength('stabilizer')-1)),
+    magazine: Math.ceil(gun.mag * (mod?.magMult || 1)),
+    damage: gun.damage,
+    fireRate: gun.rate,
     projectileSpeed: gun.speed,
-    range: gun.range * (1 + .35*strength('longbarrel')),
-    spread: gun.spread * (1 - .3*strength('suppressor')),
-    compatibleAttachments: gun.attachments||[],
+    range: gun.range * (mod?.rangeMult || 1),
+    spread: gun.spread,
+    noise: (gun.noise ?? 1) * (mod?.noiseMult ?? 1),
+    bounces: mod?.bounces || 0,
+    burn: mod?.burn || null,
+    stun: gun.stun || 0,
   };
 }
 
@@ -28,10 +29,9 @@ export function shotgunShellStats(shell, gunStats) {
   };
 }
 
-export function weaponPenetration(gun, mods) {
-  const compatible=new Set(gun.attachments||[]),tier=compatible.has('longbarrel')&&mods.has('longbarrel')?lootTier(mods.get('longbarrel')):null;
+export function weaponPenetration(gun, modId = null) {
   const base=gun.penetration||{enemies:0,crates:0,walls:0};
-  return {...base,enemies:base.enemies+(tier?Math.ceil(tier.strength):0)};
+  return {...base,enemies:base.enemies+(activeMod(gun,modId)?.pierce||0)};
 }
 
 export function consumePenetration(budget, target) {
@@ -45,24 +45,15 @@ export function unlockRewardGate(gate,scrap) {
   return {status:'opened',scrap:scrap-gate.cost};
 }
 
-export function reloadSeconds(mods, gun, reloadMultiplier=1) {
-  let seconds=1.65;
-  const tierFor=id=>lootTier(mods.get(id));
-  if (!gun) {
-    if(mods.has('stabilizer'))seconds=1.25;
-    else if(mods.has('extended'))seconds=1.85;
-  } else {
-    const compatible=new Set(gun.attachments||[]);
-    if(mods.has('stabilizer')&&compatible.has('stabilizer'))seconds=1.25-(tierFor('stabilizer').strength-1)*.25;
-    else if(mods.has('extended')&&compatible.has('extended'))seconds=(gun.reload??1.65)*(1.22-(tierFor('extended').strength-1)*.12);
-    else seconds=gun.reload??1.65;
-  }
-  return seconds*reloadMultiplier;
+export function reloadSeconds(gun, modId = null, reloadMultiplier = 1) {
+  return (gun?.reload ?? 1.65) * (activeMod(gun, modId)?.reloadMult || 1) * reloadMultiplier;
 }
 
-export function compatibleAttachments(gun, attachments) {
-  const allowed=new Set(gun.attachments||[]);
-  return attachments.filter(attachment=>allowed.has(attachment.id));
+/** Seconds before a gun can fire after being switched to. QUICK-DRAW is instant; a third slot makes every swap slower. */
+export const THIRD_SLOT_SWAP_PENALTY = .4;
+export function swapSeconds(gun, modId = null, slotCount = 2) {
+  if (activeMod(gun, modId)?.instantSwap) return 0;
+  return (gun?.swap ?? .35) + (slotCount > 2 ? THIRD_SLOT_SWAP_PENALTY : 0);
 }
 
 export function damageDurability(current, damage) {
@@ -158,28 +149,15 @@ export function segmentWallRuns(start, end, tileMap, tileSize, startsInsideWall=
   return {runs,endsInsideWall:tileMap[y]?.[x]!==0};
 }
 
-export function weaponLoadoutWeight(weapons, guns) {
-  return weapons.reduce((total, index) => total + guns[index].weight, 0);
-}
-
-export function canCarryWeapons(weapons, guns, capacity) {
-  return weaponLoadoutWeight(weapons, guns) <= capacity;
-}
-
-export function weaponReplacement(weapons, slot, candidate, guns, capacity, gearWeight = 0) {
-  const nextWeapons=weapons.slice();
-  nextWeapons[slot]=candidate;
-  const totalWeight=weaponLoadoutWeight(nextWeapons,guns)+gearWeight;
-  const alreadyEquipped=weapons.includes(candidate);
-  const hasDuplicate=nextWeapons.some((weapon,index)=>nextWeapons.indexOf(weapon)!==index);
-  return {weapons:nextWeapons,totalWeight,canCarry:!alreadyEquipped&&!hasDuplicate&&totalWeight<=capacity};
-}
-
-export function chooseWeaponReplacementSlot(weapons,candidate,maxSlots,activeSlot,guns,capacity,gearWeight=0){
-  const newSlot=weapons.length;
-  if(newSlot<maxSlots&&weaponReplacement(weapons,newSlot,candidate,guns,capacity,gearWeight).canCarry)return newSlot;
-  const preferred=maxSlots===2?[1,0]:[activeSlot,...weapons.map((_,index)=>index).filter(index=>index!==activeSlot)];
-  return preferred.find(slot=>slot<weapons.length&&weaponReplacement(weapons,slot,candidate,guns,capacity,gearWeight).canCarry);
+/**
+ * Picking a gun up with a free slot adds it; with full hands it swaps with the gun in your hand. Returns
+ * {slot, replaces} (replaces = the gun index that drops, or null), or null when you already carry that gun.
+ */
+export function gunPickupPlan(weapons, candidate, maxSlots, activeSlot) {
+  if (weapons.includes(candidate)) return null;
+  if (weapons.length < maxSlots) return {slot: weapons.length, replaces: null};
+  const slot = Math.min(Math.max(0, activeSlot), weapons.length - 1);
+  return {slot, replaces: weapons[slot]};
 }
 
 export function timeScale({mode, paused, loadoutOpen, moving, idleScale = 0.18}) {

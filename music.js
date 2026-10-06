@@ -366,7 +366,7 @@ export function musicSyncGame(state,dt=1/60){
   }else{watch.extraction=false;watch.cleared=state.roomsCleared||0;}
   if(mode==='won'&&watch.mode!=='won')musicSting('win');
   watch.mode=mode;watch.wasCombat=fight.combat;
-  const paused=!!(state.paused||state.merchantOpen||state.cacheOpen||state.pendingGunPickup||state.loadoutOpen);
+  const paused=!!(state.paused||state.supplyOpen||state.loadoutOpen);
   const scene=sceneFromGame({mode,combat:fight.combat&&!paused,boss:fight.boss,extractionOpen:state.extractionOpen});
   setMusicPaused(paused&&mode==='play');
   setMusicScene(scene,{lowHealth:mode==='play'&&isLowHealth(state.health,state.maxHealth),critical:state.health<=1,intensity:fight.intensity});
