@@ -161,6 +161,12 @@ function getAudioContext(){
   }catch{return null;}
 }
 
+/** Shared runtime for music.js / ambience.js: the live context, the master gain (mute/volume) and the SFX bus (slow-mo filtered). Null before a context exists. */
+export function getAudioRuntime(create=true){
+  const context=create?getAudioContext():audioContext;
+  return context&&masterGain?{context,master:masterGain,sfxBus,limiter,noiseWhite,forceRunning}:null;
+}
+
 /** Test/offline hook: render the real synth into an OfflineAudioContext. */
 export function attachAudioContextForRender(context){
   audioContext=context;masterGain=context.createGain();masterGain.gain.value=1;masterGain.connect(context.destination);
