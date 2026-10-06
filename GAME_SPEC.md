@@ -51,7 +51,7 @@ The first room should teach movement, aiming, slow time, shooting, cover, and sw
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.
 - Bullets are physical projectiles with collision checks; walls block shots.
-- Player bullets damage enemies and crates. Enemy bullets damage the player.
+- Player bullets damage enemies and crates. Enemy bullets damage the player. Player bullets fly on world time with a floor of 0.45x real (see Player bullet clock).
 - Hits briefly interrupt time, push targets, and add restrained camera shake.
 - Enemy tells must remain readable at both slow and fast speeds. Use an aim cue or wind-up before ranged shots and a clear charge before heavy contact. Brutes now commit to a visible directional swing with a dodgeable wind-up and recovery.
 - Reloads consume time and ammunition. A reload may be interrupted by damage; whether ammo is retained on interruption is a balance choice to test.
@@ -65,7 +65,7 @@ The first room should teach movement, aiming, slow time, shooting, cover, and sw
 - Rooms vary in width, height, outline, entrance position, and corridor connection. Hallways should create choices and avoid one long empty chain.
 - Enemies belong to their spawn encounter. A living enemy still blocks that room's clear reward if it chases beyond the original walls.
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
-- Each room gets a deterministic role: combat, cache, armory, clinic, hazard, merchant, or extraction. Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
+- Each room gets a deterministic role: combat, cache, armory, clinic, hazard, or extraction (the merchant is gone: supply drops replace it). Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
 - Keep entry and extraction roles reserved. Optional branches, a hidden cache, topology-validated scrap gates, FIELD CLINIC rest stops, and the Warden miniboss are implemented; a cache gate appears only when it will not block the extraction route.
 - Rooms are processed by shortest route from the entry. The first two ordinary combat rooms cap at three enemies; later ordinary rooms roll two to four. Cache, armory, hazard, and elite budgets keep their role-specific counts. A room may be small and dangerous or large with scattered guards.
 - Room footprints vary between rectangles and L, U, or C outlines. Keep the center and door approaches clear, and preserve a walkable route between all connected rooms.
@@ -198,17 +198,32 @@ Guns join the loot, armory and Black Market pool when unlocked: Vector 9 (40), K
 
 ### Frequencies (the in-run build system)
 
-Five stations, four upgrades each, three ranks (common, rare, epic). Offers are pick-1-of-3 from FREQUENCY pickups (door rewards, ELITE rooms) and after each floor you descend. Stations you already hold are weighted up, and an offer that would switch on a crossfade is guaranteed about half the time. Two stations at level 2 or more (total ranks) turn on a **crossfade**. Every upgrade is a behavior, not a percentage.
+Five stations, three or four upgrades each, three ranks. Every upgrade is a **behavior you can watch happen**, and a rank-up changes what it does: rank 2 adds a **twist**, rank 3 a **flourish** (the card text says which). Offers are pick-1-of-3 from FREQUENCY pickups (door rewards, ELITE rooms, supply drops) and after each floor you descend. Offers lean on your build so crossfades actually happen: when a crossfade completer is in reach it is on the table 60% of the time, at least one card comes from a station you hold, one card is a fresh voice so you can pivot, and no station fills more than two cards. Two stations at level 2 or more (total ranks) switch on a **crossfade**: a freeze-frame name card (near-frozen time for 1.5 s, a chord, a ring in both station colours) and a visible effect in play. Every card's one-line text is generated from the same numbers the game reads (`frequencies.js` ranks are `{fx, text}`; `frequencies.test.js` asserts the mapping), so no description can drift from the code.
 
-| Station | Voice | Upgrades |
+| Station | Play style | Upgrades (rank 1 / twist / flourish) |
 | --- | --- | --- |
-| STATIC | chain, stun, interfere | Arc Light (hits chain), Jammer (hits stun), Distortion Field (enemy bullets slow near you), Dead Channel (kills pulse a stun) |
-| DEADLINE | kills buy time | Borrowed Time (kills grant half-speed walking), Clean Slate (kills refill the mag), Freeze Frame (kills freeze time), Held Breath (stand still, next shot hits harder) |
-| CARRIER | one clean signal | Throughput (pierce), Multipath (ricochet), Lock-On (bullets curve), Shatter (kills burst into seeking shards) |
-| NIGHT SHIFT | stealth | Dead Mic (quiet shots), Blindside (bonus vs unaware), Smoke Bloom (reloading drops smoke), Cold Cash (unaware kills pay scrap) |
-| FEEDBACK | risk scales damage | Red Line (damage per missing health), Feedback Loop (hit streak speeds fire), Adrenaline (damage grants half-speed walking), Last Stand (at 1 health: damage and half-speed walking) |
+| STATIC | lightning, jams | **Arc Light**: hits arc a visible bolt to the nearest other enemy / jumps to a second enemy / arcs jam what they touch. **Jammer**: hits jam the target (it cannot shoot and its bullets in the air vanish) / the jam splashes 2 tiles / longer jam, 3-tile splash. **Distortion Field** (35): a drawn ring slows enemy bullets / bigger and slower / bullets close to you are zapped out of the air. **Dead Channel** (60): kills release a shockwave that jams enemies / it also erases enemy bullets / bigger and shoves enemies back |
+| DEADLINE | time as currency | **Borrowed Time** (the one merged refund): each kill refunds slow time (half speed while walking) / getting hit refunds some too / at 1 health you always walk in half time. **Hang Fire** (45): a kill while you stand still freezes the victim's bullets in mid-air / they hang until you move / the kill freezes every enemy bullet within 6 tiles. **Held Breath**: stand still 0.6 s (a ring pings), next shot +50% / the charged shot pierces everything in line / and is silent |
+| CARRIER | pierce, bank, seek | **Throughput**: rounds pierce 1 enemy / 2 and punch through crates / everything in line. **Multipath**: bullets bounce once / each bounce bends toward the nearest enemy / three bounces. **Lock-On** (55): bullets curve to targets near their path, tighter and farther per rank. **Shatter** (70): kills burst into seeking shards / shards pierce / shards ricochet |
+| NIGHT SHIFT | quiet play | **Dead Mic**: half-size noise ring / a shot that kills an unaware enemy makes no noise at all (the ring does not appear) / 75% quieter and silent sprinting. **Blindside**: +60% vs unaware / any hit on an unaware enemy kills it outright (brutes, riots, elites, boss excepted) / a quiet takedown refunds the round. **Smoke Bloom** (45): reload drops a smoke cloud, bigger and longer per rank. **Blackout** (55): enemy vision cones shrink (drawn smaller) / shorter and narrower / standing still hides you beyond 3 tiles |
+| FEEDBACK | power from risk | **Red Line**: +20% damage per missing health and your shots grow bigger and brighter / at 2 health shots pierce / at 1 health shots burst on impact. **Echo**: at 2 health or less every shot is followed 0.2 s later by a ghost round (50%) / 75% / two ghosts. **Kindling** (55): kills set nearby enemies on fire. **Backlash** (70): taking a hit sends a shockwave that jams enemies / and erases bullets / bigger and shoves enemies back |
 
-Crossfades: SIGNAL BOOST (Static + Carrier), DEAD AIR (Static + Deadline), HOLD YOUR BREATH (Deadline + Night Shift), RED SHIFT (Carrier + Feedback), BORROWED PULSE (Deadline + Feedback), DEAD DROP (Night Shift + Feedback), WHITE NOISE (Static + Night Shift). Ten upgrades are free from the start; ten more are bought in the safehouse for 35 to 70 coins.
+Removed as dominant or flat: Clean Slate (kills refilled the magazine: strictly best when ammo was tight), Cold Cash (+6 scrap), Feedback Loop (a fire-rate percentage), and the near-duplicate time refunds Adrenaline, Last Stand and Freeze Frame (all merged into Borrowed Time and Hang Fire).
+
+Crossfades (each fires a floater with its name when it triggers): SIGNAL BOOST (Static + Carrier: arcs jump one more enemy, every ricochet fires an arc), DEAD AIR (Static + Deadline: killing a jammed enemy refunds 1 s), HOLD YOUR BREATH (Deadline + Night Shift: held-breath bonus doubles and is silent), RED SHIFT (Carrier + Feedback: ricochets deal +60% and glow red), BORROWED PULSE (Deadline + Feedback: at 2 health or less every kill releases a jamming shockwave), DEAD DROP (Night Shift + Feedback: quiet kills heal at half health), WHITE NOISE (Static + Night Shift: jams last twice as long on unaware enemies). Nine upgrades are free from the start; the rest are bought in the safehouse for 35 to 70 coins (Backlash is unlocked by the pistol-boss goal).
+
+### Shove and the dry-ammo fallback
+
+Both guns at 0/0 with awake enemies must never be a dead end. **SHOVE** (default V, also right mouse; rebindable in controls, shown in the pause footer) is a short wide shoulder-barge (`shove.js`): small damage and a knock-back that **staggers** (a staggered enemy cannot shoot), enough to finish weakened enemies. From behind an enemy who has not noticed you, or a sleeper, it is a **SILENT TAKEDOWN**: a kill with no noise ring. Heavy enemies shrug it off: brutes barely move, riots block the front (shove them from the flank for double damage), the boss ignores it. The kill that follows running dry (shove or otherwise) **always drops an AMMO pickup** (placed so it can never land inside a wall), and the dry-click toast names the shove key.
+
+### Player bullet clock (decision)
+
+Question: player bullets used to fly on the real clock while enemies and their bullets run on world time, so standing still (0.08x) and shooting landed instantly on a frozen target. Options tested with `window.__deadair.PLAYER_BULLET_CLOCK` (`time-rule.js`):
+
+- (a) **real clock** (old): a shot lands the same frame regardless of the time rule. Standing still is both the safest and the fastest way to kill; the beat from the shot has nothing to advance, because the bullet is already there.
+- (b) **world time with a minimum effective speed** (`minRate` 0.45): the bullet flies on world time but never slower than 0.45x real. While you move or sprint (world 0.35x to 1x) it is essentially the old speed; while you stand still it visibly travels, and the shot's beat (0.03 to 0.2 s of 1x flow) advances time as it flies, so the shot "arrives as the beat advances time".
+
+Measured in a browser (aware gunner, standing still, one shot): about 0.25 s to land at 3 tiles in both modes, 0.40 s (a) vs 0.45 s (b) at 4.6 tiles; the gap grows roughly 0.05 s per tile (a 12-tile marksman shot takes about 0.6 s longer under (b)). **Chosen: (b).** Reasons: (1) it keeps the pillar honest, the world is not allowed to freeze around a bullet the player owns; (2) it is fair: dodging enemies get a real warning window to react to a shot they can see coming, instead of being hit before any reaction is possible; (3) stealth: a silent kill is a visible commitment (the bullet crosses the room before the unaware target drops) instead of a teleport, which makes the quiet-kill frequencies (Dead Mic, Blindside) something you watch; (4) marksman fights: shooting a sniper down a lane is now a decision (it gets a few extra frames to respond) rather than a free instant; (5) the boss: telegraphed lanes and the exposed window stay fair, because player shots cannot out-run the boss's pattern clock. The minimum rate keeps stationary play fluid: nobody waits for a bullet at 0.08x. Revisit the number (0.35 to 0.6) in balance passes; it is a single constant.
 
 ### Permanent upgrade tracks
 
@@ -232,7 +247,13 @@ After the first boss kill: ARMORED SIGNAL (+30% enemy health), OVERDRIVE (+15% e
 
 ### THE CONDUCTOR (boss)
 
-1100 health, three phases at 66% and 33% (supplies drop and the bullet field clears at each). Every pattern has a 0.85 to 1.2 simulated-second telegraph, about 5x longer in real time while you stand still: fan, ring (with a visible safe gap), sweep, spiral, summon adds, and the phase-3 charge (lane warning, then a 1.5 s exposed window with +50% damage). Logic is the pure `boss.js`; `boss-fight.js` applies it to the world; `boss2d.js` draws it and its telegraphs.
+700 health, three phases at 66% and 33% (supplies drop and the bullet field clears at each). The arena is **THE BROADCAST ROOM** (the last room of floor 4), lit by stage lights so the Conductor always stands in a spotlight, and the camera leans toward him while the fight is on so he is never at the screen edge. Each phase is tied to the time rule so the fight teaches it:
+
+1. **Phase I:** fan, ring (with a visible safe gap), sweep: ordinary world time. Every telegraph is 0.85 to 1.2 simulated seconds, about 5x longer in real time while you stand still.
+2. **Phase II, TEMPO:** *he conducts your time.* His pattern clock (spiral, summons, fan, ring, sweep) runs on how much you move (`tempoRate`: 10% when still, 100% at a walk), so his barrages only advance while you move. A ring clock around him shows it (bright when running, dim when frozen). Moving is how you pay for his attacks; the boss bar says PHASE II · TEMPO.
+3. **Phase III, BEATDROP:** a pattern locked to the music (`getMusicBeat()` in `music.js`, from the audible step clock; a world-time clock stands in with no music). A 4-beat cycle: on beat 1 he MARKS a straight line at you, beat 2 (the off-beat) is your dodge window (the line pulses white), beat 3 he FIRES a fan along the mark, beat 4 rests. Moving on the off-beat is the dodge. Charges and summons are mixed in; the charge leaves him exposed for 1.5 s (+100% damage).
+
+Death moment: hit-stop, near-frozen time for 2.4 s, a shatter of pink shards and a ring in each phase colour, the win sting, the banner THE CONDUCTOR FALLS, then the exit opens. Logic is the pure `boss.js` (`tempoRate`, beat stages); `boss-fight.js` applies it and builds the stage lights and camera shift; `boss2d.js` draws it and its telegraphs.
 
 ### Meta progression safeguards
 
