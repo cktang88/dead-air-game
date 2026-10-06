@@ -688,7 +688,7 @@ function playerHitDamage(b,enemy){
   if(b.owner!=='player')return b.damage;
   const f=freqStats(state.freq);let dmg=b.damage;
   {const snap=b.sneak?.get(enemy),mod=damageModifier({type:enemy.type,aware:!snap&&!!enemy.aware,asleep:!!snap?.asleep,facing:snap??enemy.face,bulletDir:{x:b.vx,y:b.vy},bruteRecovering:enemy.type==='brute'&&(enemy.meleeCooldown>0||enemy.ai?.brute?.phase==='recover')});
-    if(mod.mult>1){dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-22,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',13,1);}}
+    if(mod.mult>1){dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-30,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',mod.label==='SILENT'?26:22,1.2);}}
   if(!enemy.aware&&enemy.type!=='boss')dmg*=1+f.unawareDamage;
   if((b.bounces||0)>0)dmg*=1+f.bounceDamage;
   return bossDamageFor(enemy,dmg);
@@ -733,12 +733,13 @@ function roomClearTracking(room){
 }
 
 /* ---------- run modal (decision + frequency pick) */
+let runModalClear=0;
 function setRunModal(kind,html){
   state.runModal=kind;input.keys.clear();input.firing=false;
-  const el=$('run-modal');el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');el.querySelector('button')?.focus();
+  const el=$('run-modal');clearTimeout(runModalClear);el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');el.querySelector('button')?.focus();
 }
 function closeRunModal(){
-  state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');el.innerHTML='';dialogClosedAt=performance.now();view?.canvas.focus();
+  state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
 }
 const runCoinMult=()=>runStats().coinMult*(1+interferenceStats(state.progress).coinBonus);
 function reachExit(){
@@ -809,8 +810,8 @@ function finishRunImpl(result,causeArg){
   const showEnd=()=>{
     if(state.mode==='play')return;
     const el=$('run-result');el.hidden=false;
-    el.innerHTML=runEndHtml({won:result!=='dead',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
-    el.dataset.result=result==='dead'?'dead':'won';$('start-button').innerHTML='<span>RUN AGAIN</span><kbd>R</kbd>';$('start-button').classList.add('again');$('game-shell')?.classList.remove('dying');$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus();animateCounts(el);
+    el.innerHTML=runEndHtml({won:result!=='dead',boss:result==='won',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
+    el.dataset.result=result==='dead'?'dead':'won';el.dataset.kind=result==='won'?'boss':result;$('how-to')?.classList.toggle('compact',progress.stats.runs>1);$('start-button').innerHTML='<span>RUN AGAIN</span><kbd>R</kbd>';$('start-button').classList.add('again');$('game-shell')?.classList.remove('dying');$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus({preventScroll:true});animateCounts(el);
   };
   toast(result==='won'?'THE CONDUCTOR IS DOWN':result==='extract'?'EXTRACTED':'RUN OVER',3500);
   if(result!=='dead'||matchMedia('(prefers-reduced-motion: reduce)').matches)showEnd();else{$('game-shell')?.classList.add('dying');setTimeout(showEnd,1100);}
@@ -827,6 +828,7 @@ function wireMacroUi(){
     else if(act){const id=act.dataset.id,kind=act.dataset.act;if(kind==='tab')state.metaTab=id;else if(kind==='kit'){state.progress=selectKit(state.progress,id);saveProgress();}else if(kind==='heat'){state.progress=toggleInterference(state.progress,id);saveProgress();}}
     renderMeta();
   });
+  $('how-to')?.addEventListener('click',event=>{const hw=$('how-to');if(hw.classList.contains('compact')&&event.target.closest('.eyebrow'))hw.classList.toggle('open');});
   $('run-result').addEventListener('click',event=>{if(event.target.closest('[data-act="share"]')&&state.shareLine){try{navigator.clipboard?.writeText(state.shareLine);}catch{}event.target.textContent='COPIED';}});
   $('kit-chip')?.addEventListener('click',()=>{state.metaTab='unlocks';renderMeta();$('meta-panel').hidden=false;$('close-meta').focus();});
 }
@@ -834,7 +836,7 @@ function wireMacroUi(){
 function checkRoomClear(){for(const [i,r] of state.rooms.entries()){
   if(r.cleared||!r.visited)continue;
   const hasEnemy=roomHasLivingEnemies(i,state.enemies);
-  if(!hasEnemy){r.cleared=true;state.roomsCleared++;state.runRooms++;if(roomHasEncounter(r)){roomRewardDrop(r);roomClearTracking(r);const reward=scrapGain(runStats().roomClearScrap);state.scrap+=reward;playRoomClear();roomClearBanner(reward);{const cx=(r.cx+.5)*TILE,cy=(r.cy+.5)*TILE;view.fx.pickup(cx,cy,'#6dffb0');view.fx.floater(cx,cy-26,reward?`ROOM CLEARED · +${reward} SCRAP`:'ROOM CLEARED','#6dffb0',17,2.2);}for(let n=0;n<6;n++)dropPickup('scrap',rand(r.x1+1,r.x2-1)*TILE,rand(r.y1+1,r.y2-1)*TILE,4);roomClearSupplies(r);hud();}}
+  if(!hasEnemy){r.cleared=true;state.roomsCleared++;state.runRooms++;if(roomHasEncounter(r)){roomRewardDrop(r);roomClearTracking(r);const reward=scrapGain(runStats().roomClearScrap);state.scrap+=reward;playRoomClear();roomClearBanner(reward);{const cx=(r.cx+.5)*TILE,cy=(r.cy+.5)*TILE;view.fx.pickup(cx,cy,'#6dffb0');}for(let n=0;n<6;n++)dropPickup('scrap',rand(r.x1+1,r.x2-1)*TILE,rand(r.y1+1,r.y2-1)*TILE,4);roomClearSupplies(r);hud();}}
 }
   checkExtractionOpen();
 }
@@ -907,15 +909,16 @@ function updatePlayer(dt){
   updateTutorHint(p);
   updateRoom();
 }
-const tutor={seen:(()=>{try{return loadSeen(localStorage);}catch{return new Set();}})(),shownAt:-99,current:null,still:0,wasMoving:false};
+const tutor={seen:(()=>{try{return loadSeen(localStorage);}catch{return new Set();}})(),done:new Set(),shownAt:-99,current:null,still:0,wasMoving:false};
 function updateTutorHint(p){
   const el=$('tutor-hint');if(!el)return;const dt=state.frameDt||1/60,moving=hasMovementInput();tutor.still=moving?0:tutor.still+dt;
+  if(moving)tutor.done.add('moved');if(moving&&input.keys.has('shift'))tutor.done.add('sprinted');if(state.reloadTimer>0)tutor.done.add('reloaded');if(state.thrown.length)tutor.done.add('threw');if(state.loadoutOpen)tutor.done.add('loadout');if(state.shotsFired>0)tutor.done.add('fired');
   const clock=performance.now()/1000;
   if(tutor.current&&clock-tutor.shownAt>5){tutor.current=null;el.classList.remove('show');}
   if(tutor.current||clock-tutor.shownAt<2.5)return;
   const gi=state.weaponIndex,gun=GUNS[gi],others=state.weaponSlots.filter(i=>i!==gi);
   const centreBusy=!!document.querySelector('#room-banner.show,#toast.show');if(moving)tutor.moved=true;
-  const ctx={shots:state.shotsFired||0,moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.supplyOpen||state.paused||state.mode!=='play',seen:tutor.seen,runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
+  const ctx={shots:state.shotsFired||0,moved:!!tutor.moved,blocked:centreBusy||!!state.runModal||state.loadoutOpen||state.supplyOpen||state.paused||state.mode!=='play',seen:tutor.seen,done:tutor.done,inCombat:state.enemies.some(e=>e.alive&&(e.type==='boss'||distance(p,e)<460)),runTime:state.elapsed,moving,stillFor:tutor.still,magEmpty:state.weaponAmmo[gi]<=0&&state.reloadTimer<=0,reserve:state.reserveAmmo[gi],otherHasAmmo:others.some(i=>state.weaponAmmo[i]>0||state.reserveAmmo[i]>0),hostilesNear:state.enemies.filter(e=>e.alive&&distance(p,e)<360).length,grenades:Object.values(state.throwables).reduce((a,b)=>a+b,0),hasMod:true,scrap:state.scrap};
   const keys={reload:keyLabel(binding('reload')),throwableCycle:keyLabel(binding('throwableCycle')),throwableUse:keyLabel(binding('throwableUse')),loadout:'TAB',moveKeys:['moveUp','moveLeft','moveDown','moveRight'].map(a=>keyLabel(binding(a)))};
   const hint=pickHint(ctx,keys);if(!hint)return;
   tutor.current=hint;tutor.shownAt=clock;tutor.seen.add(hint.id);try{saveSeen(localStorage,tutor.seen);}catch{}
@@ -1025,11 +1028,8 @@ function update(dt){
     physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
   if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
   state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
-  updateRateChip(scale);
   drawMinimap();syncHudFrame();
 }
-// Minimal HUD readout of the world rate; the grade + edge meter (timefx.js) is the primary display.
-function updateRateChip(scale){const el=$('tempo');if(!el)return;const band=timeBand(playerSpeedRatio());if(el.dataset.state!==band)el.dataset.state=band;const label=rateLabel(state.worldRate??scale);if(state.rateText!==label){state.rateText=label;$('tempo-speed').textContent=label;$('tempo-label').textContent=band.toUpperCase();}}
 function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);mm.key='';mm.lookup=null;}
 // The minimap's room layer only changes when a room becomes visited or scanner-visible, so it is drawn once into an
 // offscreen canvas and re-rendered when that visibility key changes. Enemy room lookups use a tile -> room table.

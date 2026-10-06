@@ -1,6 +1,7 @@
 // Screen-space affordance layer: world interaction prompts, name tags, target highlight, off-screen arrows.
 // Pure presentation; all "what can I do here" decisions come from interaction.js via state.interact.
 import {drawIcon, ENEMY_ICON} from './icons.js';
+import {hudSafeRects, placeEdgeArrow, clearShift} from './hud-safe.js';
 import {nearestHostileRoom, promptParts} from './interaction.js';
 
 import {COLORS, FONTS, RADII} from './theme.js';
@@ -99,32 +100,14 @@ export function createAffordances() {
     ctx.beginPath(); ctx.arc(sp.x, sp.y, r, 0, TAU); ctx.stroke(); ctx.restore();
   }
 
-  // Screen rectangles the DOM HUD occupies (bottom-left gun panel, bottom-right stats/minimap, top-centre tempo + objective, feed);
-  // arrows are pushed out of them so they never hide behind the HUD. Cached ~4x a second.
-  let safe = [], safeAt = -1;
-  function safeRects() {
-    if (typeof document === 'undefined') return safe;
-    if (t - safeAt < 0.25) return safe;
-    safeAt = t; safe = [];
-    for (const id of ['hud', 'hud-right', 'top-center', 'feed']) {
-      const el = document.getElementById(id); if (!el) continue;
-      const r = el.getBoundingClientRect(); if (r.width > 0) safe.push({x0: r.left - 18, y0: r.top - 18, x1: r.right + 18, y1: r.bottom + 18});
-    }
-    return safe;
-  }
+  // Arrows hug the viewport edge but slide along it so neither the circle nor its label ever sits under DOM HUD (hud-safe.js).
   function edgeArrow(ctx, cam, from, to, color, label, alpha = 1, strong = false) {
     const dx = to.x - from.x, dy = to.y - from.y, ang = Math.atan2(dy, dx);
     const M = 30;   // marker radius + breathing room: the arrow hugs the real viewport edge
     const hx = cam.w / 2 - M, hy = cam.h / 2 - M, k = Math.min(Math.abs(hx / (Math.cos(ang) || 1e-6)), Math.abs(hy / (Math.sin(ang) || 1e-6)));
-    let ax = cam.w / 2 + Math.cos(ang) * k, ay = cam.h / 2 + Math.sin(ang) * k;
-    for (const r of safeRects()) {
-      if (ax > r.x0 && ax < r.x1 && ay > r.y0 && ay < r.y1) {
-        // slide along the viewport edge to the nearest clear side of the rect
-        const onSide = Math.abs(ax - M) < 2 || Math.abs(ax - (cam.w - M)) < 2;
-        if (onSide) ay = ay < (r.y0 + r.y1) / 2 ? Math.max(M, r.y0 - 2) : Math.min(cam.h - M, r.y1 + 2);
-        else ax = ax < (r.x0 + r.x1) / 2 ? Math.max(M, r.x0 - 2) : Math.min(cam.w - M, r.x1 + 2);
-      }
-    }
+    const lw = textW(ctx, label, 13) + 30;
+    const boxFor = (x, y) => (x > cam.w / 2 ? {x0: x - 17 - lw, x1: x + 17, y0: y - 18, y1: y + 18} : {x0: x - 17, x1: x + 17 + lw, y0: y - 18, y1: y + 18});
+    const {x: ax, y: ay} = placeEdgeArrow({x: cam.w / 2 + Math.cos(ang) * k, y: cam.h / 2 + Math.sin(ang) * k}, cam.w, cam.h, M, boxFor, hudSafeRects());
     const pulse = 0.5 + 0.5 * Math.sin(t * 4);
     ctx.save(); ctx.globalAlpha = alpha; ctx.translate(ax, ay);
     if (strong) { ctx.strokeStyle = color; ctx.globalAlpha = alpha * 0.6; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 21 + pulse * 7, 0, TAU); ctx.stroke(); ctx.globalAlpha = alpha; }
@@ -144,7 +127,13 @@ export function createAffordances() {
       ctx.save(); ctx.globalAlpha = e.elite ? 1 : 0.85;
       ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(bx, by, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
       if (icon) drawIcon(ctx, icon, bx, by, 11, col);
-      if (e.elite) outlinedText(ctx, `ELITE ${e.def?.name || ''}`.trim(), sp.x, sp.y + r + 12, COLORS.sprint, 12, 'center');
+      if (e.elite) {
+        const text = `ELITE ${e.def?.name || ''}`.trim(), tw = textW(ctx, text, 12) / 2 + 6;
+        let lx = sp.x, ly = sp.y + r + 12;
+        const sh = clearShift({x0: lx - tw, x1: lx + tw, y0: ly - 9, y1: ly + 9}, hudSafeRects(4), cam.w, cam.h, 120);   // never under the HUD panels
+        if (sh) { lx += sh.dx; ly += sh.dy; }
+        outlinedText(ctx, text, lx, ly, COLORS.sprint, 12, 'center');
+      }
       ctx.restore();
     }
   }
