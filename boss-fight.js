@@ -8,7 +8,7 @@ const BOSS_BULLET = {color: 0xff6aa8, range: 760};
 
 export function spawnBoss(g, room, hpMult = 1) {
   const x = (room.cx + .5) * TILE, y = (room.cy + .5) * TILE;
-  const enemy = g.spawnEnemy('boss', x, y, room.index);
+  const enemy = g.spawnEnemy('boss', x, y, g.state.rooms.indexOf(room));
   enemy.boss = createBoss();
   enemy.hp = enemy.maxHp = Math.round(BOSS.maxHp * hpMult);
   enemy.shownHp = enemy.hp;

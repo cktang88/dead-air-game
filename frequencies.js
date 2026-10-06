@@ -19,31 +19,31 @@ export const MAX_RANK = 3;
 // `ranks[i]` describes rank i+1 and holds the raw value read by freqStats via `effect`.
 // `unlockCost:null` upgrades are available from the first run; others are bought in the safehouse (id `freq:<id>`).
 export const UPGRADES = [
-  // STATIC
+  // STATIC: your fire leaks into the room
   {id:'arc', station:'static', name:'ARC LIGHT', effect:'chain', unlockCost:null, ranks:[{v:.35, desc:'Hits chain to the nearest other enemy for 35% damage.'}, {v:.5, desc:'Chain damage 50%.'}, {v:.7, desc:'Chain damage 70%.'}]},
-  {id:'jam', station:'static', name:'JAMMER', effect:'stun', unlockCost:null, ranks:[{v:.35, desc:'Hits stun enemies for +0.35 s.'}, {v:.6, desc:'Hits stun for +0.6 s.'}, {v:.9, desc:'Hits stun for +0.9 s.'}]},
-  {id:'distortion', station:'static', name:'DISTORTION', effect:'bulletSlow', unlockCost:35, ranks:[{v:.12, desc:'Enemy bullets fly 12% slower.'}, {v:.2, desc:'Enemy bullets fly 20% slower.'}, {v:.3, desc:'Enemy bullets fly 30% slower.'}]},
+  {id:'jam', station:'static', name:'JAMMER', effect:'stun', unlockCost:null, ranks:[{v:.35, desc:'Hits stun enemies for +0.35 s: a stunned enemy cannot shoot.'}, {v:.6, desc:'Hits stun for +0.6 s.'}, {v:.9, desc:'Hits stun for +0.9 s.'}]},
+  {id:'distortion', station:'static', name:'DISTORTION FIELD', effect:'bubble', unlockCost:35, ranks:[{v:70, desc:'Enemy bullets slow to 45% within 2 tiles of you. Weave through them.'}, {v:100, desc:'Slow field reaches 3 tiles.'}, {v:130, desc:'Slow field reaches 4 tiles.'}]},
   {id:'dead_channel', station:'static', name:'DEAD CHANNEL', effect:'pulse', unlockCost:60, ranks:[{v:80, desc:'Kills pulse a 2.5 tile stun burst.'}, {v:110, desc:'Kill pulse reaches 3.5 tiles.'}, {v:140, desc:'Kill pulse reaches 4.5 tiles.'}]},
-  // DEADLINE
+  // DEADLINE: time is a currency
   {id:'borrowed', station:'deadline', name:'BORROWED TIME', effect:'credit', unlockCost:null, ranks:[{v:.6, desc:'Each kill: 0.6 s of walking at half speed.'}, {v:.9, desc:'Each kill: 0.9 s of half-speed walking.'}, {v:1.3, desc:'Each kill: 1.3 s of half-speed walking.'}]},
-  {id:'long_still', station:'deadline', name:'LONG STILL', effect:'idleScale', unlockCost:null, ranks:[{v:-.04, desc:'Standing still: time slows a little more (0.14×).'}, {v:-.07, desc:'Standing still: 0.11×.'}, {v:-.1, desc:'Standing still: 0.08×.'}]},
+  {id:'reload_kill', station:'deadline', name:'CLEAN SLATE', effect:'reloadKill', unlockCost:null, ranks:[{v:.25, desc:'Kills refill 25% of your magazine. Chain kills never reload.'}, {v:.4, desc:'Kills refill 40% of the magazine.'}, {v:.6, desc:'Kills refill 60% of the magazine.'}]},
+  {id:'freeze', station:'deadline', name:'FREEZE FRAME', effect:'freeze', unlockCost:45, ranks:[{v:.3, desc:'Every kill freezes time for 0.3 s, even mid-sprint.'}, {v:.45, desc:'Kill freeze lasts 0.45 s.'}, {v:.65, desc:'Kill freeze lasts 0.65 s.'}]},
   {id:'held_breath', station:'deadline', name:'HELD BREATH', effect:'heldBreath', unlockCost:40, ranks:[{v:.25, desc:'After 0.6 s still, your next shot deals +25%.'}, {v:.4, desc:'Held-breath shot +40%.'}, {v:.6, desc:'Held-breath shot +60%.'}]},
-  {id:'overtime', station:'deadline', name:'OVERTIME', effect:'reload', unlockCost:50, ranks:[{v:.2, desc:'Reload 20% faster.'}, {v:.3, desc:'Reload 30% faster.'}, {v:.4, desc:'Reload 40% faster.'}]},
-  // CARRIER
+  // CARRIER: one clean signal
   {id:'through', station:'carrier', name:'THROUGHPUT', effect:'pierce', unlockCost:null, ranks:[{v:1, desc:'Rounds pierce 1 extra enemy.'}, {v:2, desc:'Pierce 2 extra enemies.'}, {v:3, desc:'Pierce 3 extra enemies.'}]},
-  {id:'bounce', station:'carrier', name:'MULTIPATH', effect:'ricochet', unlockCost:null, ranks:[{v:1, desc:'Bullets bounce off a wall once.'}, {v:2, desc:'Bullets bounce twice.'}, {v:3, desc:'Bullets bounce three times.'}]},
-  {id:'long_wave', station:'carrier', name:'LONG WAVE', effect:'range', unlockCost:45, ranks:[{v:.2, desc:'+20% bullet range.'}, {v:.35, desc:'+35% bullet range.'}, {v:.5, desc:'+50% bullet range.'}]},
-  {id:'tight_beam', station:'carrier', name:'TIGHT BEAM', effect:'spread', unlockCost:45, ranks:[{v:.25, desc:'Spread tightened 25%.'}, {v:.4, desc:'Spread tightened 40%.'}, {v:.55, desc:'Spread tightened 55%.'}]},
-  // NIGHT SHIFT
-  {id:'silent', station:'nightshift', name:'SUPPRESSED CARRIER', effect:'noise', unlockCost:null, ranks:[{v:.35, desc:'Shots are 35% quieter.'}, {v:.6, desc:'Shots are 60% quieter.'}, {v:.85, desc:'Shots are 85% quieter.'}]},
+  {id:'bounce', station:'carrier', name:'MULTIPATH', effect:'ricochet', unlockCost:null, ranks:[{v:1, desc:'Bullets bounce off a wall once. Bank shots around cover.'}, {v:2, desc:'Bullets bounce twice.'}, {v:3, desc:'Bullets bounce three times.'}]},
+  {id:'homing', station:'carrier', name:'LOCK-ON', effect:'homing', unlockCost:55, ranks:[{v:1, desc:'Bullets curve toward enemies near their path.'}, {v:1.8, desc:'Stronger curve.'}, {v:2.6, desc:'Bullets hunt hard.'}]},
+  {id:'shatter', station:'carrier', name:'SHATTER', effect:'shards', unlockCost:70, ranks:[{v:2, desc:'Kills burst into 2 seeking shards.'}, {v:3, desc:'Kills burst into 3 shards.'}, {v:4, desc:'Kills burst into 4 shards.'}]},
+  // NIGHT SHIFT: nobody hears the shift end
+  {id:'silent', station:'nightshift', name:'DEAD MIC', effect:'noise', unlockCost:null, ranks:[{v:.35, desc:'Your shots wake rooms 35% less.'}, {v:.6, desc:'Shots 60% quieter.'}, {v:.85, desc:'Shots 85% quieter.'}]},
   {id:'blindside', station:'nightshift', name:'BLINDSIDE', effect:'unaware', unlockCost:null, ranks:[{v:.3, desc:'+30% damage to enemies who have not noticed you.'}, {v:.6, desc:'+60% to unaware enemies.'}, {v:1, desc:'+100% to unaware enemies.'}]},
-  {id:'shadow_step', station:'nightshift', name:'SHADOW STEP', effect:'move', unlockCost:40, ranks:[{v:.08, desc:'+8% move speed.'}, {v:.14, desc:'+14% move speed.'}, {v:.2, desc:'+20% move speed.'}]},
+  {id:'smoke_reload', station:'nightshift', name:'SMOKE BLOOM', effect:'smokeReload', unlockCost:45, ranks:[{v:55, desc:'Reloading drops a small smoke cloud. Reload is cover.'}, {v:75, desc:'Larger bloom.'}, {v:95, desc:'Largest bloom.'}]},
   {id:'cold_cash', station:'nightshift', name:'COLD CASH', effect:'unawareScrap', unlockCost:55, ranks:[{v:6, desc:'Unaware kills pay +6 scrap.'}, {v:10, desc:'Unaware kills +10 scrap.'}, {v:16, desc:'Unaware kills +16 scrap.'}]},
-  // FEEDBACK
+  // FEEDBACK: the closer to dead, the louder
   {id:'rage', station:'feedback', name:'RED LINE', effect:'missingHp', unlockCost:null, ranks:[{v:.08, desc:'+8% damage per health point missing.'}, {v:.14, desc:'+14% per missing health.'}, {v:.2, desc:'+20% per missing health.'}]},
-  {id:'overclock', station:'feedback', name:'OVERCLOCK', effect:'fireRate', unlockCost:null, ranks:[{v:.1, desc:'Fire 10% faster.'}, {v:.18, desc:'Fire 18% faster.'}, {v:.26, desc:'Fire 26% faster.'}]},
+  {id:'loop', station:'feedback', name:'FEEDBACK LOOP', effect:'loop', unlockCost:null, ranks:[{v:.04, desc:'Hit streak: each hit within 1.5 s speeds your fire 4% (5 stacks).'}, {v:.07, desc:'7% per hit.'}, {v:.1, desc:'10% per hit.'}]},
   {id:'adrenaline', station:'feedback', name:'ADRENALINE', effect:'hitCredit', unlockCost:50, ranks:[{v:1.5, desc:'Taking damage grants 1.5 s of half-speed walking.'}, {v:2.5, desc:'Taking damage: 2.5 s.'}, {v:3.5, desc:'Taking damage: 3.5 s.'}]},
-  {id:'wager', station:'feedback', name:'WAGER', effect:'coins', unlockCost:70, ranks:[{v:.1, desc:'+10% coins banked.'}, {v:.2, desc:'+20% coins banked.'}, {v:.3, desc:'+30% coins banked.'}]},
+  {id:'last_stand', station:'feedback', name:'LAST STAND', effect:'lastStand', unlockCost:70, ranks:[{v:.25, desc:'At 1 health: +25% damage and walking runs at half time.'}, {v:.5, desc:'At 1 health: +50% damage.'}, {v:.75, desc:'At 1 health: +75% damage.'}]},
 ];
 export const UPGRADE_BY_ID = new Map(UPGRADES.map(u => [u.id, u]));
 export const upgradeById = id => UPGRADE_BY_ID.get(id);
@@ -86,16 +86,14 @@ export function freqStats(owned = {}) {
   const x = {}; for (const c of activeCrossfades(owned)) for (const [k, v] of Object.entries(c.effects)) x[k] = (x[k] || 0) + v;
   return {
     chain: valueOf(owned, 'chain'), chainTargets: 1 + (x.chainTargets || 0), stunBonus: valueOf(owned, 'stun'),
-    bulletSlow: valueOf(owned, 'bulletSlow'), pulse: valueOf(owned, 'pulse'),
-    creditPerKill: valueOf(owned, 'credit'), idleScaleDelta: valueOf(owned, 'idleScale'),
+    bubble: valueOf(owned, 'bubble'), pulse: valueOf(owned, 'pulse'),
+    creditPerKill: valueOf(owned, 'credit'), freezeKill: valueOf(owned, 'freeze'), reloadKill: valueOf(owned, 'reloadKill'),
     heldBreath: valueOf(owned, 'heldBreath') * (x.heldBreathMult || 1), heldBreathSilent: Boolean(x.heldBreathSilent),
-    reloadMult: clamp(1 - valueOf(owned, 'reload'), .4, 1),
-    pierce: valueOf(owned, 'pierce'), ricochet: valueOf(owned, 'ricochet'), rangeMult: 1 + valueOf(owned, 'range'),
-    spreadMult: clamp(1 - valueOf(owned, 'spread'), .3, 1), bounceDamage: x.bounceDamage || 0,
-    noiseMult: clamp(1 - valueOf(owned, 'noise'), .1, 1), unawareDamage: valueOf(owned, 'unaware'),
-    moveMult: 1 + valueOf(owned, 'move'), unawareScrap: valueOf(owned, 'unawareScrap'),
-    missingHpDamage: valueOf(owned, 'missingHp'), fireRateMult: 1 + valueOf(owned, 'fireRate'),
-    hitCredit: valueOf(owned, 'hitCredit'), coinMult: 1 + valueOf(owned, 'coins'),
+    pierce: valueOf(owned, 'pierce'), ricochet: valueOf(owned, 'ricochet'), homing: valueOf(owned, 'homing'), shards: valueOf(owned, 'shards'),
+    bounceDamage: x.bounceDamage || 0,
+    noiseMult: clamp(1 - valueOf(owned, 'noise'), .1, 1), unawareDamage: valueOf(owned, 'unaware'), smokeReload: valueOf(owned, 'smokeReload'),
+    unawareScrap: valueOf(owned, 'unawareScrap'),
+    missingHpDamage: valueOf(owned, 'missingHp'), loopPerStack: valueOf(owned, 'loop'), hitCredit: valueOf(owned, 'hitCredit'), lastStand: valueOf(owned, 'lastStand'),
     stunKillCredit: x.stunKillCredit || 0, hitPulse: x.hitPulse || 0, unawareHeal: x.unawareHeal || 0, unawareStunMult: x.unawareStunMult || 1,
   };
 }

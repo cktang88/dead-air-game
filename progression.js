@@ -1,7 +1,6 @@
 import {BASE_CARRY_CAPACITY,TILE} from './catalog.js';
 import {emptyStats} from './goals.js';
 import {KITS, UNLOCK_BY_ID, isUnlocked, kitUnlocked} from './unlocks.js';
-import {freqStats} from './frequencies.js';
 import {COIN_RATES} from './run-loop.js';
 import {TAPE_BY_ID} from './story.js';
 import {INTERFERENCE_BY_ID} from './interference.js';
@@ -95,13 +94,12 @@ export function purchaseUpgrade(progress,id) {
   };
 }
 
-// Meta-upgrade stats, optionally folded with the run's frequencies (an object {upgradeId: rank}).
-export function progressionStats(progress,freqs={}) {
+// Meta-upgrade stats. Frequencies are behaviors, not stats, so they live in frequencies.js / freqStats().
+export function progressionStats(progress) {
   const {runner,stillmind,carryrig,salvager,luckyfind,roomsense,vitalreserve,highroller=0,adrenal=0,stockpile=0}=progress.upgrades;
-  const perk=freqStats(freqs);
   return {
-    moveSpeed:112*(1+.06*runner-.06*stockpile)*perk.moveMult,
-    idleScale:Math.max(.06,.18-.015*stillmind+perk.idleScaleDelta),
+    moveSpeed:112*(1+.06*runner-.06*stockpile),
+    idleScale:Math.max(.06,.18-.015*stillmind),
     maxHealth:Math.max(1,5+vitalreserve-adrenal),
     carryCapacity:BASE_CARRY_CAPACITY+carryrig,
     maxWeaponSlots:carryrig>=3?3:2,
@@ -112,7 +110,7 @@ export function progressionStats(progress,freqs={}) {
     // Run-economy and combat modifiers (tradeoff upgrades + perks).
     damageMult:1+.2*adrenal,
     startScrap:40+40*stockpile,
-    coinMult:(1+.25*highroller)*perk.coinMult,
+    coinMult:1+.25*highroller,
     deathKeep:highroller?.25:COIN_RATES.deathKeep,
   };
 }

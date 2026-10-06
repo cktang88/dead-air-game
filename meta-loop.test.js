@@ -113,12 +113,6 @@ test('high roller trades safety for coin income and stockpile trades speed for s
   assert.ok(Math.abs(progressionStats(sp).moveSpeed - 112 * .88) < 1e-9);
 });
 
-test('frequencies fold into progression stats', () => {
-  const stats = progressionStats(emptyProgress(), {long_still: 1, shadow_step: 1});
-  assert.ok(Math.abs(stats.idleScale - .14) < 1e-9);
-  assert.ok(Math.abs(stats.moveSpeed - 112 * 1.08) < 1e-9);
-});
-
 /* ------------------------------------------------------------------ frequencies */
 const seq = (seed = .3) => { let v = seed; return () => (v = (v * 9301 + .49297) % 1); };
 
@@ -147,7 +141,7 @@ test('two stations at level 2 switch on a crossfade', () => {
   assert.equal(activeCrossfades({arc: 1, through: 1}).length, 0);
   assert.equal(stationLevel(owned, 'static'), 2);
   assert.deepEqual(crossfadesCompletedBy({arc: 1, jam: 1, through: 1}, 'bounce').map(c => c.id), ['signal_boost']);
-  assert.ok(freqStats({rage: 1, overclock: 1, through: 1, bounce: 1}).bounceDamage > 0);
+  assert.ok(freqStats({rage: 1, loop: 1, through: 1, bounce: 1}).bounceDamage > 0);
 });
 
 test('frequency offers are three distinct upgrades with the next rank, honoring unlocks', () => {
@@ -162,7 +156,7 @@ test('frequency offers are three distinct upgrades with the next rank, honoring 
   assert.equal(availableUpgrades([], {arc: 3}).some(u => u.id === 'arc'), false);
   assert.equal(availableUpgrades(['freq:dead_channel'], {}).some(u => u.id === 'dead_channel'), true);
   assert.equal(availableUpgrades([], {}).some(u => u.id === 'dead_channel'), false);
-  assert.ok(unlockedFreqIds(grantUnlock(emptyProgress(), 'freq:wager')).includes('freq:wager'));
+  assert.ok(unlockedFreqIds(grantUnlock(emptyProgress(), 'freq:last_stand')).includes('freq:last_stand'));
 });
 
 test('offers lean toward owned stations and surface crossfade completers', () => {
@@ -220,7 +214,7 @@ test('boss goals: pistol finish unlocks the high roller and wager', () => {
   assert.ok(r.completed.some(goal => goal.id === 'boss_slayer'));
   assert.ok(r.completed.some(goal => goal.id === 'boss_pistol'));
   assert.equal(isUnlocked(r.progress, 'upg:highroller'), true);
-  assert.equal(isUnlocked(r.progress, 'freq:wager'), true);
+  assert.equal(isUnlocked(r.progress, 'freq:last_stand'), true);
   assert.equal(isUnlocked(r.progress, 'gun:sniper_mule'), true);
 });
 

@@ -15,7 +15,7 @@ export const GOALS = [
   {id:'kills_100', name:'CLEANER', desc:'Down 100 enemies across all runs.', metric:'totalKills', goal:100, reward:{coins:60, unlock:['freq:dead_channel']}},
   {id:'daily_1', name:'DAILY GRIND', desc:'Finish a daily seed run.', metric:'dailyRuns', goal:1, reward:{coins:40}},
   {id:'boss_slayer', name:'THE LAST NOTE', desc:'Defeat THE CONDUCTOR.', metric:'bossKills', goal:1, reward:{coins:300, unlock:['gun:sniper_mule']}},
-  {id:'boss_pistol', name:'SIDEARM SOLO', desc:'Land the killing blow on THE CONDUCTOR with a pistol.', metric:'bossPistolKills', goal:1, reward:{coins:200, unlock:['upg:highroller','freq:wager']}},
+  {id:'boss_pistol', name:'SIDEARM SOLO', desc:'Land the killing blow on THE CONDUCTOR with a pistol.', metric:'bossPistolKills', goal:1, reward:{coins:200, unlock:['upg:highroller','freq:last_stand']}},
   {id:'kills_500', name:'EXTERMINATOR', desc:'Down 500 enemies across all runs.', metric:'totalKills', goal:500, reward:{coins:120}},
   {id:'boss_3', name:'ENCORE', desc:'Defeat THE CONDUCTOR 3 times.', metric:'bossKills', goal:3, reward:{coins:150}},
 ];

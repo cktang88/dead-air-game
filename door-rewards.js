@@ -88,13 +88,13 @@ export function doorPreviews({rooms, doors, links, currentRoom}) {
   for (const link of links) {
     if (link.from === null || link.to === null) continue;
     const other = link.from === currentRoom ? link.to : link.to === currentRoom ? link.from : null;
-    if (other === null) continue;
+    if (other === null || seenTargets.has(other)) continue;
     const target = rooms[other];
     if (!target || target.cleared || !target.reward || target.rewardTaken) continue;
-    const door = doors[link.index], key = `${link.index}`;
-    if (seenTargets.has(key)) continue;
-    seenTargets.add(key);
-    markers.push({x: (door.x + .5) , y: (door.y + .5), room: other, reward: target.reward, info: REWARDS[target.reward], axis: door.axis});
+    seenTargets.add(other);
+    // One marker per destination, nudged into the room you are standing in so it never hides in the wall.
+    const door = doors[link.index], dx = here.cx - door.x, dy = here.cy - door.y, len = Math.hypot(dx, dy) || 1;
+    markers.push({x: door.x + .5 + dx / len * 1.3, y: door.y + .5 + dy / len * 1.3, room: other, reward: target.reward, info: REWARDS[target.reward], axis: door.axis});
   }
   return markers;
 }
