@@ -96,7 +96,7 @@ function random(){return ROT.RNG.getUniform();}
 function rand(min,max){ return min+random()*(max-min); }
 function choose(list){ return list[Math.floor(random()*list.length)]; }
 function distance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
-function clamp(n,min,max){ return Math.max(min,Math.min(max,n)); }
+import {clamp} from './util.js';
 function loadProgress(){try{return readSavedProgress(localStorage);}catch{return emptyProgress();}}
 function saveProgress(){try{writeSavedProgress(localStorage,state.progress);}catch{toast('PROGRESS COULD NOT BE SAVED');}}
 function resetProgress(){
@@ -108,21 +108,25 @@ function renderSlotStrip(){
   const strip=$('slot-strip');if(!strip)return;
   strip.innerHTML=state.weaponSlots.map((gi,slot)=>{const g=GUNS[gi];return `<div class="slot ${slot===state.activeSlot?'active':''}" style="--cat:${categoryColor(g.category)}">${keycap(keyLabel(binding(['weaponOne','weaponTwo','weaponThree'][slot])))}${gunIcon(g,'gun-ico sm')}<span class="slot-name">${g.name}</span><span class="slot-ammo">${state.weaponAmmo[gi]}<i>/${state.reserveAmmo[gi]}</i></span></div>`;}).join('');
 }
+// Per-frame HUD writes go through these: the DOM is only touched when the value actually changed.
+function setText(el,v){if(el._t!==v){el._t=v;el.textContent=v;}}
+function setHtml(el,v){if(el._h!==v){el._h=v;el.innerHTML=v;}}
 function syncWeaponPanel(){
   const gun=GUNS[state.weaponIndex],mag=magSize(gun),cur=state.weaponAmmo[state.weaponIndex],reloading=state.reloadTimer>0;
-  const ammoEl=$('ammo'),low=cur<=Math.ceil(mag*.25);ammoEl.innerHTML=`<b class="${cur===0?'empty':low?'low':''}">${cur}</b><i>/ ${mag}</i>`;
-  $('ammo-reserve').textContent=`RES ${state.reserveAmmo[state.weaponIndex]}`;
-  const pips=$('ammo-pips');if(pips.dataset.mag!==String(mag)){pips.dataset.mag=String(mag);pips.innerHTML=Array.from({length:mag},()=>'<i></i>').join('');pips.classList.toggle('dense',mag>24);}
-  const kids=pips.children;for(let i=0;i<kids.length;i++)kids[i].classList.toggle('on',i<cur);
-  const track=$('reload-track');track.classList.toggle('active',reloading);if(reloading)$('reload-fill').style.width=`${Math.round(clamp(1-state.reloadTimer/Math.max(.01,reloadDuration(gun)),0,1)*100)}%`;
-  $('weapon-note').textContent=reloading?'RELOADING':gun.id==='shotgun'?`${shellForRun().name} · C TO CYCLE`:gun.short;
+  const low=cur<=Math.ceil(mag*.25);setHtml($('ammo'),`<b class="${cur===0?'empty':low?'low':''}">${cur}</b><i>/ ${mag}</i>`);
+  setText($('ammo-reserve'),`RES ${state.reserveAmmo[state.weaponIndex]}`);
+  const pips=$('ammo-pips');if(pips.dataset.mag!==String(mag)){pips.dataset.mag=String(mag);pips.innerHTML=Array.from({length:mag},()=>'<i></i>').join('');pips.classList.toggle('dense',mag>24);pips._on=-1;}
+  if(pips._on!==cur){pips._on=cur;const kids=pips.children;for(let i=0;i<kids.length;i++)kids[i].classList.toggle('on',i<cur);}
+  const track=$('reload-track');if(track._a!==reloading){track._a=reloading;track.classList.toggle('active',reloading);}
+  if(reloading){const fill=$('reload-fill'),w=`${Math.round(clamp(1-state.reloadTimer/Math.max(.01,reloadDuration(gun)),0,1)*100)}%`;if(fill._w!==w){fill._w=w;fill.style.width=w;}}
+  setText($('weapon-note'),reloading?'RELOADING':gun.id==='shotgun'?`${shellForRun().name} · C TO CYCLE`:gun.short);
   const icon=$('gun-icon'),key=`${gun.id}`;if(icon.dataset.g!==key){icon.dataset.g=key;icon.innerHTML=gunIcon(gun,'gun-ico lg');icon.style.setProperty('--cat',categoryColor(gun.category));}
 }
 function syncRunStats(){
-  $('kills').textContent=String(state.kills).padStart(2,'0');$('scrap').textContent=String(state.scrap).padStart(3,'0');
-  $('sector-count').textContent=`${String(state.roomsCleared)} / ${String(state.rooms.length)}`;
-  $('run-clock').textContent=formatClock(state.elapsed);
-  $('room-name').textContent=state.roomToast||`FLOOR 01 · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`;
+  setText($('kills'),String(state.kills).padStart(2,'0'));setText($('scrap'),String(state.scrap).padStart(3,'0'));
+  setText($('sector-count'),`${String(state.roomsCleared)} / ${String(state.rooms.length)}`);
+  setText($('run-clock'),formatClock(state.elapsed));
+  setText($('room-name'),state.roomToast||`FLOOR 01 · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`);
 }
 function hud(){
   const gun=GUNS[state.weaponIndex];
@@ -661,12 +665,15 @@ function enemyNav(){
   }
   return state.nav;
 }
+// The brain's world view is reused between frames (objects and arrays mutated in place) instead of rebuilt every tick.
+const enemyWorld={nav:null,player:{x:0,y:0,vx:0,vy:0,radius:8},los:(ax,ay,bx,by)=>!lineBlocked(ax,ay,bx,by),enemies:null,smoke:[],projectiles:[],noises:null,
+  fireAllowed:e=>withinWorldView(e,state.player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT)};
 function updateEnemies(dt){
-  const player=state.player,nav=enemyNav(),pv=player.body.linvel();
-  const world={nav,player:{x:player.x,y:player.y,vx:pv.x,vy:pv.y,radius:8},los:(ax,ay,bx,by)=>!lineBlocked(ax,ay,bx,by),enemies:state.enemies,
-    smoke:state.effects.filter(effect=>effect.id==='smoke'&&effect.remaining>0).map(effect=>({x:effect.x,y:effect.y,radius:effect.item.radius})),
-    projectiles:state.bullets.filter(b=>b.owner==='player'),noises:state.noises,
-    fireAllowed:e=>withinWorldView(e,player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight,CAMERA_HALF_HEIGHT)};
+  const player=state.player,nav=enemyNav(),pv=player.body.linvel(),world=enemyWorld;
+  world.nav=nav;world.enemies=state.enemies;world.noises=state.noises;world.coverBudget=2;
+  const wp=world.player;wp.x=player.x;wp.y=player.y;wp.vx=pv.x;wp.vy=pv.y;
+  world.smoke.length=0;for(const effect of state.effects)if(effect.id==='smoke'&&effect.remaining>0)world.smoke.push({x:effect.x,y:effect.y,radius:effect.item.radius});
+  world.projectiles.length=0;for(const b of state.bullets)if(b.owner==='player')world.projectiles.push(b);
   for(const e of state.enemies){if(!e.alive)continue;const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
     const out=stepEnemyBrain(e,world,dt,random),canSee=out.sees;
     e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;
@@ -739,7 +746,7 @@ function update(dt){
   $('tempo-label').textContent=tv.label;$('tempo-speed').textContent=tv.speed;$('tempo-fill').style.width=`${tv.percent}%`;$('tempo-hint').textContent=tv.hint;
   drawMinimap();syncHudFrame();
 }
-function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);}
+function makeMinimap(){const c=$('minimap'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);mm.key='';mm.lookup=null;}
 function drawLootScannerPings(ctx,sx,sy,player){
   const scanRange=GEAR.find(item=>item.id===state.gear)?.pickupScanRange||0;
   if(!player||!scanRange)return;
@@ -750,17 +757,36 @@ function drawLootScannerPings(ctx,sx,sy,player){
     ctx.fillStyle=MINIMAP_LOOT_COLORS[pickup.kind]||'#d4d0da';ctx.fillRect(pickup.x/TILE*sx-1,pickup.y/TILE*sy-1,2,2);
   }
 }
-function drawMinimap(){const c=$('minimap'),ctx=c.getContext('2d'),sx=c.width/state.mapW,sy=c.height/state.mapH;ctx.fillStyle='#171420';ctx.fillRect(0,0,c.width,c.height);
-  const scanRange=progressionStats(state.progress).scannerRange,player=state.player;
-  for(const r of state.rooms){const roomDistance=player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity;if(!minimapContactVisible({visited:r.visited,distance:roomDistance,scanRange,secret:r.secret}))continue;ctx.fillStyle=r.visited?'#45404e':'#34303a';for(let y=r.y1;y<=r.y2;y++)for(let x=r.x1;x<=r.x2;x++)if(state.tileMap[y]?.[x]===0)ctx.fillRect(x*sx, y*sy, sx+.2, sy+.2);}
-  ctx.fillStyle='#ed5a68';for(const e of state.enemies){if(!e.alive)continue;const ex=e.x/TILE,ey=e.y/TILE,spawnRoom=state.rooms[e.roomIndex],room=state.rooms.find(r=>ex>=r.x1&&ex<=r.x2&&ey>=r.y1&&ey<=r.y2),enemyDistance=state.player?distance(state.player,e):Infinity;if(minimapContactVisible({visited:!!room?.visited,distance:enemyDistance,scanRange,secret:spawnRoom?.secret&&!spawnRoom.visited}))ctx.fillRect(ex*sx-1,ey*sy-1,3,3);}
-  {const seen=r=>r&&minimapContactVisible({visited:r.visited,distance:player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity,scanRange,secret:r.secret});
+// The minimap's room layer only changes when a room becomes visited or scanner-visible, so it is drawn once into an
+// offscreen canvas and re-rendered when that visibility key changes. Enemy room lookups use a tile -> room table.
+const mm={c:null,ctx:null,layer:null,key:'',tileMap:null,lookup:null,vis:[]};
+function minimapLookup(){
+  if(mm.tileMap===state.tileMap&&mm.lookup)return mm.lookup;
+  const w=state.mapW,h=state.mapH,t=new Int16Array(w*h).fill(-1);
+  for(let i=state.rooms.length-1;i>=0;i--){const r=state.rooms[i];for(let y=Math.max(0,r.y1);y<=Math.min(h-1,r.y2);y++)for(let x=Math.max(0,r.x1);x<=Math.min(w-1,r.x2);x++)t[y*w+x]=i;}
+  mm.tileMap=state.tileMap;mm.lookup=t;mm.key='';return t;
+}
+function drawMinimap(){
+  const c=mm.c||(mm.c=$('minimap')),ctx=mm.ctx||(mm.ctx=c.getContext('2d')),sx=c.width/state.mapW,sy=c.height/state.mapH;
+  const scanRange=progressionStats(state.progress).scannerRange,player=state.player,lookup=minimapLookup(),rooms=state.rooms,vis=mm.vis;
+  let key=`${state.mapW}x${state.mapH}:`;
+  for(let i=0;i<rooms.length;i++){const r=rooms[i];const roomDistance=player?distanceToRect(player,{left:r.x1*TILE,top:r.y1*TILE,right:(r.x2+1)*TILE,bottom:(r.y2+1)*TILE}):Infinity;
+    vis[i]=minimapContactVisible({visited:r.visited,distance:roomDistance,scanRange,secret:r.secret});key+=vis[i]?(r.visited?'2':'1'):'0';}
+  if(key!==mm.key){
+    mm.key=key;
+    const lc=mm.layer||(mm.layer=document.createElement('canvas'));if(lc.width!==c.width||lc.height!==c.height){lc.width=c.width;lc.height=c.height;}
+    const lg=lc.getContext('2d');lg.fillStyle='#171420';lg.fillRect(0,0,lc.width,lc.height);
+    for(let i=0;i<rooms.length;i++){if(!vis[i])continue;const r=rooms[i];lg.fillStyle=r.visited?'#45404e':'#34303a';for(let y=r.y1;y<=r.y2;y++)for(let x=r.x1;x<=r.x2;x++)if(state.tileMap[y]?.[x]===0)lg.fillRect(x*sx, y*sy, sx+.2, sy+.2);}
+  }
+  ctx.drawImage(mm.layer,0,0);
+  ctx.fillStyle='#ed5a68';for(const e of state.enemies){if(!e.alive)continue;const ex=e.x/TILE,ey=e.y/TILE,spawnRoom=rooms[e.roomIndex],tx=Math.floor(ex),ty=Math.floor(ey),ri=tx>=0&&ty>=0&&tx<state.mapW&&ty<state.mapH?lookup[ty*state.mapW+tx]:-1,room=ri>=0?rooms[ri]:undefined,enemyDistance=player?distance(player,e):Infinity;if(minimapContactVisible({visited:!!room?.visited,distance:enemyDistance,scanRange,secret:spawnRoom?.secret&&!spawnRoom.visited}))ctx.fillRect(ex*sx-1,ey*sy-1,3,3);}
+  {const seen=r=>r&&vis[rooms.indexOf(r)];let anySeen=false;for(let i=0;i<vis.length;i++)if(vis[i]){anySeen=true;break;}
     const mark=(id,x,y,color)=>{ctx.fillStyle='rgba(23,20,32,.85)';ctx.beginPath();ctx.arc(x,y,6.5,0,TAU);ctx.fill();drawIcon(ctx,id,x,y,10,color);};
-    for(const r of state.rooms){if(!seen(r))continue;const x=(r.cx+.5)*sx,y=(r.cy+.5)*sy;if(r.role==='merchant')mark('station-merchant',x,y,'#ffd27a');else if(r.role==='clinic')mark('pickup-heal',x,y,'#74dfab');}
-    if(state.rooms[0]&&state.workbench)mark('station-workbench',state.workbench.x/TILE*sx,state.workbench.y/TILE*sy,'#8fe0ff');
-    for(const p of state.pickups){if(!p.available)continue;if(p.kind==='cache'){const r=state.rooms[p.roomIndex];if(r&&seen(r)&&!(r.secret&&!r.visited))mark('station-cache',p.x/TILE*sx,p.y/TILE*sy,'#f4c66d');}}
-    for(const g of state.lockedDoors)if(!g.opened&&state.rooms.some(seen))mark('lock-locked',(g.x+.5)*sx,(g.y+.5)*sy,'#ffb04a');
-    for(const p of state.pickups)if(p.available&&p.kind==='exit'){const ready=!hasUnclearedRouteEnemies(state.rooms,state.enemies);mark('exit-extraction',p.x/TILE*sx,p.y/TILE*sy,ready?'#6dffb0':'#ff6a78');}}
+    for(const r of rooms){if(!seen(r))continue;const x=(r.cx+.5)*sx,y=(r.cy+.5)*sy;if(r.role==='merchant')mark('station-merchant',x,y,'#ffd27a');else if(r.role==='clinic')mark('pickup-heal',x,y,'#74dfab');}
+    if(rooms[0]&&state.workbench)mark('station-workbench',state.workbench.x/TILE*sx,state.workbench.y/TILE*sy,'#8fe0ff');
+    for(const p of state.pickups){if(!p.available)continue;if(p.kind==='cache'){const r=rooms[p.roomIndex];if(r&&seen(r)&&!(r.secret&&!r.visited))mark('station-cache',p.x/TILE*sx,p.y/TILE*sy,'#f4c66d');}}
+    for(const g of state.lockedDoors)if(!g.opened&&anySeen)mark('lock-locked',(g.x+.5)*sx,(g.y+.5)*sy,'#ffb04a');
+    for(const p of state.pickups)if(p.available&&p.kind==='exit'){const ready=!hasUnclearedRouteEnemies(rooms,state.enemies);mark('exit-extraction',p.x/TILE*sx,p.y/TILE*sy,ready?'#6dffb0':'#ff6a78');}}
   drawLootScannerPings(ctx,sx,sy,player);
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
@@ -871,7 +897,7 @@ function setupControls(){
 }
 async function boot(){
   await RAPIER.init();
-  view=createRenderer($('game'),state);window.__deadair={state,view};
+  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').textContent='ENTER THE SECTOR ↗';
   let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;if(state.mode==='play')update(dt);render(dt);}requestAnimationFrame(loop);
 }
