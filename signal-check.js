@@ -96,7 +96,7 @@ export const SCRIPT = [
     card: {id: 'mech.door', title: 'DOOR', line: 'hold E to peek'},
   },
   {
-    id: 'choice', name: 'CHOICE', start: {x: 75.5, y: 8.5}, idleHint: null,
+    id: 'choice', name: 'CHOICE', start: {x: 79.5, y: 6.5}, idleHint: null,
     goal: {type: 'pick'},
     unlock: null,
     props: [], enemies: [],
