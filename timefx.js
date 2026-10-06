@@ -33,7 +33,7 @@ export function createTimeFx() {
     for (let i = 0; i < GRAIN_TILES; i++) {
       const c = mk(GRAIN_SIZE, GRAIN_SIZE); if (!c) return tiles;
       const g = c.getContext('2d'), img = g.createImageData(GRAIN_SIZE, GRAIN_SIZE), d = img.data;
-      for (let p = 0; p < d.length; p += 4) { const v = Math.random() < 0.5 ? 255 : 0; d[p] = d[p + 1] = d[p + 2] = v; d[p + 3] = Math.random() * 70; }
+      for (let p = 0; p < d.length; p += 4) { const v = Math.random() < 0.5 ? 255 : 0; d[p] = d[p + 1] = d[p + 2] = v; d[p + 3] = Math.random() * 60; }
       g.putImageData(img, 0, 0); tiles.push(c);
     }
     return tiles;
@@ -44,7 +44,7 @@ export function createTimeFx() {
     if (fx.vig && fx.vigKey === key) return fx.vig;
     const c = mk(256, Math.max(64, Math.round(256 * h / w))); if (!c) return null;
     const g = c.getContext('2d'), grad = g.createRadialGradient(c.width / 2, c.height / 2, c.height * 0.28, c.width / 2, c.height / 2, c.width * 0.62);
-    grad.addColorStop(0, 'rgba(8,14,34,0)'); grad.addColorStop(0.6, 'rgba(8,14,34,0.4)'); grad.addColorStop(1, 'rgba(4,8,22,0.95)');
+    grad.addColorStop(0, 'rgba(8,14,34,0)'); grad.addColorStop(0.65, 'rgba(8,14,34,0.2)'); grad.addColorStop(1, 'rgba(4,8,22,0.62)');
     g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
     fx.vig = c; fx.vigKey = key; return c;
   }
@@ -63,29 +63,43 @@ export function createTimeFx() {
     return this.slow;
   };
 
+  // Selective colour: the ENVIRONMENT (floor, walls, props, crates) drains first and hardest while actors, bullets and
+  // pickups are drawn afterwards at full colour, so in frozen time the things that matter pop off a calm, cool backdrop.
+  // Screen space (identity transform). Call after the environment is drawn and before actors. `rooms` is an optional
+  // list of {x, y, w, h, color} screen-pixel rects: each room's accent colour is washed back in AFTER the drain so
+  // every room keeps its identity in slow time.
+  fx.drawEnv = function drawEnv(ctx, w, h, rooms) {
+    const g = clamp(this.slow * (1 - 0.55 * this.pulse), 0, 1);
+    ctx.save();
+    if (g > 0.01) { ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.6 * g; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, w, h); }
+    // floor luminance LIFT (screen raises blacks far more than highlights): frozen time must read, not sink into the dark
+    ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.55 + 0.4 * g; ctx.fillStyle = 'rgb(34,40,56)'; ctx.fillRect(0, 0, w, h);
+    if (rooms) for (const r of rooms) { // each room's accent colour survives the drain (a little at 1x, more in slow time)
+      ctx.globalCompositeOperation = 'color'; ctx.globalAlpha = 0.09 + 0.12 * g; ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.03 + 0.03 * g; ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+    ctx.restore();
+  };
+
   // Screen space (identity transform), after the world and lights are drawn. w/h are canvas pixels.
   fx.draw = function draw(ctx, w, h, dpr = 1, flashK = 1) {
     const g = clamp(this.slow * (1 - 0.55 * this.pulse * flashK), 0, 1);
     if (g > 0.01) {
       ctx.save();
-      // 1. drain colour hard
-      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.82 * g; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, w, h);
-      // 2. cold tint (multiply keeps highlights icy rather than flat blue)
-      ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.5 * g; ctx.fillStyle = '#9fb8ff'; ctx.fillRect(0, 0, w, h);
+      // 1. a light touch of drain over everything (the environment already drained in drawEnv)
+      ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.12 * g; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = 'source-over';
-      // 3. vignette that closes in as time thins
-      const v = vignette(w, h); if (v) { ctx.globalAlpha = 0.62 * g; ctx.drawImage(v, 0, 0, w, h); }
-      // 4. film grain + flicker (grain tile jumps ~12 times a second; stronger the slower the world)
+      // 2. a gentle vignette that closes in as time thins
+      const v = vignette(w, h); if (v) { ctx.globalAlpha = 0.3 * g; ctx.drawImage(v, 0, 0, w, h); }
+      // 3. very fine film grain (tile jumps ~10 times a second); barely there, never competes with the read
       if (!this.grain) this.grain = buildGrain();
       if (this.grain.length) {
-        const frameIdx = Math.floor(this.t * 12), tile = this.grain[frameIdx % this.grain.length];
+        const frameIdx = Math.floor(this.t * 10), tile = this.grain[frameIdx % this.grain.length];
         const ox = (frameIdx * 53) % GRAIN_SIZE, oy = (frameIdx * 97) % GRAIN_SIZE, s = Math.max(1, dpr);
-        ctx.globalAlpha = (0.1 + 0.34 * g) * flashK;
+        ctx.globalAlpha = (0.02 + 0.07 * g) * flashK;
         const pat = ctx.createPattern(tile, 'repeat');
         if (pat) { ctx.translate(-ox * s, -oy * s); ctx.scale(s, s); ctx.fillStyle = pat; ctx.fillRect(ox, oy, w / s + GRAIN_SIZE, h / s + GRAIN_SIZE); ctx.setTransform(1, 0, 0, 1, 0, 0); }
       }
-      const fl = (Math.sin(this.t * 41) + Math.sin(this.t * 23.3 + 1.7)) * 0.5;
-      ctx.globalAlpha = Math.max(0, 0.05 * g * (0.5 + fl)) * flashK; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
       ctx.restore();
     }
     if (this.pulse > 0.02) { // beat: a brief cool-white tick as the world lets a moment through
