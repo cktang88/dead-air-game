@@ -50,22 +50,22 @@ export function armsOffer({rng = Math.random, gunCandidates = [], activeGun = nu
 }
 
 /** Can this offer be taken right now, and if not, why (shown on the card). */
-export function offerStatus(offer, {scrap = 0, ammoNeed = false, health = 1, maxHealth = 1, activeModId = null, hasGunInHand = true} = {}) {
+export function offerStatus(offer, {scrap = 0, ammoNeed = false, health = 1, maxHealth = 1, activeModId = null, hasGunInHand = true, carried = []} = {}) {
   if (offer.sold) return {ok: false, reason: 'BOUGHT'};
-  const base = offerUsable(offer, {ammoNeed, health, maxHealth, activeModId, hasGunInHand});
+  const base = offerUsable(offer, {ammoNeed, health, maxHealth, activeModId, hasGunInHand, carried});
   if (!base.ok) return base;
   const cost = offer.cost || 0;
   return scrap >= cost ? base : {ok: false, reason: `NEED ${cost - Math.floor(scrap)} MORE SCRAP`};
 }
 
-function offerUsable(offer, {ammoNeed, health, maxHealth, activeModId, hasGunInHand}) {
+function offerUsable(offer, {ammoNeed, health, maxHealth, activeModId, hasGunInHand, carried = []}) {
   if (offer.kind === 'ammo') return ammoNeed ? {ok: true, reason: ''} : {ok: false, reason: 'AMMO ALREADY FULL'};
   if (offer.kind === 'heal') return health < maxHealth ? {ok: true, reason: ''} : {ok: false, reason: 'HEALTH ALREADY FULL'};
   if (offer.kind === 'mod') {
     if (!hasGunInHand) return {ok: false, reason: 'NO GUN IN HAND'};
     return offer.modId === activeModId ? {ok: false, reason: 'ALREADY FITTED'} : {ok: true, reason: ''};
   }
-  if (offer.kind === 'gun') return {ok: true, reason: ''};
+  if (offer.kind === 'gun') return carried.includes(offer.gunIndex) ? {ok: false, reason: 'ALREADY CARRIED'} : {ok: true, reason: ''};
   if (offer.kind === 'freq') return {ok: true, reason: ''};
   return {ok: false, reason: ''};
 }

@@ -12,7 +12,7 @@ export const RANGE = Object.freeze({gate: 38, supply: 40, gun: 36, mod: 34, exit
 /** Within this distance an out-of-range interactable shows a small name tag so you know what it is. */
 export const LABEL_RANGE = 300;
 /** Lower number wins when several targets are in range at once (same order interact() always used). */
-export const PRIORITY = Object.freeze({gate: 0, door: 0.5, supply: 1, gun: 3, mod: 3, exit: 5, pickup: 6});
+export const PRIORITY = Object.freeze({gate: 0, door: 4, supply: 1, gun: 3, mod: 3, exit: 5, pickup: 6});
 const prio = k => PRIORITY[k] ?? 9;
 
 import {dist} from './util.js';
