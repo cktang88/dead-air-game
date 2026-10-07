@@ -149,6 +149,52 @@ export function ambienceCutChatter(id){
   A.chat.delete(v.id);A.stats.cuts++;
 }
 
+/** A brass casing tinks off the floor: two tiny pitched pings. Very quiet, positional, throttled by the caller's 50 % dice. */
+export function ambienceTink(pan=0,near=.5){
+  if(!A||A.ctx.state!=='running'||near<=.05)return;
+  const t=A.ctx.currentTime+.005,out=spatial(pan),vol=.035*near;
+  [[3100,0],[4300,.045]].forEach(([hz,dt],i)=>{
+    const o=A.ctx.createOscillator(),g=A.ctx.createGain();o.type='triangle';o.frequency.value=hz*(.92+A.rng()*.16);
+    g.gain.setValueAtTime(.0001,t+dt);g.gain.linearRampToValueAtTime(vol/(i+1),t+dt+.002);g.gain.exponentialRampToValueAtTime(.0001,t+dt+.09);
+    o.connect(g);g.connect(out);o.start(t+dt);o.stop(t+dt+.12);
+  });
+}
+
+/* ------------------------------------------------------------ dead radios + the number station */
+
+/** A dead enemy's radio keeps crackling for a few seconds: three faint, fading static bursts. */
+function deadRadio(e,p){
+  const d=Math.hypot(e.x-p.x,e.y-p.y);if(d>CHATTER_RANGE*.7)return;
+  const pan=Math.max(-1,Math.min(1,(e.x-p.x)/480)),base=.05*Math.pow(1-d/(CHATTER_RANGE*.7),1.5),t=A.ctx.currentTime;
+  for(let i=0;i<3;i++){const at=t+.25+i*.8+A.rng()*.3;burst(at,.14+A.rng()*.1,{hz:1800+A.rng()*900,q:.7,vol:base*(1-i*.28),pan,chop:.012});}
+}
+
+/**
+ * The rare NUMBER STATION: in flagged rooms a flat, filtered voice-like beep pattern counts digits down, over and over,
+ * very quietly. Digit n is n short beeps (0 = one long tone); a low "ready" tone opens each group. Purely atmospheric.
+ */
+function numberStation(active,digits){
+  const N=A.num||(A.num={on:false,gain:null,next:0,i:0});
+  if(active&&!N.on){
+    const g=A.ctx.createGain();g.gain.value=0;const lp=filt('lowpass',1900,.9),hp=filt('highpass',300,.7);lp.connect(hp);hp.connect(g);g.connect(A.bus);
+    N.on=true;N.gain=g;N.in=lp;N.next=A.ctx.currentTime+1.6;N.i=0;g.gain.setTargetAtTime(1,A.ctx.currentTime,.8);
+  }else if(!active&&N.on){
+    N.on=false;const g=N.gain,n=A.ctx.currentTime;g.gain.setTargetAtTime(0,n,.5);setTimeout(()=>{try{g.disconnect();}catch{/* gone */}},2500);N.gain=null;
+  }
+  if(!N.on)return;
+  const now=A.ctx.currentTime;
+  while(N.next<now+.4){
+    const digit=digits[N.i%digits.length],tAt=N.next;
+    const tone=(at,dur,hz,vol)=>{const o=A.ctx.createOscillator(),e=A.ctx.createGain();o.type='sine';o.frequency.value=hz;tape(o);
+      e.gain.setValueAtTime(.0001,at);e.gain.linearRampToValueAtTime(vol,at+.01);e.gain.setValueAtTime(vol,at+dur-.015);e.gain.linearRampToValueAtTime(.0001,at+dur);o.connect(e);e.connect(N.in);o.start(at);o.stop(at+dur+.02);};
+    tone(tAt,.34,440,.05);
+    let at=tAt+.5;
+    const beeps=digit===0?1:digit,hz=620+digit*34;
+    for(let b=0;b<beeps;b++){const dur=digit===0?.55:.09;tone(at,dur,hz,.045);at+=dur+.075;}
+    N.next=at+.7+(N.i%9===8?1.8:0);N.i++;
+  }
+}
+
 export const getAmbienceStats=()=>A?{...A.stats,theme:A.theme,chatting:A.chat.size}:null;
 
 /**
@@ -165,7 +211,8 @@ export function ambienceSync(state,dt=1/60){
   if(state.mode!=='play'){for(const id of [...A.chat.keys()])ambienceCutChatter(id);A.lastRoom=null;return;}
   if(A.lastRoom!==null&&state.currentRoom!==A.lastRoom&&playing)ambienceStatic();
   A.lastRoom=state.currentRoom;
-  if(!playing)return;
+  if(!playing){numberStation(false,[]);return;}
+  numberStation(!!state.numberRooms?.has(state.currentRoom),state.numberDigits||(state.numberDigits=Array.from({length:9},(_,i)=>(i*7+(state.seed|0)+state.floor*3)%10)));
   A.machine-=dt;
   if(A.machine<=0){const ev=nextMachineryEvent(A.rng);A.machine=ev.delay;machinery(ev.type);}
   const p=state.player;if(!p)return;
@@ -173,7 +220,7 @@ export function ambienceSync(state,dt=1/60){
   for(const [id,v] of [...A.chat])if(v.end<now){A.chat.delete(id);}
   if(A.cool.size>64){const ids=new Set((state.enemies||[]).map(e=>e.id));for(const id of A.cool.keys())if(!ids.has(id))A.cool.delete(id);}
   for(const e of state.enemies||[]){
-    if(!e.alive){if(A.chat.has(e.id))ambienceCutChatter(e.id);A.cool.delete(e.id);continue;}
+    if(!e.alive){if(A.chat.has(e.id))ambienceCutChatter(e.id);A.cool.delete(e.id);if(e.corpseTimer>0&&e.type!=='boss'&&!(A.dead||(A.dead=new WeakSet())).has(e)){A.dead.add(e);deadRadio(e,p);}continue;}
     const d=Math.hypot(e.x-p.x,e.y-p.y);if(d>CHATTER_RANGE)continue;
     const live=A.chat.get(e.id);
     if(live){live.pan=(e.x-p.x)/480;continue;}

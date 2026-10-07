@@ -244,7 +244,7 @@ export class Fx {
         p.vz -= p.g * dt; p.z += p.vz * dt; p.tm += p.vr * 0.7 * dt;
         if (p.z <= 0) {
           p.z = 0;
-          if (p.vz < -24) { p.vz = -p.vz * p.bounce; p.vr *= 0.55; p.vx *= 0.7; p.vy *= 0.7; }
+          if (p.vz < -24) { if (p.kind === 'casing' && this.onTink && ((p.tinks = (p.tinks || 0) + 1) <= 2) && Math.random() < 0.5) this.onTink(p.x, p.y); p.vz = -p.vz * p.bounce; p.vr *= 0.55; p.vx *= 0.7; p.vy *= 0.7; }
           else { p.vz = 0; p.vr *= Math.exp(-16 * dt); p.drag = 11; }
         }
       }

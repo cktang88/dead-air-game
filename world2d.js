@@ -114,6 +114,27 @@ export class WorldLayer {
     this.cw = CW;
   }
 
+  // A wall opened at runtime (the cracked secret wall): `cells` ([{x, y}]) just became floor in the shared tileMap. Re-derive the
+  // tile kinds around them and drop the chunks they touch so those re-bake with the new floor and wall edges.
+  patchTiles(cells) {
+    const L = this.level;
+    if (!L || !cells?.length) return;
+    const {tileMap, w, h, isFloor} = L;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (const c of cells) { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x); y1 = Math.max(y1, c.y); }
+    x0 = Math.max(0, x0 - 2); y0 = Math.max(0, y0 - 2); x1 = Math.min(w - 1, x1 + 2); y1 = Math.min(h - 1, y1 + 2);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (isFloor(x, y)) { L.kind[y * w + x] = 0; continue; }
+      if (L.cover.has(y * w + x)) continue;
+      let near = false;
+      for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) if (isFloor(x + dx, y + dy)) { near = true; break; }
+      L.kind[y * w + x] = near ? 1 : 2;
+    }
+    void tileMap;
+    for (let cy = Math.floor((y0 - 3) / CHUNK_TILES); cy <= Math.floor((y1 + 3) / CHUNK_TILES); cy++) for (let cx = Math.floor((x0 - 3) / CHUNK_TILES); cx <= Math.floor((x1 + 3) / CHUNK_TILES); cx++) this.chunks.delete(cy * 1000 + cx);
+    this.queue = []; this.queueDone = false; this.version++;
+  }
+
   chunkAt(cx, cy) {
     const L = this.level;
     if (!L || cx < 0 || cy < 0 || cx * CHUNK_TILES >= L.w || cy * CHUNK_TILES >= L.h) return null;
