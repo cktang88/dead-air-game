@@ -37,3 +37,11 @@ test('slow amount maps time scale to 0..1', () => {
   assert.equal(slowAmount(0.18), 1);
   assert.ok(slowAmount(0.6) > 0 && slowAmount(0.6) < 1);
 });
+
+test('default view shows past the longest common engagement range along the wide axis', async () => {
+  const {ENEMY_TYPES} = await import('./catalog.js');
+  const cam = resizeCamera(createCamera(), 1280, 720), b = viewBounds(cam, 0);
+  const halfW = (b.x1 - b.x0) / 2, halfH = (b.y1 - b.y0) / 2;
+  assert.ok(halfW >= ENEMY_TYPES.gunner.range * 1.5, `half width ${halfW} must cover 1.5x gunner range`);
+  assert.ok(halfH + 96 >= ENEMY_TYPES.gunner.range, 'look-ahead gives vertical coverage of gunner range');
+});

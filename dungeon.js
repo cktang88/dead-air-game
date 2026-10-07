@@ -4,7 +4,7 @@ import {stampRoomTemplates} from './room-templates.js';
 import {assignRoomRoles} from './room-roles.js';
 
 // Digger parameters: wide size ranges give real room variety (closets to halls); short corridors keep floors tight.
-const DIGGER={roomWidth:[6,22],roomHeight:[6,15],corridorLength:[2,4],dugPercentage:0.26};
+const DIGGER={roomWidth:[9,24],roomHeight:[8,16],corridorLength:[2,4],dugPercentage:0.26};
 const ROOM_NAMES = ['FURNACE', 'THE GALLERY', 'COLD STORAGE', 'RED HALL', 'MOTOR POOL', 'THE VAULT', 'NIGHT SHIFT'];
 
 export function nameDungeonRooms(rooms){
@@ -16,8 +16,8 @@ export function nameDungeonRooms(rooms){
   });
 }
 
-export function generateDungeon(ROT, seed, width = 96, height = 72) {
-  const attempts = [[width, height], [Math.max(width, 108), Math.max(height, 82)]];
+export function generateDungeon(ROT, seed, width = 116, height = 84) {
+  const attempts = [[width, height], [Math.max(width, 132), Math.max(height, 96)]];
   for (const [mapWidth, mapHeight] of attempts) {
     ROT.RNG.setSeed(seed);
     const generator = new ROT.Map.Digger(mapWidth, mapHeight, {

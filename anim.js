@@ -121,5 +121,5 @@ export function swapPose(p, out) {
 // Zoom the camera wants this frame: out when sprinting, a little in when time is slow, plus a decaying punch.
 export function cameraZoom({sprint = 0, slow = 0, punch = 0, motion = 1} = {}) {
   const m = clamp(motion);
-  return 1 - 0.045 * sprint * m + 0.03 * slow * m + punch * m;
+  return 1 - 0.045 * sprint * m + 0.01 * slow * m + punch * m;
 }
