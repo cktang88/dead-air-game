@@ -108,7 +108,6 @@ export const MANUAL = Object.freeze([
   // ROOMS
   {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'E opens a door (quietly; at a sprint it is loud). Hold E to peek in frozen time.'},
   {id: 'clear', section: 'ROOMS', title: 'CLEARING', line: 'Clearing a room pays scrap and drops a medkit when you are hurt.'},
-  {id: 'regen', section: 'ROOMS', title: 'CALM', line: 'Rest in a cleared room and you mend slowly, up to about 60 percent.'},
   {id: 'rewards', section: 'ROOMS', title: 'REWARD DOORS', line: 'The icon over a doorway shows what the room beyond pays.'},
   {id: 'minimap', section: 'ROOMS', title: 'MINIMAP', line: 'Dots are enemies in rooms you have seen.'},
 ]);
@@ -158,7 +157,6 @@ export function manualTriggers(ctx) {
   add('extract', ctx.exitOpen);
   add('door', ctx.doorSeen);
   add('clear', ctx.roomsCleared >= 1);
-  add('regen', ctx.calmRegen);
   add('rewards', ctx.rewardDoors);
   add('minimap', ctx.minimapEnemies);
   return ids;
