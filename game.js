@@ -148,7 +148,7 @@ function syncWeaponPanel(){
 function routeStats(){let total=0,cleared=0;for(const r of state.rooms){if(r.branch===true||!roomHasEncounter(r))continue;total++;if(r.cleared)cleared++;}return {total,cleared};}
 function syncRunStats(){
   tickNumber($('kills'),state.kills,2);tickNumber($('scrap'),state.scrap,3);
-  {const r=routeStats();setText($('sector-count'),`${r.cleared} / ${r.total}`);}
+  {const r=routeStats(),stat=$('sector-count').parentElement;if(stat)stat.hidden=signalOn();setText($('sector-count'),`${r.cleared} / ${r.total}`);}   // Signal Check has its own N / 5 chip: the route counter would read 0 / 0
   setText($('run-clock'),`RUN ${formatClock(state.realElapsed)}`);
   setText($('room-name'),state.roomToast||(signalOn()?`SIGNAL CHECK · ${state.rooms[state.currentRoom]?.name||'BREATH'}`:`FLOOR ${String(state.floor).padStart(2,'0')} · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`));
 }

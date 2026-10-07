@@ -19,7 +19,8 @@ export const ROLE_TINT = {
   clinic: ['#7fe8e0', 0.14], armory: ['#6a8cff', 0.14], merchant: ['#ffb04a', 0.17], cache: ['#f4c66d', 0.14],
 };
 const COMBAT_TINTS = ['#ff5367', '#eaaa66', '#79d6ae', '#a888e8'];
-export const roomTint = (room, index) => ROLE_TINT[room.role] || [COMBAT_TINTS[index % 4], 0.075];
+// combat rooms wash their floor with their own accent (not just an index colour) so each reads as a place at 1x
+export const roomTint = (room, index) => ROLE_TINT[room.role] || [room.theme?.accent || COMBAT_TINTS[index % 4], room.theme?.accent ? 0.14 : 0.075];
 
 export class WorldLayer {
   constructor() {

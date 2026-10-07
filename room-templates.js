@@ -230,7 +230,7 @@ const COMBAT_LOOKS = {
   'l-pairs': {floor: 'tile', tint: '#2b2c33', accent: '#79d6ae'},
   'island-cross': {floor: 'concrete', tint: '#2c2a30', accent: '#e8c46b'},
   'arena-ring': {floor: 'dirt', tint: '#2b2622', accent: '#ff5367'},
-  scatter: {floor: 'dirt', tint: '#2a2825', accent: '#9aa0b8'},
+  scatter: {floor: 'dirt', tint: '#2a2825', accent: '#d9954f'},
 };
 
 /* ---------- stamping ---------- */

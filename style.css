@@ -738,6 +738,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #name-card strong { font: 800 26px/1 var(--font-display); letter-spacing: .14em; color: var(--text-hi); text-transform: uppercase; }
 #name-card span { font: 500 var(--fs-body) var(--font-mono); letter-spacing: .06em; color: var(--text-mid); }
 #name-card.show { animation: name-card 2s var(--ease-out) forwards; }
+/* the room banner owns the 84px slot while it plays: the card slides below it instead of printing over the room name */
+#game-shell:has(#room-banner.show) #name-card { top: 204px; }
 @keyframes name-card { 0% { opacity: 0; transform: translate(-50%, -10px); } 9% { opacity: 1; transform: translate(-50%, 0); } 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -6px); } }
 
 #manual-chip { position: absolute; z-index: 5; left: var(--s-4); top: 62px; display: inline-flex; align-items: center; gap: var(--s-2); padding: 5px var(--s-3); background: var(--panel); border: 1px solid color-mix(in srgb, var(--slow) 55%, transparent); border-radius: 999px; box-shadow: var(--e-1); color: var(--slow); font: 700 var(--fs-micro) var(--font-body); letter-spacing: .18em; opacity: 0; transform: translateX(-8px); transition: opacity var(--dur), transform var(--dur) var(--ease-out); pointer-events: none; }
@@ -751,7 +753,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #sig-hint.show { opacity: 1; transform: translate(-50%, 0); animation: sig-pulse 1.6s ease-in-out infinite; }
 @keyframes sig-pulse { 50% { border-color: var(--coin); } }
 
-#sig-cause { position: absolute; z-index: 5; left: 50%; top: 138px; transform: translate(-50%, -8px); padding: var(--s-2) var(--s-5); background: var(--panel); border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); border-left: 3px solid var(--danger); border-radius: var(--r-md); font: 800 var(--fs-lead) var(--font-display); letter-spacing: .18em; color: var(--text-hi); white-space: nowrap; opacity: 0; pointer-events: none; }
+#sig-cause { position: absolute; z-index: 5; left: 50%; top: 156px; transform: translate(-50%, -8px); padding: var(--s-2) var(--s-5); background: var(--panel); border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); border-left: 3px solid var(--danger); border-radius: var(--r-md); font: 800 var(--fs-lead) var(--font-display); letter-spacing: .18em; color: var(--text-hi); white-space: nowrap; opacity: 0; pointer-events: none; }
 #sig-cause.show { animation: name-card 1.9s var(--ease-out) forwards; }
 
 #sig-complete { position: absolute; z-index: 5; left: 50%; top: 34%; transform: translate(-50%, 0); text-align: center; opacity: 0; pointer-events: none; }
