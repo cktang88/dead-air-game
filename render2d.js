@@ -36,6 +36,8 @@ function lgrad(ctx, x0, y0, x1, y1, c0, c1) {
 }
 
 export {hexStr};
+/** Distance from an enemy's centre to the drawn muzzle (bullets, flash, telegraph all start here). */
+export const enemyMuzzle = (e) => (isHeavy(e) ? heavyMuzzle(e) : ENEMY_GUNS[e.type] ? gunMuzzle(ENEMY_GUNS[e.type]) : 13);
 const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
@@ -43,9 +45,9 @@ const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.ro
 const ENEMY_GUNS = {
   // same art ids as the player's guns: a GUNNER carries an assault rifle, a WARDEN a street-sweeper shotgun,
   // a MARKSMAN a long scoped sniper. Longer than the player's so the weapon reads from across the room.
-  gunner: {category: 'ASSAULT RIFLE', visual: {length: 37, width: 6, art: 'CARBINE'}, color: 0xff5a4a},
-  guard: {category: 'SHOTGUN', visual: {length: 27, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
-  sniper: {category: 'SNIPER', visual: {length: 52, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
+  gunner: {category: 'ASSAULT RIFLE', visual: {length: 54, width: 6, art: 'CARBINE'}, color: 0xff5a4a},
+  guard: {category: 'SHOTGUN', visual: {length: 38, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
+  sniper: {category: 'SNIPER', visual: {length: 64, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
 };
 
 // Dashed footprint trail behind moving bodies, aged in real time.
@@ -152,7 +154,8 @@ export function createRenderer(container, state) {
   // ------------------------------------------------------------------ events from the game
   function shot(owner, shooter, angle) {
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    fx.muzzle(shooter.x + dx * 18, shooter.y + dy * 18, angle, {color: '#ff7a6a', size: 0.75});
+    const mzd = owner === 'enemy' ? enemyMuzzle(shooter) : 18;
+    fx.muzzle(shooter.x + dx * mzd, shooter.y + dy * mzd, angle, {color: '#ff7a6a', size: 0.75});
     shooter.vis ??= {}; shooter.vis.kick = 1;
   }
 
@@ -794,17 +797,17 @@ export function createRenderer(container, state) {
         }
         if (e.type === 'sniper' && aimP === 0) {
           // idle scope glint: a slow sparkle on the lens so the long rifle reads as a sniper before it aims
-          const tw = Math.max(0, Math.sin(vis.time * 2.1 + (e.id || 0) * 17)) ** 8, lens = 3 + gun.visual.length * 0.7 * 0.62 + 3;
+          const tw = Math.max(0, Math.sin(vis.time * 2.1 + (e.id || 0) * 17)) ** 8, lens = 5 + gun.visual.length * 0.7 * 0.54;
           if (tw > 0.05) { ctx.globalCompositeOperation = 'lighter'; drawStar(lens, 0, 1.5 + tw * 4, '#e8fcff'); ctx.globalCompositeOperation = 'source-over'; }
         }
         if (aimP > 0 && e.type === 'sniper') {
           // scope glint: the lens flares and sparkles harder as the lock builds
-          const lens = 3 + gun.visual.length * 0.7 * 0.62 + 3, flick = 0.65 + 0.35 * Math.sin(vis.time * 34), g = (0.15 + aimP * aimP * 1.3) * flick + (e.locked ? 0.5 : 0);
+          const lens = 5 + gun.visual.length * 0.7 * 0.54, flick = 0.65 + 0.35 * Math.sin(vis.time * 34), g = (0.15 + aimP * aimP * 1.3) * flick + (e.locked ? 0.5 : 0);
           ctx.globalCompositeOperation = 'lighter'; drawStar(lens, yOff, 2 + g * 6, '#fff0f0'); ctx.globalAlpha = 0.6; ctx.drawImage(glowSprite('#ff6a7a'), lens - 8, yOff - 8, 16, 16); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         } else if (aimP > 0.55) {
-          const mz = 3 + gun.visual.length * 0.82 + 2; ctx.globalCompositeOperation = 'lighter'; drawStar(mz, yOff, 1.5 + (aimP - 0.55) * 5, '#ffb0a0'); ctx.globalCompositeOperation = 'source-over';
+          const mz = gunMuzzle(gun); ctx.globalCompositeOperation = 'lighter'; drawStar(mz, yOff, 1.5 + (aimP - 0.55) * 5, '#ffb0a0'); ctx.globalCompositeOperation = 'source-over';
         }
-        if (aimP > 0) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#ff4a5e'; ctx.beginPath(); ctx.arc(3 + gun.visual.length * 0.82 + 2, yOff, 1.8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
+        if (aimP > 0) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#ff4a5e'; ctx.beginPath(); ctx.arc(gunMuzzle(gun), yOff, 1.8, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
       } else {
         // brute / warden: fists pumping while walking, hauled back on the wind-up, thrown forward on the strike
         const rb = outCubic(windP), fr = e.elite ? 6.6 : 5, fs = e.elite ? 1.35 : 1;
@@ -939,7 +942,7 @@ export function createRenderer(container, state) {
 
   function drawSniperLaser(e) {
     const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
-    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : 3 + gun.visual.length * 0.82 + 2;
+    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : gunMuzzle(gun);
     const sx = e.x + dx * m, sy = e.y + dy * m, len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
     const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
     ctx.lineCap = 'round';
@@ -972,7 +975,7 @@ export function createRenderer(container, state) {
         ctx.restore();
       } else if (e.aimTimer > 0) {
         const p = clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), range = e.type === 'brute' ? 130 : Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
-        const gun = ENEMY_GUNS[e.type], hvg = isHeavy(e) && gun, m = hvg ? heavyMuzzle(e) : gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
+        const gun = ENEMY_GUNS[e.type], hvg = isHeavy(e) && gun, m = hvg ? heavyMuzzle(e) : gun ? gunMuzzle(gun) : 14;
         const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' && !hvg ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
         const len = rayWall(e.x, e.y, dx, dy, range);
         const ex = e.x + dx * len, ey = e.y + dy * len;

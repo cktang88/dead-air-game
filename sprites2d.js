@@ -415,7 +415,9 @@ export function pillarSprite(stage = 0) {
   });
 }
 
-export const gunMuzzle = (gun, reach = 5) => reach + gun.visual.length * 0.7;
+/** Gun origin ahead of the body centre: pistols are held at arm's length (isosceles), everything else is shouldered. */
+export const gunReach = (gun) => ((GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || {}).cls === 'pistol' ? 11 : 5);
+export const gunMuzzle = (gun, reach = gunReach(gun)) => reach + gun.visual.length * 0.7;
 
 // A magazine held in a hand or sitting in a gun. Lies along +x.
 export function drawMagSprite(g, x, y, rot = 0, len = 5.6, wid = 3.2) {

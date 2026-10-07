@@ -1,4 +1,4 @@
-import {createRenderer,hexStr} from './render2d.js';
+import {createRenderer,hexStr,enemyMuzzle} from './render2d.js';
 import {VIEW_HALF_HEIGHT as CAMERA_HALF_HEIGHT} from './camera2d.js';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
@@ -413,7 +413,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   const speed=stats?.projectileSpeed??gun.speed;
   // Player rounds (and their tracer mesh) leave exactly at the muzzle; the swept test starts at the
   // shooter's centre (ox,oy) so a muzzle poking through a wall cannot let a round slip past it.
-  const start=owner==='player'?muzzlePoint(x,y,dx,dy,gun):{x:x+dx*13,y:y+dy*13};
+  const start=owner==='player'?muzzlePoint(x,y,dx,dy,gun):{x:x+dx*(projectile.muzzle??13),y:y+dy*(projectile.muzzle??13)};
   const color=owner==='player'?gun.color:0xff6a64;
   const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'&&!projectile.lob?weaponPenetration(gun,mod):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.lob?'lob':projectile.style||null,lob:projectile.lob?gun.lob:null,missed:false,boss:!!projectile.boss};
   if(owner==='player'){const f=freqStats(state.freq),sx=state.shotExtra||{};bullet.burn=stats.burn;bullet.stun=stats.stun;bullet.maxBounces=f.ricochet+stats.bounces;bullet.bounces=0;bullet.bounceSeek=f.bounceSeek;bullet.penetration={...bullet.penetration,enemies:bullet.penetration.enemies+f.pierce+(sx.pierce||0),crates:bullet.penetration.crates+(f.crateThru?9:0)};bullet.homing=f.homing;bullet.homingRange=f.homingRange||280;bullet.damage*=state.shotDamageMult;
@@ -550,7 +550,7 @@ function updateWeaponBurst(){
 function enemyShoot(enemy,dx,dy){
   playEnemyShot({distance:distance(enemy,state.player),pan:(enemy.x-state.player.x)/480,heavy:enemy.type==='sniper'});
   view.shot('enemy',enemy,Math.atan2(dy,dx));
-  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1,{enemyId:enemy.id,style:enemy.type==='sniper'?'sniper':null});
+  fireBullet('enemy',enemy.x,enemy.y,dx,dy,{speed:enemy.def.projectileSpeed,range:enemy.def.range,damage:enemy.def.damage,color:0xff6a64},1,{enemyId:enemy.id,muzzle:enemyMuzzle(enemy),style:enemy.type==='sniper'?'sniper':null});
 }
 function burst(){}
 

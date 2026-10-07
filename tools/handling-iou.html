@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Handling IoU</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="10" height="10"></canvas>
+<script type="module">
+// Silhouette similarity between our rig and the Blender reference renders (same 2.5D camera, zoom 4, 56-unit cells).
+// window.measure(cls) -> per-facing {iou, oursLen, refLen, oursRatio, refRatio}; run by tools/handling-iou.mjs (it maps /__refs/ to the ref render folder).
+import {setSpriteScale} from '../sprites2d.js';
+import {beginStackFrame, STACK_CONFIG} from '../stack2d.js';
+import {kitFor, gunStack, gunGeometry} from '../models2d.js';
+import {humanoidPose, newRigOut, drawRig, RIG} from '../rig2d.js';
+import {GUNS} from '../catalog.js';
+const zoom = 4, CELL = 56, px = CELL * zoom, THR = 60;
+const CLS = {pistol: 'pistol_9', smg: 'machine', rifle: 'ar_ash', shotgun: 'shotgun', sniper: 'sniper_lynx', amr: 'sniper_mule', launcher: 'launcher'};
+setSpriteScale(zoom); STACK_CONFIG.bakeBudgetMs = 1e6;
+const kit = kitFor("player");
+const mk = (n = px) => { const c = document.createElement('canvas'); c.width = c.height = n; return c; };
+const loadImg = (u) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = u; });
+const alphaOf = (c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.width).data, a = new Uint8Array(c.width * c.width); for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3] > THR ? 1 : 0; return a; };
+function render(gun, ang, gunOnly) {
+  const out = newRigOut();
+  const geo = gunGeometry(gun), g = gunStack(gun, {});
+  humanoidPose(kit, {id: 3, t: 1, bodyYaw: ang, aimYaw: ang, moveYaw: ang, gunModel: g, gunGeo: {...geo}, magModel: kit.mag}, out);
+  if (gunOnly) { const keep = new Set([g, ...Object.values(g.parts || {})]); let n = 0; for (let i = 0; i < out.n; i++) if (keep.has(out.items[i].model)) out.items[n++] = out.items[i]; out.n = n; }
+  const n = gunOnly ? px * 2 : px, c = mk(n), ctx = c.getContext('2d'); beginStackFrame();
+  ctx.translate(n / 2, n / 2); ctx.scale(zoom, zoom); drawRig(ctx, out, 0, 0, {shadow: false});
+  return c;
+}
+function majorLen(a, px) {   // extent of the silhouette along its principal axis, in game units
+  let n = 0, mx = 0, my = 0; for (let i = 0; i < a.length; i++) if (a[i]) { n++; mx += i % px; my += (i / px) | 0; }
+  if (n < 5) return 0; mx /= n; my /= n;
+  let sxx = 0, sxy = 0, syy = 0; for (let i = 0; i < a.length; i++) if (a[i]) { const x = i % px - mx, y = ((i / px) | 0) - my; sxx += x * x; sxy += x * y; syy += y * y; }
+  const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), cx = Math.cos(th), cy = Math.sin(th); let lo = 1e9, hi = -1e9;
+  for (let i = 0; i < a.length; i++) if (a[i]) { const t = (i % px - mx) * cx + (((i / px) | 0) - my) * cy; if (t < lo) lo = t; if (t > hi) hi = t; }
+  return (hi - lo) / zoom;
+}
+const iouAt = (ra, oa, dx, dy) => {   // IoU with ours shifted by (dx, dy) px
+  let inter = 0, uni = 0;
+  for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) { const r = ra[y * px + x], xs = x - dx, ys = y - dy, o = xs >= 0 && xs < px && ys >= 0 && ys < px ? oa[ys * px + xs] : 0; if (r & o) inter++; if (r | o) uni++; }
+  return [inter, uni];
+};
+window.measure = async function (cls, refBase = '/__refs/') {
+  const gun = GUNS.find((g) => g.id === CLS[cls]), meta = await (await fetch(refBase + `ref_${cls}.json`)).json(), res = [], masks = [];
+  const j3 = meta.joints3d, sw = 12 * Math.hypot(j3.shoulderR[0] - j3.shoulderL[0], j3.shoulderR[1] - j3.shoulderL[1]), oursSw = 2 * RIG.shoulder.y;
+  for (const deg of [0, 45, 90, 135, 180, 225, 270, 315]) {
+    const im = await loadImg(refBase + `ref_${cls}_${String(deg).padStart(3, '0')}.png`), rc = mk(); rc.getContext('2d').drawImage(im, 0, 0, px, px);
+    const ra = alphaOf(rc), oa = alphaOf(render(gun, deg * Math.PI / 180, false)), ga = alphaOf(render(gun, deg * Math.PI / 180, true));
+    const [inter, uni] = iouAt(ra, oa, 0, 0); masks.push([ra, oa]);
+    const pj = meta.proj[String(deg)], refLen = Math.hypot(pj.gunMuzzle[0] - pj.gunRear[0], pj.gunMuzzle[1] - pj.gunRear[1]), oursLen = majorLen(ga, px * 2);
+    res.push({deg, iou: inter / uni, oursLen, refLen, oursRatio: oursLen / oursSw, refRatio: refLen / sw});
+  }
+  // one shift per class (the reference cell is centred on the hips, ours on the ground point): best IoU over +-6 units
+  let best = {s: -1, dx: 0, dy: 0};
+  for (let dy = -24; dy <= 24; dy += 4) for (let dx = -24; dx <= 24; dx += 4) { let I = 0, U = 0; for (const [ra, oa] of masks) { const [i, u] = iouAt(ra, oa, dx, dy); I += i; U += u; } if (I / U > best.s) best = {s: I / U, dx, dy}; }
+  masks.forEach(([ra, oa], k) => { const [i, u] = iouAt(ra, oa, best.dx, best.dy); res[k].iouAligned = i / u; res[k].shift = [best.dx / zoom, best.dy / zoom]; });
+  return res;
+};
+// debugging: ref silhouette green, ours red, both yellow, for one class and the 8 facings in a row
+window.overlay = async (cls, refBase = '/__refs/') => {
+  const gun = GUNS.find((g) => g.id === CLS[cls]), sheet = document.createElement('canvas'); sheet.width = px * 8; sheet.height = px; const sc = sheet.getContext('2d'), id = sc.createImageData(px * 8, px);
+  for (let k = 0; k < 8; k++) {
+    const deg = k * 45, im = await loadImg(refBase + `ref_${cls}_${String(deg).padStart(3, '0')}.png`), rc = mk(); rc.getContext('2d').drawImage(im, 0, 0, px, px);
+    const ra = alphaOf(rc), oa = alphaOf(render(gun, deg * Math.PI / 180, false));
+    for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) { const i = y * px + x, o = (y * px * 8 + k * px + x) * 4; id.data[o] = oa[i] ? 255 : 0; id.data[o + 1] = ra[i] ? 255 : 0; id.data[o + 2] = 0; id.data[o + 3] = 255; }
+  }
+  sc.putImageData(id, 0, 0); return sheet.toDataURL();
+};
+window.__ready = true;
+</script>

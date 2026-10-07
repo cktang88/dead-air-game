@@ -45,7 +45,7 @@ const mixp = (o, a, b, t) => { o.x = a.x + (b.x - a.x) * t; o.y = a.y + (b.y - a
 const POOL = 30;
 export function newRigOut() {
   const items = [];
-  for (let i = 0; i < POOL; i++) items.push({model: null, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, flash: 0, key: 0, draw: null, a: 0, b: 0});
+  for (let i = 0; i < POOL; i++) items.push({model: null, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, flash: 0, key: 0, draw: null, a: 0, b: 0, p: new Float64Array(12), kit: null});
   return {items, n: 0, variant: null, shadowX: 0, shadowY: 0, muzzleX: 0, muzzleY: 0, handR: {x: 0, y: 0}, handL: {x: 0, y: 0}, fidget: ''};
 }
 function add(out, model, x, y, z, yaw, sx = 1, sy = 1, flash = 0) {
@@ -194,13 +194,15 @@ export function humanoidPose(kit, inp, out) {
   const gunYaw = gunYaw0 - cross;
   const gcs = Math.cos(aimYaw), gsn = Math.sin(aimYaw), gdx = Math.cos(gunYaw), gdy = Math.sin(gunYaw);
   const kb = kick * (hasGun && geo.cls === 'pistol' ? 2.6 : 3.2);
-  const oxA = RIG.reach + gL * (1 - Math.cos(cross)) + (inp.gunDx || 0) - sprint * (geo && geo.cls === 'pistol' ? 3 : 1.5);
+  const oxA = (geo && geo.reach != null ? geo.reach : RIG.reach) + gL * (1 - Math.cos(cross)) + (inp.gunDx || 0) - sprint * (geo && geo.cls === 'pistol' ? 3 : 1.5);
   const gx = gtx * 0.35 + gcs * oxA - gsn * gv - gdx * kb, gy = gty * 0.35 + gsn * oxA + gcs * gv - gdy * kb;
   const longGun = hasGun && geo.cls !== 'pistol' && geo.cls !== 'smg';
-  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5 + (longGun ? 1.0 * stance : 0) - sprint * (longGun ? 1.2 : 0.4);
+  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5 + (longGun ? 4.0 * stance : hasGun ? (geo.cls === "pistol" ? 4.5 : 1.5) * stance : 0) - sprint * (longGun ? 1.2 : 0.4);
   // weapon layer: gun, arms and gloves always draw over the torso AND the head (a held weapon is nearer the camera than the face, and when
   // aiming away the head would otherwise swallow the extended arms); inside the layer: arms (both bones) < gun and its pump / bolt < gloves < mag, so the gun stays legible and only the hands wrap it
-  const topK = Math.max(ty + tz * 0.03, hy + hz * 0.03) + 0.3, gunKey = topK + 0.1;
+  let topK = Math.max(ty + tz * 0.03, hy + hz * 0.03) + 0.3;
+  for (let i = 0; i < out.n; i++) if (out.items[i].key + 0.3 > topK) topK = out.items[i].key + 0.3;   // over the legs too (aiming towards the camera the legs are the nearest part of the body)
+  const gunKey = topK + 0.1;
   if (inp.gunModel) { const g = add(out, inp.gunModel, gx, gy, gz, gunYaw, gsc, gsc, fl); g.key = gunKey; }
   out.muzzleX = gx + gdx * gL * gsc; out.muzzleY = gy + gdy * gL * gsc;
   const gpt = (p, o, dx = 0, dy = 0) => { const px = (p.x + dx) * gsc, py = (p.y + dy) * gsc; o.x = gx + gdx * px - gdy * py; o.y = gy + gdy * px + gdx * py; o.z = gz + 1.5; return o; };
@@ -244,19 +246,21 @@ export function humanoidPose(kit, inp, out) {
   // ---------------- arms: shoulders ride the torso, two-bone IK to the trigger / support hands, elbows flare outward
   const tcs = Math.cos(torsoYaw - twist - _fp.torsoYaw), tsn = Math.sin(torsoYaw - twist - _fp.torsoYaw), tk = ty + tz * 0.03;
   for (const side of [1, -1]) {
-    const shx = tx + tcs * RIG.shoulder.x - tsn * RIG.shoulder.y * side, shy = ty + tsn * RIG.shoulder.x + tcs * RIG.shoulder.y * side;
+    const sy0 = RIG.shoulder.y * 0.78, shx = tx + tcs * RIG.shoulder.x - tsn * sy0 * side, shy = ty + tsn * RIG.shoulder.x + tcs * sy0 * side;   // limbs start inside the pauldrons (our chibi torso is wider than the reference)
     const H = side > 0 ? hT : hS, hxw = H.x, hyw = H.y, hz = H.z;
     const dx = hxw - shx, dy = hyw - shy, d = Math.hypot(dx, dy);
     // pistols are held at near full extension (isosceles): bones shorten instead of folding the elbows out
-    const L = Math.max(RIG.armBone * (G.cls === 'pistol' && !rf && tuck < 0.5 ? 0.92 : 1), d / 1.94);
+    const L = Math.max(d * ((G.cls === 'pistol' && !rf && tuck < 0.5) ? 0.51 : side > 0 ? 0.58 : 0.525), 5.5);   // limbs are procedural: the bend follows the reach (support arm nearly straight, trigger elbow flared)
     solveElbow(shx, shy, hxw, hyw, L, side, torsoYaw, _e1);
     const z0 = RIG.shoulder.z + (tz - RIG.torsoZ) - 1.0, z1 = hz - 0.4;
     const zm = (z0 + (z0 + z1) / 2) / 2 - 1.5, zn = ((z0 + z1) / 2 + z1) / 2 - 1.5;
-    const up = add(out, kit.arm, shx, shy, zm, Math.atan2(_e1.y - shy, _e1.x - shx), Math.hypot(_e1.x - shx, _e1.y - shy) / RIG.armBone, 1, fl);
-    up.key = topK;
-    const lo = add(out, kit.arm, _e1.x, _e1.y, zn, Math.atan2(hyw - _e1.y, hxw - _e1.x), Math.hypot(hxw - _e1.x, hyw - _e1.y) / RIG.armBone, 1, fl);
-    lo.key = topK + 0.05;
-    const gl = add(out, side > 0 ? kit.gloveR : kit.gloveL, hxw, hyw, hz - 1.4, Math.atan2(hyw - _e1.y, hxw - _e1.x) * 0.35 + gunYaw * 0.65, 1, 1, fl);
+    const limb = add(out, null, 0, 0, RIG.anchorZ, 0, 1, 1, fl);
+    limb.draw = drawLimb; limb.kit = kit; limb.key = topK + 0.02;
+    const q = limb.p, zE = (z0 + z1) / 2 - 1.3;
+    q[0] = shx; q[1] = shy; q[2] = z0; q[3] = _e1.x; q[4] = _e1.y; q[5] = zE; q[6] = hxw; q[7] = hyw; q[8] = z1; q[9] = side;
+    const gl = add(out, null, 0, 0, RIG.anchorZ, 0, 1, 1, fl);
+    gl.draw = drawHand; gl.kit = kit;
+    const hq = gl.p; hq[0] = hxw; hq[1] = hyw; hq[2] = hz - 0.6; hq[3] = gunYaw; hq[4] = (G.cls === 'pistol' ? 0.8 : 1.0); hq[5] = side;
     gl.key = gunKey + 0.06 + ((side > 0 ? hT.y > hS.y : hS.y > hT.y) ? 0.001 : 0);
   }
   const hlx = hS.x, hly = hS.y, handZ = hS.z, gyc = gdx, gys = gdy;
@@ -291,9 +295,64 @@ export function drawRig(ctx, out, x, y, {variant = null, anchorZ = RIG.anchorZ, 
   }
   for (let i = 0; i < out.n; i++) {
     const it = out.items[i];
-    if (it.draw) { it.draw(ctx, x + it.x, y + it.y - (it.z - anchorZ) * STACK_TILT, it, anchorZ); continue; }
+    if (it.draw) { it.draw(ctx, x + it.x, y + it.y - (it.z - anchorZ) * STACK_TILT, it, anchorZ, variant, Math.max(it.flash, flash)); continue; }
     drawStack(ctx, it.model, x + it.x, y + it.y, {yaw: it.yaw, z: it.z - anchorZ, variant, flash: Math.max(it.flash, flash), sx: it.sx, sy: it.sy, alpha});
   }
+}
+
+
+// ------------------------------------------------------------------ procedural limbs and hands
+// Arms are not voxel chains: each is one smooth tapered limb (upper arm + forearm drawn as round-capped segments of slowly shrinking width,
+// subtle elbow pad) in a sleeve a little darker than the torso. Hands are small dark gloves that wrap ACROSS the gun (fingers over the
+// barrel / handguard, thumb along it) so the gun stays the readable shape. Both honour the floor / dead variant and the white hit flash.
+const INK_LIMB = '#120f18';
+const hexMix = (a, b, t) => { const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const A = p(a), B = p(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const palCache = new Map();
+function limbPal(kit, variant) {
+  const key = (kit.spec ? kit.spec.id : '?') + '|' + (variant ? variant.key : '');
+  let p = palCache.get(key);
+  if (!p) {
+    const c = (kit.spec && kit.spec.c) || {}, f = variant ? variant.fn : (h) => h;
+    const cloth = c.cloth || '#2f5c56', glove = c.glove || '#40291d';
+    p = {sleeve: f(hexMix(cloth, '#000000', 0.16)), fore: f(hexMix(cloth, '#000000', 0.28)), hi: f(hexMix(cloth, '#ffffff', 0.18)), pad: f(hexMix(cloth, '#000000', 0.5)),
+      glove: f(hexMix(glove, '#14121a', 0.84)), gloveHi: f(hexMix(glove, '#5a5662', 0.5)), ink: f(INK_LIMB)};
+    palCache.set(key, p);
+  }
+  return p;
+}
+const R_UP = 1.3, R_EL = 1.1, R_WR = 0.85;
+function drawLimb(ctx, x, y, it, anchorZ, variant, flash) {
+  const q = it.p, pal = limbPal(it.kit, variant), T = STACK_TILT;
+  const sx = x + q[0], sy = y + q[1] - (q[2] - anchorZ) * T, ex = x + q[3], ey = y + q[4] - (q[5] - anchorZ) * T, hx = x + q[6], hy = y + q[7] - (q[8] - anchorZ) * T;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const seg = (ax, ay, bx, by, r0, r1, col, grow) => {
+    const N = 5;
+    for (let i = 0; i < N; i++) {
+      const u0 = i / N, u1 = (i + 1) / N, r = (r0 + (r1 - r0) * (u0 + u1) / 2) + grow;
+      ctx.lineWidth = r * 2; ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(ax + (bx - ax) * u0, ay + (by - ay) * u0); ctx.lineTo(ax + (bx - ax) * u1, ay + (by - ay) * u1); ctx.stroke();
+    }
+  };
+  seg(sx, sy, ex, ey, R_UP, R_EL, pal.ink, 0.38); seg(ex, ey, hx, hy, R_EL, R_WR, pal.ink, 0.38);
+  seg(sx, sy, ex, ey, R_UP, R_EL, pal.sleeve, 0); seg(ex, ey, hx, hy, R_EL, R_WR, pal.fore, 0);
+  // elbow pad and a soft top highlight so the limb reads round
+  ctx.fillStyle = pal.pad; ctx.beginPath(); ctx.arc(ex, ey, R_EL * 0.8, 0, TAU); ctx.fill();
+  ctx.strokeStyle = pal.hi; ctx.globalAlpha = 0.45; ctx.lineWidth = 0.45;
+  ctx.beginPath(); ctx.moveTo(sx, sy - R_UP * 0.45); ctx.lineTo(ex, ey - R_EL * 0.45); ctx.lineTo(hx, hy - R_WR * 0.4); ctx.stroke(); ctx.globalAlpha = 1;
+  if (flash > 0) { ctx.globalAlpha = Math.min(1, flash); seg(sx, sy, ex, ey, R_UP, R_EL, '#fff', 0); seg(ex, ey, hx, hy, R_EL, R_WR, '#fff', 0); }
+  ctx.restore();
+}
+function drawHand(ctx, x, y, it, anchorZ, variant, flash) {
+  const q = it.p, pal = limbPal(it.kit, variant), hx = x + q[0], hy = y + q[1] - (q[2] - anchorZ) * STACK_TILT, a = q[3], t = q[4];
+  const gx = Math.cos(a), gy = Math.sin(a), px = -gy, py = gx, span = t + 0.4;
+  ctx.save(); ctx.lineCap = 'round';
+  // fingers: a short bar across the gun, thumb: a nub along it
+  ctx.strokeStyle = pal.ink; ctx.lineWidth = 2.0 + 0.8; ctx.beginPath(); ctx.moveTo(hx - px * span, hy - py * span); ctx.lineTo(hx + px * span, hy + py * span); ctx.stroke();
+  ctx.lineWidth = 1.2 + 0.8; ctx.beginPath(); ctx.moveTo(hx + px * span * 0.2, hy + py * span * 0.2 - 0.6); ctx.lineTo(hx + gx * 1.8 + px * span * 0.2, hy + gy * 1.8 + py * span * 0.2 - 0.6); ctx.stroke();
+  ctx.strokeStyle = pal.glove; ctx.lineWidth = 2.0; ctx.beginPath(); ctx.moveTo(hx - px * span, hy - py * span); ctx.lineTo(hx + px * span, hy + py * span); ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(hx + px * span * 0.2, hy + py * span * 0.2 - 0.6); ctx.lineTo(hx + gx * 1.8 + px * span * 0.2, hy + gy * 1.8 + py * span * 0.2 - 0.6); ctx.stroke();
+  ctx.strokeStyle = pal.gloveHi; ctx.globalAlpha = 0.7; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(hx - px * span * 0.7 - gx * 0.3, hy - py * span * 0.7 - gy * 0.3 - 0.4); ctx.lineTo(hx + px * span * 0.7 - gx * 0.3, hy + py * span * 0.7 - gy * 0.3 - 0.4); ctx.stroke(); ctx.globalAlpha = 1;
+  if (flash > 0) { ctx.globalAlpha = Math.min(1, flash); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.0; ctx.beginPath(); ctx.moveTo(hx - px * span, hy - py * span); ctx.lineTo(hx + px * span, hy + py * span); ctx.stroke(); }
+  ctx.restore();
 }
 
 // The radio antenna: a bendy 2-segment rod with a blinking LED. (x, y) is the socket screen position.

@@ -22,7 +22,7 @@ test('cracks add cells to the shield', () => {
 });
 
 test('muzzle length matches gunMuzzle for the stacked guns', () => {
-  const descs = {guard: {visual: {length: 27}}, sniper: {visual: {length: 52}}};
+  const descs = {guard: {visual: {length: 38}}, sniper: {visual: {length: 64}}};
   for (const t of ['guard', 'sniper']) {
     assert.ok(Math.abs(heavyGun(t).geo.L + 5 - gunMuzzle(descs[t])) < 1e-9);
     assert.ok(Math.abs(heavyMuzzle({type: t}) - gunMuzzle(descs[t])) < 1e-9);
