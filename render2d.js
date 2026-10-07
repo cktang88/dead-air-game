@@ -12,7 +12,7 @@ import {floorLook} from './floor-palette.js';
 import {beginStackFrame, STACK_CONFIG} from './stack2d.js';
 import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
-import {warmEnemy} from './stack-warm.js';
+import {warmEnemy, pumpWarm} from './stack-warm.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
 import {isHeavy, drawHeavy, drawHeavyCorpse, heavyMuzzle} from './heavies2d.js';
@@ -1309,12 +1309,14 @@ export function createRenderer(container, state) {
     drawPickups(bp);
     // corpses first, then the living
     beginStackFrame(); const actorT0 = performance.now();
+    if (!vis.warmP) { vis.warmP = 1; warmEnemy('player', false, null, null); }
     for (const e of state.enemies) if (e.alive && !(e.vis && e.vis.warm)) warmFor(e);
     for (const e of state.enemies) if (!e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     for (const e of state.enemies) if (e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     drawThrown();
     drawPlayer(now);
     { const am = performance.now() - actorT0; stats.actorLast = am; stats.actorMs += (am - stats.actorMs) * 0.1; }
+    pumpWarm(1.5);   // spread the enemy kits' background bakes over frames (outside the actor timing)
     drawEffects(bp);
     fx.drawSmoke(ctx, bp);
 

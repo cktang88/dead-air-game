@@ -244,6 +244,7 @@ function bakeBucket(e, bi) {
   const r = bakeComposite(makeCanvas, e, bi), out = r.cv;
   e.buckets[bi] = out; e.have++; e.cx[bi] = r.cx; e.cy[bi] = r.cy;
   const sz = out.width * out.height * 4; e.size += sz; bytes += sz;
+  (stackStats.cold || (stackStats.cold = [])).push(e.n.id + '|' + (e.variant ? e.variant.key : ''));
   stackStats.bakes++; stackStats.syncBakes++; stackStats.bakeMs += now() - t0; stackStats.mb = bytes / 1048576;
   if (bytes > STACK_CONFIG.cacheBytes) evict(e);
   return out;
@@ -320,8 +321,10 @@ export function prebake(model, variant, count) {
  * Queues a model's yaw buckets for the background baker (every STACK_CONFIG.prefetchStep-th one, spread round the circle) so the
  * first fight does not bake. A no-op without a worker or when the cache is already prefetchFrac full. Safe to call every frame.
  */
+/** True when warmStack can do anything (stacks on, a baking worker is possible). */
+export const warmAvailable = () => STACK_CONFIG.enabled && workerOk();
 export function warmStack(model, variant, step = STACK_CONFIG.prefetchStep) {
-  if (!STACK_CONFIG.enabled || !model || !workerOk()) return false;
+  if (!model || !warmAvailable()) return false;
   const e = entryFor(model, variant);
   if (e.warm || !e.vox) return false;
   if (bytes > STACK_CONFIG.cacheBytes * STACK_CONFIG.prefetchFrac) return false;
@@ -367,3 +370,5 @@ export function drawContactShadow(ctx, x, y, rx, ry, alpha = 0.5) {
   const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * alpha; ctx.drawImage(s.c, x - s.w / 2, y - s.h / 2, s.w, s.h); ctx.globalAlpha = a0;
 }
 onSpriteScale(() => { if (shadowCache.size && !cache.size) shadowCache.clear(); });
+// boot the baking worker as soon as the engine loads (the title screen hides its start-up), so the first fight finds it ready
+if (typeof document !== 'undefined' && typeof setTimeout !== 'undefined') setTimeout(() => { if (STACK_CONFIG.enabled) getWorker(); }, 0);
