@@ -28,7 +28,7 @@ export function ammoPickupRounds(maxReserve, pct) {
 export function supplyDrop(roll, source, {health, maxHealth, ammoLow, armorUseful}) {
   const crate = source === 'crate', hurt = maxHealth > 0 && health / maxHealth <= 0.5;
   const ammo = (crate ? 0.34 : 0.18) * (ammoLow ? 2.5 : 1); // tuned up for 3-HP lethality: fewer kills per mag, more drops when you are low
-  const heal = health >= maxHealth ? 0 : (crate ? 0.12 : 0.04) * (hurt ? 2.2 : 1);
+  const heal = health >= maxHealth ? 0 : (crate ? 0.07 : 0.025) * (hurt ? 2.2 : 1);
   const armor = armorUseful ? (crate ? 0.07 : 0.025) : 0;
   if (roll < ammo) return 'ammo';
   if (roll < ammo + heal) return 'heal';
@@ -36,10 +36,10 @@ export function supplyDrop(roll, source, {health, maxHealth, ammoLow, armorUsefu
   return null;
 }
 
-/** Guaranteed medkit when a room clears while the player is at or below half health. Returns HP to give (0 = none). */
+/** Guaranteed +1 HP when a room clears while the player is on their last point of health (a lifeline, not a refill). Returns HP to give (0 = none). */
 export function clearHealAmount({health, maxHealth}) {
-  if (maxHealth <= 0 || health >= maxHealth || health / maxHealth > 0.5) return 0;
-  return health <= 1 ? 2 : 1;
+  if (maxHealth <= 0 || health >= maxHealth || health > 1) return 0;
+  return 1;
 }
 
 /** There is no passive regeneration: healing is the room-clear medkit above plus rare drops (`supplyDrop`) and SUPPLY DROPs. */

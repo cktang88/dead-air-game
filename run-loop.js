@@ -7,10 +7,10 @@ export const FINAL_FLOOR = 4;
 // depthShift is added to each room's 0..1 depth when picking encounter recipes, so MARKSMAN / RIOT squads appear
 // earlier on deeper floors. aimMul scales enemy aim error (below 1 = more accurate shots). eliteRooms converts that many ordinary combat rooms into WARDEN rooms.
 export const FLOORS = {
-  1: {n:1, aimMul:1, name:'THE SPILLWAY', depthShift:0, countBonus:0, eliteRooms:0, hpMult:1, speedMult:1, clearBonus:40, boss:false},
-  2: {n:2, aimMul:1, name:'FOUNDRY ROW', depthShift:.3, countBonus:1, eliteRooms:1, hpMult:1.08, speedMult:1.04, clearBonus:70, boss:false},
-  3: {n:3, aimMul:1, name:'THE UNDERCROFT', depthShift:.55, countBonus:1, eliteRooms:2, hpMult:1.15, speedMult:1.08, clearBonus:110, boss:false},
-  4: {n:4, aimMul:1, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.15, speedMult:1.08, clearBonus:0, boss:true},
+  1: {n:1, aimMul:0.7, name:'THE SPILLWAY', depthShift:0, countBonus:1, eliteRooms:0, hpMult:1.35, speedMult:1, clearBonus:40, boss:false},
+  2: {n:2, aimMul:0.55, name:'FOUNDRY ROW', depthShift:.3, countBonus:2, eliteRooms:2, hpMult:1.6, speedMult:1.04, clearBonus:70, boss:false},
+  3: {n:3, aimMul:0.5, name:'THE UNDERCROFT', depthShift:.55, countBonus:2, eliteRooms:3, hpMult:1.9, speedMult:1.08, clearBonus:110, boss:false},
+  4: {n:4, aimMul:0.55, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.9, speedMult:1.08, clearBonus:0, boss:true},
 };
 
 export function floorConfig(n) {

@@ -33,11 +33,11 @@ test('supplyDrop respects need and source', () => {
   assert.equal(supplyDrop(0.21, 'kill', {...calm, armorUseful: true}), null);
   assert.equal(supplyDrop(0.19, 'kill', {...calm, armorUseful: true}), 'armor');
 });
-test('clearHealAmount only helps at half health or below', () => {
+test('clearHealAmount is a lifeline: +1 only on the last point of health', () => {
   assert.equal(clearHealAmount({health: 5, maxHealth: 5}), 0);
   assert.equal(clearHealAmount({health: 4, maxHealth: 5}), 0);
-  assert.equal(clearHealAmount({health: 2, maxHealth: 5}), 1);
-  assert.equal(clearHealAmount({health: 1, maxHealth: 5}), 2);
+  assert.equal(clearHealAmount({health: 2, maxHealth: 5}), 0);
+  assert.equal(clearHealAmount({health: 1, maxHealth: 5}), 1);
 });
 test('a cleared room pays ammo only when a gun is running dry', () => {
   assert.equal(clearAmmoDrop({ammoLow: true}), true);

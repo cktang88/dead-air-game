@@ -266,11 +266,11 @@ class Bot {
     this.page = page; this.o = opts; this.seed = seed; this.outDir = outDir; this.log = log;
     this.k = opts.skill; this.rng = mulberry(seed * 2654435761 + Math.round(opts.skill * 1000));
     const k = this.k;
-    this.react = 0.5 - 0.38 * k;               // seconds before reacting to a newly visible enemy
-    this.aimSigma = 0.13 - 0.115 * k;           // radians of sustained aim error
+    this.react = 0.9 - 0.8 * k;               // seconds before reacting to a newly visible enemy
+    this.aimSigma = 0.22 - 0.2 * k;           // radians of sustained aim error
     this.lead = k;                              // target leading factor
-    this.stillProb = 0.15 + 0.7 * k;            // chance of choosing stand-still slow-time fighting
-    this.dodgeSkill = 0.25 + 0.75 * k;          // weight on bullet avoidance
+    this.stillProb = 0.05 + 0.85 * k;            // chance of choosing stand-still slow-time fighting
+    this.dodgeSkill = 0.05 + 0.95 * k;          // weight on bullet avoidance
     this.greed = 0.35 + 0.4 * k;                // willingness to detour for loot
     this.keys = new Set(); this.mouseDown = false; this.mouse = {x: opts.width / 2, y: opts.height / 2};
     this.seen = new Map(); this.prevEn = new Map(); this.aimNoise = {x: 0, y: 0, until: 0};
