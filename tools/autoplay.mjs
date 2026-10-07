@@ -138,7 +138,7 @@ function installHooks() {
         px: p.x, py: p.y, vx: s.playerVel.x, vy: s.playerVel.y, hp: s.health, mhp: s.maxHealth, armor: s.armor, marmor: s.maxArmor, scrap: s.scrap, kills: s.kills, cleared: s.roomsCleared,
         cur: s.currentRoom, slots: s.weaponSlots.slice(), active: s.activeSlot, wi: s.weaponIndex, ammo: s.weaponAmmo.slice(), reserve: s.reserveAmmo.slice(),
         reloading: s.reloadTimer > 0, burst: !!s.weaponBurst, aim: {x: s.aim.x, y: s.aim.y}, thr: Object.assign({}, s.throwables), thrIdx: s.throwableIndex, inv: s.invuln,
-        modal: {cache: !!s.cacheOpen, merchant: !!s.merchantOpen, gun: s.pendingGunPickup ? s.pendingGunPickup.gunIndex : null, loadout: !!s.loadoutOpen, pending: !!s.pendingLoadoutChange},
+        modal: {supply: !!s.supplyOpen, cache: !!s.cacheOpen, merchant: !!s.merchantOpen, gun: s.pendingGunPickup ? s.pendingGunPickup.gunIndex : null, loadout: !!s.loadoutOpen, pending: !!s.pendingLoadoutChange},
         extraction: !!s.extractionOpen, gear: s.gear, freq: Object.assign({}, s.freq || {}), floor: s.floor, rm: s.runModal || null, runRooms: s.runRooms || 0,
         cam: {x: v.cam.x, y: v.cam.y, w: v.cam.w, h: v.cam.h, scale: v.cam.scale},
         enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0, sa: typeof e.shieldAng === 'number' ? e.shieldAng : null, aware: !!e.aware, susp: e.suspicion || 0, posture: e.posture || null, locked: !!e.locked, face: e.face ? {x: e.face.x, y: e.face.y} : null, aim: e.aim ? {x: e.aim.x, y: e.aim.y} : null, intent: e.intent || null, ammo: e.ammo, hr: e.def?.hitRadius || 11})),
@@ -151,6 +151,7 @@ function installHooks() {
         rstate: s.rooms.map(r => (r.cleared ? 2 : 0) | (r.visited ? 1 : 0)),
         active_i: s.interact && s.interact.active ? {kind: s.interact.active.kind, id: s.interact.active.id, ok: s.interact.active.enabled} : null,
         stock: s.merchantOpen && s.merchantRoom ? (s.merchantRoom.stock || []).map(o => ({type: o.type, cost: o.cost, sold: !!o.sold, gun: o.gunId, gear: o.gearId, thr: o.throwableId})) : null,
+        supply: s.supplyOpen && s.supplyPickup?.offers ? s.supplyPickup.offers.map(o => ({kind: o.kind, cost: o.cost, sold: !!o.sold, gun: o.gunIndex, mod: o.modId})) : null,
         gunName: null,
       });
       return out;
@@ -275,7 +276,7 @@ class Bot {
     this.seen = new Map(); this.prevEn = new Map(); this.aimNoise = {x: 0, y: 0, until: 0};
     this.task = null; this.plan = null; this.stillMode = false; this.stillUntil = 0; this.lastE = -9; this.lastReload = -9; this.lastThrow = -9; this.lastQ = -9;
     this.recover = null; this.progress = {x: 0, y: 0, t: 0}; this.stuckEvents = []; this.stuckCount = 0; this.recentStuck = [];
-    this.permBlocks = []; this.gateTraps = []; this.badRooms = new Map();
+    this.permBlocks = []; this.gateTraps = []; this.supplyDone = new Set(); this.badRooms = new Map();
     this.declined = new Set(); this.unreachable = new Map(); this.doneMarket = new Set(); this.pulled = new Map();
     this.stats = {scrapEarned: 0, scrapSpent: 0, starve: 0, dry: 0, hurt: [], kills: [], shotsFired: 0, stillTicks: 0, ticks: 0, throws: 0, taskTicks: {}, trapped: false, merchantBuys: [], cacheChoices: [], gunSwaps: 0, freqPicks: 0, decisions: [], errors: []};
     this.lastScrap = null; this.wasStarved = false; this.wasDry = false; this.nextShot = opts.shots || 1e9; this.shotN = 0; this.lastSnap = null;
@@ -378,12 +379,13 @@ class Bot {
         case 'scrap': v = 22 + (k.value || 10) / 2; break;
         case 'mod': v = 38; break;
         case 'gun': if (!this.declined.has(key) && !k.declined && this.wantGun(S, k.gun)) v = 40; break;
+        case 'supply': if (!k.claimed && !this.supplyDone.has(key) && k.room != null && !aliveIn(k.room) && S.scrap >= 20) { v = 58; tol = 28; } break;
         case 'cache': if (!k.claimed && k.room != null && !aliveIn(k.room)) { v = 62 + (n.hurt >= 2 ? 15 : 0) + (n.resFrac < .6 ? 15 : 0); tol = 28; } break;
         case 'locker': { const miss = GUNS[S.wi].reserve - S.reserve[S.wi]; if (n.activeRes < 0.55 && miss > 0 && S.scrap >= Math.ceil(miss * 0.9)) { v = 80; tol = 34; } break; }
         default: break;
       }
       if (v <= 0 || roomBusy || d > maxDist * (v > 60 ? 1.6 : 1)) continue;
-      T.push({kind: k.kind, key, x: k.x, y: k.y, tol, score: v - cost(k.x, k.y), interact: ['cache', 'locker'].includes(k.kind) ? k.kind : null});
+      T.push({kind: k.kind, key, x: k.x, y: k.y, tol, score: v - cost(k.x, k.y), interact: ['cache', 'locker', 'supply'].includes(k.kind) ? k.kind : null});
     }
     for (const g of S.gates) {
       if (g.opened) continue; const key = `gate:${g.x},${g.y}`;
@@ -451,6 +453,23 @@ class Bot {
     }
     if (S.rm === 'decision') {
       const act = (this.o.extractAt && S.floor >= this.o.extractAt) ? 'extract' : 'descend'; const b = await p.$(`#run-modal [data-act="${act}"]`); if (b) { await b.click(); this.stats.decisions.push(act + '@' + S.floor); } return true;
+    }
+    if (S.modal.supply) {
+      // buy by need: medkit when hurt, restock when low, a signal (frequency) whenever affordable, then arms
+      const n = this.needs(S), offers = S.supply || []; let best = null;
+      offers.forEach((o, i) => {
+        if (o.sold || o.cost > S.scrap) return;
+        let pr = -1;
+        if (o.kind === 'heal') pr = n.hurt > 0 ? 100 : -1;
+        else if (o.kind === 'ammo') pr = n.resFrac < 0.75 ? 85 : -1;
+        else if (o.kind === 'freq') pr = 70;
+        else if (o.kind === 'mod') pr = 50;
+        else if (o.kind === 'gun') pr = this.wantGun(S, o.gun) ? 60 : -1;
+        if (pr > 0 && (!best || pr > best.pr)) best = {i, pr, o};
+      });
+      if (best) { const btn = await p.$(`#supply-options [data-supply="${best.i}"]:not([disabled])`); if (btn) { await btn.click(); (this.stats.supplyBuys ??= []).push(best.o.kind + ':' + best.o.cost); return true; } }
+      if (this.task?.kind === 'supply') this.supplyDone.add(this.task.key);
+      await p.click('#close-supply').catch(() => {}); return true;
     }
     if (S.modal.cache) {
       const n = this.needs(S); const order = [];
@@ -553,7 +572,7 @@ class Bot {
     this.lastScrap = S.scrap;
     // modals / pause
     if (S.rm) { await this.setKeys([]); await this.setFire(false); await this.handleModals(S); return; }
-    if (S.paused && !S.modal.cache && !S.modal.merchant && S.modal.gun == null && !S.modal.loadout) { this.pausedFor++; await this.setKeys([]); await this.setFire(false); if (this.pausedFor % 4 === 1) await this.press('Escape'); return; }
+    if (S.paused && !S.modal.supply && !S.modal.cache && !S.modal.merchant && S.modal.gun == null && !S.modal.loadout) { this.pausedFor++; await this.setKeys([]); await this.setFire(false); if (this.pausedFor % 4 === 1) await this.press('Escape'); return; }
     this.pausedFor = 0;
     if (await this.handleModals(S)) { await this.setKeys([]); await this.setFire(false); return; }
     // ammo bookkeeping
@@ -642,7 +661,7 @@ class Bot {
 
     // interact
     if (task.interact && S.active_i && S.t - this.lastE > 0.7) {
-      const want = {gate: 'gate', cache: 'cache', locker: 'locker', market: 'market', exit: 'exit'}[task.interact];
+      const want = {supply: 'supply', gate: 'gate', cache: 'cache', locker: 'locker', market: 'market', exit: 'exit'}[task.interact];
       const near = hyp(task.x - P.x, task.y - P.y) < task.tol + 16 || task.interact === 'market' || task.interact === 'exit';
       if (S.active_i.kind === want && (S.active_i.ok !== false || want === 'exit') && near && !inCombat) { this.lastE = S.t; await this.press('KeyE'); if (want === 'gate') { this.task.done = true; } }
       else if (S.active_i.kind === 'gun' && task.kind === 'gun') { this.lastE = S.t; await this.press('KeyE'); }
@@ -887,7 +906,7 @@ async function playSeed(browser, seed, o, ctx) {
     res.routeRooms = bot.routeRooms.length; res.routeCleared = bot.routeRooms.filter(i => (rst[i] || 0) & 2).length;
     res.routeVisited = bot.routeRooms.filter(i => (rst[i] || 0) & 1).length;
     res.kills = fin?.kills ?? L.kills ?? 0; res.gameSec = +(fin?.t ?? L.t ?? 0).toFixed(1); res.worldSec = +(fin?.st ?? L.st ?? 0).toFixed(1);
-    res.scrapEarned = bot.stats.scrapEarned; res.scrapSpent = bot.stats.scrapSpent; res.scrapEnd = fin?.scrap ?? L.scrap ?? 0;
+    res.supplyBuys = bot.stats.supplyBuys || []; res.scrapEarned = bot.stats.scrapEarned; res.scrapSpent = bot.stats.scrapSpent; res.scrapEnd = fin?.scrap ?? L.scrap ?? 0;
     res.starvationEvents = bot.stats.starve; res.dryEvents = bot.stats.dry;
     const dmg = {total: 0, armorAbsorbed: 0, byRole: {}, byEnemy: {}, byRoute: {route: 0, branch: 0}};
     for (const h of bot.stats.hurt) { if (h.armorOnly) { dmg.armorAbsorbed += h.dmg; continue; } dmg.total += h.dmg; dmg.byRole[h.role] = (dmg.byRole[h.role] || 0) + h.dmg; const en = h.enemy ? (ENEMY_TYPES[h.enemy]?.name || h.enemy) : h.how; dmg.byEnemy[en] = (dmg.byEnemy[en] || 0) + h.dmg; dmg.byRoute[h.branch ? 'branch' : 'route'] += h.dmg; }

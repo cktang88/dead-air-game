@@ -26,7 +26,7 @@ export const STATION_GLYPH = {
 };
 const PORTAL_CLASSES = 'dlg-card dlg-xl run-card';
 
-export function decisionHtml({floor, gross, kept, deathKeep, nextClear, hp, maxHp, build = [], interference = 0}) {
+export function decisionHtml({floor, gross, kept, scrap = 0, scrapCoins = 0, cashRate = 5, deathKeep, nextClear, hp, maxHp, build = [], interference = 0}) {
   const next = floorConfig(floor + 1), here = floorConfig(floor);
   const lossPct = Math.round((1 - deathKeep) * 100), atRisk = gross - Math.floor(gross * deathKeep);
   const boss = next.boss;
@@ -43,7 +43,7 @@ export function decisionHtml({floor, gross, kept, deathKeep, nextClear, hp, maxH
       <small>SAFE · END THE RUN</small>
       <strong>EXTRACT</strong>
       <b class="opt-big"><i>BANK</i>${kept}<em>COINS</em></b>
-      <span class="opt-line">Everything you carry is yours. Goals and unlocks still count.</span>
+      <span class="opt-line">${scrap > 0 ? `Includes ${scrapCoins} coins for ${scrap} leftover scrap (${cashRate} scrap = 1 coin).` : 'Everything you carry is yours. Goals and unlocks still count.'}</span>
     </button>
     <button class="decision-opt descend ${boss ? 'boss' : ''}" data-act="descend" type="button">
       <span class="opt-key"><kbd>2</kbd></span>
@@ -51,7 +51,7 @@ export function decisionHtml({floor, gross, kept, deathKeep, nextClear, hp, maxH
       <strong>${boss ? 'FACE THE CONDUCTOR' : 'DESCEND'}</strong>
       <b class="opt-big gold"><i>BONUS</i>+${nextClear || 0}<em>COINS${boss ? ' · +250 BOSS' : ''}</em></b>
       <span class="opt-line">${threats}</span>
-      <span class="opt-risk">DIE AND LOSE ${lossPct}% OF UNBANKED · <b>-${atRisk}</b></span>
+      <span class="opt-risk">DIE AND LOSE ${lossPct}% OF UNBANKED · <b>-${atRisk}</b>${scrap > 0 ? ` · AND ALL ${scrap} SCRAP` : ''}</span>
     </button>
   </div>
   <footer class="dlg-foot"><span class="keyhints"><span class="keyhint"><kbd>1</kbd>Extract</span><span class="keyhint"><kbd>2</kbd>Descend</span></span><span class="decision-meta">VITALS ${hp}/${maxHp} · ${build.length ? build.map(b => `${esc(b.name)} ${roman(b.rank)}`).join(' · ') : 'NO FREQUENCIES YET'}${interference ? ` · <i class="heat">INTERFERENCE +${Math.round(interference * 100)}%</i>` : ''}</span></footer>

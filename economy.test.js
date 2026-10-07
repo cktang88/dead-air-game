@@ -65,3 +65,12 @@ test('objectiveText explains the stealth-friendly exit rule', () => {
   assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 3, here: 0, exitReady: false, awareLeft: 2}).text, '2 HOSTILES HUNTING YOU · KILL OR LOSE THEM');
   assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 1, here: 0, exitReady: false, exitRoomHostiles: 1}).text, 'CLEAR THE EXTRACTION ROOM · 1 HOSTILE');
 });
+
+import {SCRAP, scrapRange, scrapToCoins} from './economy.js';
+test('scrap ranges are inclusive and clamp odd rolls', () => {
+  assert.equal(scrapRange([2, 4], 0), 2); assert.equal(scrapRange([2, 4], .999), 4); assert.equal(scrapRange([2, 4], 5), 4); assert.equal(scrapRange([2, 4], NaN), 2 + 0);
+});
+test('leftover scrap cashes in at a deliberately bad rate', () => {
+  assert.equal(scrapToCoins(0), 0); assert.equal(scrapToCoins(SCRAP.cashRate - 1), 0); assert.equal(scrapToCoins(SCRAP.cashRate * 8 + 2), 8);
+  assert.ok(SCRAP.cashRate >= 4, 'a medkit (30 scrap) must be worth more than the coins it would cash for');
+});

@@ -294,12 +294,12 @@ test('an upgrade purchase cannot spend too few coins or go past its final tier',
 
 test('permanent upgrades change only their run stats and save data is sanitized',()=>{
   const base=progressionStats(emptyProgress());
-  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:3,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(base),{moveSpeed:112,idleScale:.08,maxHealth:3,maxWeaponSlots:2,crateDropChance:.35,roomClearScrap:10,luckyFindLevel:0,scannerRange:0});
   const restored=parseProgress(JSON.stringify({version:1,coins:-4,upgrades:{runner:1,thirdslot:99,unknown:3}}));
   assert.equal(restored.coins,0);
   assert.equal(restored.upgrades.thirdslot,1);
   assert.equal(restored.upgrades.unknown,undefined);
-  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:20,luckyFindLevel:0,scannerRange:0});
+  assert.deepEqual(legacyStats(progressionStats(restored)),{moveSpeed:118.72,idleScale:.08,maxHealth:3,maxWeaponSlots:3,crateDropChance:.35,roomClearScrap:10,luckyFindLevel:0,scannerRange:0});
   assert.equal(progressionStats({...restored,upgrades:{...restored.upgrades,thirdslot:0}}).maxWeaponSlots,2);
 });
 
@@ -334,7 +334,7 @@ test('Lucky Find is saved and adds capped rarity levels without changing item qu
 
 test('Salvager improves crate drops and combat room-clear scrap at each tier',()=>{
   let progress=awardCoins(emptyProgress(),1000);
-  for(const [chance,clearScrap] of [[.45,22],[.55,24],[.65,26]]){
+  for(const [chance,clearScrap] of [[.45,12],[.55,14],[.65,16]]){
     const purchase=purchaseUpgrade(progress,'salvager');
     assert.equal(purchase.purchased,true);
     progress=purchase.progress;

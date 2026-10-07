@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {GUNS} from './catalog.js';
 import {LETHALITY, hitsToKill} from './stealth.js';
 import {shotBeat} from './time-rule.js';
-import {SIGNAL_COST, SUPPLY_MEDKIT_HP, offerCard, offerStatus, supplyOffers} from './supply.js';
+import {PRICES, SIGNAL_COST, SUPPLY_MEDKIT_HP, armsOffer, offerCard, offerStatus, reshuffleCost, supplyOffers} from './supply.js';
 
 const seq = (...values) => { let i = 0; return () => values[i++ % values.length]; };
 const machine = GUNS.find(g => g.id === 'machine');
@@ -13,7 +13,31 @@ test('a supply drop always shows three options: sustain, arms, signal', () => {
   const offers = supplyOffers({...base, rng: seq(.9, .1, .5)});
   assert.deepEqual(offers.map(o => o.slot), ['sustain', 'arms', 'signal']);
   assert.equal(offers[2].kind, 'freq'); assert.equal(offers[2].cost, SIGNAL_COST);
-  assert.equal(offers[0].cost, 0); assert.equal(offers[1].cost, 0);
+  assert.equal(offers[0].cost, PRICES.ammo); assert.equal(offers[1].cost, PRICES.mod);
+});
+
+test('every card carries a scrap price, and a fresh run cannot afford all three', () => {
+  for (const r of [.1, .9]) for (const o of supplyOffers({...base, rng: seq(r, .5)})) assert.ok(o.cost > 0, `${o.kind} is priced`);
+  const all = supplyOffers({...base, rng: seq(.9, .5)}).reduce((n, o) => n + o.cost, 0);
+  assert.ok(all >= 100 && all <= 170, `three cards cost ${all}`);
+  assert.equal(supplyOffers({...base, health: 2, rng: seq(.9)})[0].cost, PRICES.heal);
+});
+
+test('status checks the price too, and a bought card stays bought', () => {
+  assert.equal(offerStatus({kind: 'ammo', cost: 20}, {ammoNeed: true, scrap: 5}).reason, 'NEED 15 MORE SCRAP');
+  assert.equal(offerStatus({kind: 'ammo', cost: 20}, {ammoNeed: true, scrap: 20}).ok, true);
+  assert.equal(offerStatus({kind: 'ammo', cost: 20, sold: true}, {ammoNeed: true, scrap: 99}).reason, 'BOUGHT');
+  assert.equal(offerStatus({kind: 'ammo', cost: 20}, {ammoNeed: false, scrap: 99}).reason, 'AMMO ALREADY FULL', 'unusable beats unaffordable');
+});
+
+test('reshuffle gets dearer each time and never re-offers the same card', () => {
+  assert.deepEqual([0, 1, 2].map(reshuffleCost), [15, 25, 35]);
+  const first = armsOffer({...base, rng: seq(.9, .0)});
+  for (let i = 0; i < 20; i++) {
+    const next = armsOffer({...base, rng: seq(.9, (i * .05) % 1, .3), avoid: first});
+    assert.ok(next.kind !== first.kind || next.modId !== first.modId, 'differs from the replaced card');
+    assert.equal(next.slot, 'arms');
+  }
 });
 
 test('sustain is ammo by default and a medkit when you are badly hurt (or full on ammo and hurt)', () => {

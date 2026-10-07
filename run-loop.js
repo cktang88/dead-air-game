@@ -1,5 +1,6 @@
 // The macro loop: floors, escalation, risk/reward banking, floor seeds and the daily seed. Pure and data-driven.
 import {MAX_RUN_SEED} from './seeds.js';
+import {scrapToCoins} from './economy.js';
 
 export const FINAL_FLOOR = 4;
 
@@ -59,10 +60,13 @@ export function grossCoins({floorsCleared = 0, roomsCleared = 0, kills = 0, boss
 
 // Settle a finished run. outcome: 'dead' keeps `keepFraction` of the gross; 'extract' (cash out early) and 'won' keep all.
 // coinMult comes from perks / upgrades; keepFraction from upgrades (HIGH ROLLER lowers it).
-export function settleRun({outcome, floorsCleared, roomsCleared, kills, bossKilled = false, coinMult = 1, keepFraction = COIN_RATES.deathKeep}) {
-  const gross = Math.floor(grossCoins({floorsCleared, roomsCleared, kills, bossKilled}) * Math.max(0, coinMult));
-  const kept = outcome === 'dead' ? Math.floor(gross * Math.max(0, Math.min(1, keepFraction))) : gross;
-  return {gross, kept, lost: gross - kept};
+// Leftover scrap cashes in at SCRAP.cashRate scrap per coin when you extract or win; a death loses it all (spending beats banking).
+export function settleRun({outcome, floorsCleared, roomsCleared, kills, bossKilled = false, coinMult = 1, keepFraction = COIN_RATES.deathKeep, scrap = 0}) {
+  const earned = Math.floor(grossCoins({floorsCleared, roomsCleared, kills, bossKilled}) * Math.max(0, coinMult));
+  const cash = outcome === 'dead' ? 0 : scrapToCoins(scrap);
+  const gross = earned + cash;
+  const kept = outcome === 'dead' ? Math.floor(earned * Math.max(0, Math.min(1, keepFraction))) : gross;
+  return {gross, kept, lost: gross - kept, cash};
 }
 
 // Shareable one-line result for the daily seed run.

@@ -69,7 +69,7 @@ export function collectInteractables(s) {
     } else if (pk.kind === 'supply') {
       const n = livingIn(pk.roomIndex, enemies), ok = n === 0;
       add({id: `supply:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'supply', ref: pk, ...at, range: RANGE.supply, keyed: true, icon: 'station-cache',
-        verb: 'OPEN', subject: 'SUPPLY DROP', enabled: ok, reason: ok ? 'PICK ONE OF THREE' : `CLEAR ROOM FIRST (${hostilesText(n)})`, color: '#f4c66d'});
+        verb: 'OPEN', subject: 'SUPPLY DROP', enabled: ok, reason: ok ? 'BUY WITH SCRAP · PRICES INSIDE' : `CLEAR ROOM FIRST (${hostilesText(n)})`, color: '#f4c66d'});
     } else if (pk.kind === 'mod') {
       const mod = MOD_BY_ID.get(pk.modId), hand = s.hand || {}, worn = hand.modId ? MOD_BY_ID.get(hand.modId) : null, same = hand.modId === pk.modId;
       add({id: `mod:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'mod', ref: pk, ...at, range: RANGE.mod, keyed: true, icon: pickupIconId(pk),

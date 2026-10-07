@@ -559,6 +559,12 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 .cache-row.ammo .ico { color: var(--ammo); } .cache-row.health .ico { color: var(--health); } .cache-row.upgrade .ico { color: var(--armor); } .cache-row.scrap .ico { color: var(--scrap); }
 .mr-icon { display: grid; place-items: center; min-width: 56px; color: var(--scrap); }
 .merchant-row.sold { opacity: .5; }
+.supply-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) var(--s-1) 0; }
+.supply-purse { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--scrap); font: 800 18px/1 var(--font-display); letter-spacing: .06em; }
+.supply-purse small { color: var(--text-mid); font: 400 var(--fs-label)/1 var(--font-body); letter-spacing: .12em; }
+.supply-reshuffle { display: inline-flex; align-items: center; gap: var(--s-2); padding: 8px 12px; background: transparent; color: var(--text-hi); border: 1px dashed var(--border-2); border-radius: var(--r-md); font: 700 12px/1 var(--font-display); letter-spacing: .1em; cursor: pointer; }
+.supply-reshuffle:hover:not(:disabled) { border-color: var(--scrap); color: var(--scrap); }
+.supply-reshuffle:disabled { opacity: .45; cursor: not-allowed; }
 .merchant-row.poor .cost { color: var(--danger); }
 .merchant-row .stat-bars { margin-top: var(--s-2); }
 .merchant-row button { min-width: 104px; }

@@ -115,7 +115,7 @@ export function progressionStats(progress) {
     maxHealth:Math.max(1,3+vitalreserve-adrenal),
     maxWeaponSlots:thirdslot>=1?3:2,
     crateDropChance:Math.min(.65,.35+.1*salvager),
-    roomClearScrap:20+2*salvager,
+    roomClearScrap:10+2*salvager,
     luckyFindLevel:luckyfind,
     scannerRange:(ROOM_SENSE_RANGE_TILES[roomsense-1]||0)*TILE,
     // Run-economy and combat modifiers (tradeoff upgrades + perks).

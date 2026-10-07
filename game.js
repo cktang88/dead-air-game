@@ -32,8 +32,8 @@ import {createNav, stepEnemyBrain, brainState} from './enemy-brain.js';
 import {SHOVE,DRY_DROP_VALUE,isAllDry,shoveOutcome,shoveReady,shoveTargets} from './shove.js';
 import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadius} from './stealth.js';
 import {noiseRayLengths} from './stealth2d.js';
-import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
-import {supplyOffers,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
+import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText,SCRAP,scrapRange,scrapToCoins} from './economy.js';
+import {supplyOffers,armsOffer,reshuffleCost,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
 import {applyFloorLook} from './floor-palette.js';
 import {extractionStatus, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
@@ -236,7 +236,7 @@ function placeRoleRewards(room){
   for(const kind of roomPickupKinds(room.role)){
     const point=findRoomPropPosition({room,cells:state.tileMap,doors:state.doors,occupied:[...state.cover,...reserved],tileSize:TILE,random,preferred:room.rewardSpots});
     if(!point)continue;
-    dropPickup(kind,point.x,point.y,kind==='scrap'?30+Math.floor(random()*21):0,room.index);
+    dropPickup(kind,point.x,point.y,kind==='scrap'?scrapRange(SCRAP.rewardPile,random()):0,room.index);
     reserved.push({...point,radius:18});
   }
 }
@@ -296,7 +296,7 @@ function makeLevel(){
     }
     applyPostures(i,spawned);
     if(!roomPickupKinds(room.role).length){
-      if(i%2===1){dropPickup('scrap',...freeRoomPoint(room),10+Math.floor(random()*21));}
+      if(i%2===1){dropPickup('scrap',...freeRoomPoint(room),scrapRange(SCRAP.roomPile,random()));}
       if(i%3===0){const kind=choose(['gun','mod','heal']);dropPickup(kind,...freeRoomPoint(room));}
     }
   }
@@ -360,7 +360,7 @@ function breakCrate(crate){
   playCrateBreak();
   physics.removeRigidBody(crate.body);state.colliders=state.colliders.filter(item=>item.body!==crate.body);state.crates=state.crates.filter(item=>item!==crate);state.cover=state.cover.filter(item=>item.crate!==crate);
   state.shake=Math.max(state.shake,1.8);view.fx.breakCrate(crate);
-  if(random()<runStats().crateDropChance)dropPickup('scrap',crate.x,crate.y,8+Math.floor(random()*13));
+  if(random()<runStats().crateDropChance)dropPickup('scrap',crate.x,crate.y,scrapRange(SCRAP.crate,random()));
   rollSupplyDrop('crate',crate.x,crate.y);
 }
 // Noise: every entry is {x,y,radius,kind}. The brain hears it (walls cut it to 55%, sleepers hear 70%), and
@@ -560,8 +560,8 @@ function dropAmmoNear(enemy){
 function killEnemy(enemy,bullet){
   if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=enemy.type==='boss'?1.3:3.5;enemy.aimTimer=0;enemy.meleeWindup=0;for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);{const bl=Math.hypot(bullet.vx,bullet.vy)||1,kv=enemyKnockback((bullet.damage||0)*1.6,enemy.type)*1.4;enemy.body.setLinvel({x:bullet.vx/bl*kv,y:bullet.vy/bl*kv},true);}enemy.hp=0;
   view.fx.kill(enemy,bullet.vx,bullet.vy);
-  state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(6+Math.floor(random()*8));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
-  if(!signalOn()){if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
+  state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(scrapRange(SCRAP.kill,random()));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
+  if(!signalOn()){if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,SCRAP.dropMin+Math.floor(random()*(SCRAP.dropMax-SCRAP.dropMin+1)));
   if(isAllDry(state.weaponSlots,state.weaponAmmo,state.reserveAmmo)){dropAmmoNear(enemy);pushFeed('OUT OF AMMO · AMMO DROPPED','loot');}else rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));}
   playKill();onEnemyKilled(enemy,bullet);hud();checkRoomClear();
 }
@@ -644,8 +644,21 @@ function renderSupply(){
   $('supply-options').innerHTML=pickup.offers.map((offer,i)=>{
     const status=offerStatus(offer,ctx),card=offerCard(offer,{activeGun:hand,activeModId:ctx.activeModId,handGun:full?hand:null});
     const icon=offer.kind==='gun'?gunIcon(GUNS[offer.gunIndex],'gun-ico md'):strokeIcon(card.icon,'ico big');
-    return `<div class="merchant-row cache-row ${offer.kind} ${status.ok?'':'poor'}" data-kind="${offer.kind}"><div class="mr-icon">${icon}</div><span><strong>${keycap(String(i+1))} ${card.title}</strong><small>${card.text}</small>${status.ok?'':`<span class="why">${status.reason}</span>`}</span><button data-supply="${i}" ${status.ok?'':'disabled'}>${status.ok?(offer.cost?costHtml(offer.cost):'TAKE'):'UNAVAILABLE'}</button></div>`;
-  }).join('');
+    return `<div class="merchant-row cache-row ${offer.kind} ${status.ok?'':'poor'} ${offer.sold?'sold':''}" data-kind="${offer.kind}"><div class="mr-icon">${icon}</div><span><strong>${keycap(String(i+1))} ${card.title}</strong><small>${card.text}</small>${status.ok?'':`<span class="why">${status.reason}</span>`}</span><button data-supply="${i}" ${status.ok?'':'disabled'}>${offer.sold?'BOUGHT':costHtml(offer.cost||0)}</button></div>`;
+  }).join('')+supplyFooterHtml(pickup,ctx);
+}
+function supplyFooterHtml(pickup,ctx){
+  const cost=reshuffleCost(pickup.rerolls||0),arms=pickup.offers.find(o=>o.slot==='arms'),can=arms&&!arms.sold&&ctx.scrap>=cost;
+  return `<div class="supply-foot"><span class="supply-purse">${costHtml(Math.floor(ctx.scrap))} <small>YOU HAVE</small></span>${arms&&!arms.sold?`<button type="button" class="supply-reshuffle" data-supply-reshuffle ${can?'':'disabled'}>${keycap('R')} RESHUFFLE ARMS ${costHtml(cost)}</button>`:''}</div>`;
+}
+function reshuffleSupply(){
+  const pickup=state.supplyPickup;if(!pickup?.offers)return;
+  const idx=pickup.offers.findIndex(o=>o.slot==='arms'),arms=pickup.offers[idx],cost=reshuffleCost(pickup.rerolls||0);
+  if(!arms||arms.sold)return;
+  if(state.scrap<cost){toast(`NEED ${cost-Math.floor(state.scrap)} MORE SCRAP`);return;}
+  state.scrap-=cost;pickup.rerolls=(pickup.rerolls||0)+1;
+  pickup.offers[idx]=armsOffer({rng:random,gunCandidates:possiblePickupGuns(),activeGun:GUNS[state.weaponIndex],activeModId:modOf(GUNS[state.weaponIndex]),luckyFindLevel:runStats().luckyFindLevel,avoid:arms});
+  playPickup('mod');hud();renderSupply();
 }
 function openSupply(pickup){
   if(roomHasLivingEnemies(pickup.roomIndex,state.enemies)){toast('CLEAR THE ROOM FIRST');return;}
@@ -660,12 +673,15 @@ function closeSupply(){dialogClosedAt=performance.now();state.supplyOpen=false;s
 function takeSupply(index){
   const pickup=state.supplyPickup,offer=pickup?.offers?.[index];if(!offer)return;
   const status=offerStatus(offer,supplyContext());if(!status.ok){toast(status.reason||'NOT AVAILABLE');return;}
-  if(offer.kind==='ammo'){for(const gi of state.weaponSlots){state.weaponAmmo[gi]=magSize(GUNS[gi]);state.reserveAmmo[gi]=GUNS[gi].reserve;}toast('SUPPLY DROP · EVERY GUN RESTOCKED');view.fx.floater(pickup.x,pickup.y-10,'AMMO RESTOCKED','#8fe0ff',14,1.2);}
-  else if(offer.kind==='heal'){const healed=Math.min(SUPPLY_MEDKIT_HP,state.maxHealth-state.health);state.health+=healed;toast(`SUPPLY DROP · +${healed} HEALTH`);view.fx.floater(pickup.x,pickup.y-10,collectPopup('heal',healed),'#74dfab',15,1.2);}
-  else if(offer.kind==='mod'){if(!fitMod(offer.modId))return;}
-  else if(offer.kind==='gun'){if(!takeGunIndex(offer.gunIndex))return;}
-  else if(offer.kind==='freq'){state.scrap-=offer.cost;pickup.claimed=true;view.fx.pickup(pickup.x,pickup.y,pickup.color);playPickup('cache');closeSupply();hud();openFreqPick('supply');return;}
-  pickup.claimed=true;view.fx.pickup(pickup.x,pickup.y,pickup.color);playPickup('cache');closeSupply();hud();
+  const spend=()=>{state.scrap-=offer.cost||0;offer.sold=true;};
+  if(offer.kind==='ammo'){spend();for(const gi of state.weaponSlots){state.weaponAmmo[gi]=magSize(GUNS[gi]);state.reserveAmmo[gi]=GUNS[gi].reserve;}toast('SUPPLY DROP · EVERY GUN RESTOCKED');view.fx.floater(pickup.x,pickup.y-10,'AMMO RESTOCKED','#8fe0ff',14,1.2);}
+  else if(offer.kind==='heal'){spend();const healed=Math.min(SUPPLY_MEDKIT_HP,state.maxHealth-state.health);state.health+=healed;toast(`SUPPLY DROP · +${healed} HEALTH`);view.fx.floater(pickup.x,pickup.y-10,collectPopup('heal',healed),'#74dfab',15,1.2);}
+  else if(offer.kind==='mod'){if(!fitMod(offer.modId))return;spend();}
+  else if(offer.kind==='gun'){if(!takeGunIndex(offer.gunIndex))return;spend();}
+  else if(offer.kind==='freq'){spend();view.fx.pickup(pickup.x,pickup.y,pickup.color);playPickup('cache');if(pickup.offers.every(o=>o.sold))pickup.claimed=true;closeSupply();hud();openFreqPick('supply');return;}
+  view.fx.pickup(pickup.x,pickup.y,pickup.color);playPickup('cache');hud();
+  if(pickup.offers.every(o=>o.sold)){pickup.claimed=true;closeSupply();return;}
+  renderSupply();
 }
 function finishRun(result,cause){if(state.paidOut)return;finishRunImpl(result,cause);}
 function winRun(){finishRun('won');}
@@ -827,7 +843,7 @@ function roomRewardDrop(room){
   const kind=room.reward;if(!kind||room.rewardTaken)return;room.rewardTaken=true;
   const [x,y]=freeRoomPoint(room),builtIn=roomPickupKinds(room.role);
   if(kind==='freq'||kind==='elite'){dropPickup('freq',x,y,0,state.rooms.indexOf(room));const pk=state.pickups.at(-1);if(pk?.kind==='freq'&&kind==='elite')pk.elite=true;pushFeed(kind==='elite'?'ELITE DOWN · A FREQUENCY IS BROADCASTING':'A FREQUENCY IS BROADCASTING HERE','loot');}
-  else if(kind==='scrap'){for(let n=0;n<4;n++)dropPickup('scrap',...freeRoomPoint(room),14);}
+  else if(kind==='scrap'){for(let n=0;n<4;n++)dropPickup('scrap',...freeRoomPoint(room),SCRAP.rewardDoor/4);}
   else if(kind==='gun'&&!builtIn.includes('gun'))dropPickup('gun',x,y,0,state.rooms.indexOf(room));
   else if(kind==='heal'&&!builtIn.includes('heal')&&!interferenceStats(state.progress).noHeals)dropPickup('heal',x,y,2);
   else if(kind==='supply')dropPickup('supply',x,y,0,state.rooms.indexOf(room));
@@ -852,7 +868,7 @@ function reachExit(){
   state.floorsCleared=state.floor;if(!state.floorHit)state.noHitFloors++;if(state.floor===1&&!state.floor1Seconds)state.floor1Seconds=state.realElapsed;
   playExtraction();
   const st=runStats(),gross=Math.floor(grossCoins({floorsCleared:state.floorsCleared,roomsCleared:state.runRooms,kills:state.kills})*runCoinMult());
-  setRunModal('decision',decisionHtml({floor:state.floor,gross,kept:gross,deathKeep:st.deathKeep,nextClear:COIN_RATES.floorBonus[state.floor+1]||0,hp:state.health,maxHp:state.maxHealth,build:buildSummaryForUi(),interference:interferenceStats(state.progress).coinBonus}));
+  setRunModal('decision',decisionHtml({floor:state.floor,gross,kept:gross+scrapToCoins(state.scrap),scrap:state.scrap,scrapCoins:scrapToCoins(state.scrap),cashRate:SCRAP.cashRate,deathKeep:st.deathKeep,nextClear:COIN_RATES.floorBonus[state.floor+1]||0,hp:state.health,maxHp:state.maxHealth,build:buildSummaryForUi(),interference:interferenceStats(state.progress).coinBonus}));
 }
 function buildSummaryForUi(){return Object.entries(state.freq).filter(([,rank])=>rank>0).map(([id,rank])=>({name:upgradeById(id)?.name||id,rank}));}
 function decide(choice){
@@ -900,7 +916,7 @@ function finishRunImpl(result,causeArg){
   state.paidOut=true;state.mode=result==='dead'?'dead':'won';state.outcome=result;state.runModal=null;setHtml($('build-strip'),'');$('run-modal').hidden=true;$('boss-bar').hidden=true;
   if(result!=='dead')playExtraction();
   const st=runStats(),ih=interferenceStats(state.progress),floorsCleared=result==='won'?FINAL_FLOOR-1:state.floorsCleared;
-  const settle=settleRun({outcome:result,floorsCleared,roomsCleared:state.runRooms,kills:state.kills,bossKilled:state.bossKilled,coinMult:runCoinMult(),keepFraction:st.deathKeep});
+  const settle=settleRun({outcome:result,floorsCleared,roomsCleared:state.runRooms,kills:state.kills,bossKilled:state.bossKilled,coinMult:runCoinMult(),keepFraction:st.deathKeep,scrap:state.scrap});
   let progress=awardCoins(state.progress,settle.kept);
   const cause=result==='dead'?(causeArg||state.lastHitType||null):null,reached=Math.max(1,state.floor);
   const summary={kills:state.kills,floorReached:reached,outcome:result,seconds:state.realElapsed,bossKilled:state.bossKilled,bossPistol:state.bossKilled&&state.bossPistol,stillRooms:state.stillRoomClears,slowTriples:state.slowTriples,noHitFloors:state.noHitFloors,floor1Seconds:state.floor1Seconds,daily:state.daily,coins:settle.kept};
@@ -912,7 +928,7 @@ function finishRunImpl(result,causeArg){
   state.progress=progress;saveProgress();
   const lines=operatorLines({outcome:result,cause,floor:reached,firstBossKill,newUnlocks,newTape:tape.tape,runs:progress.stats.runs,seed:state.seed+state.kills});
   const share=state.daily?dailyShareLine({date:dateKey(),floor:reached,kills:state.kills,coins:settle.kept,outcome:result,seconds:state.realElapsed}):'';state.shareLine=share;
-  const payout=result==='dead'?`BANKED <b>+${settle.kept}</b> · LOST ${settle.lost} UNBANKED · DEATH KEEPS ${Math.round(st.deathKeep*100)}%`:`BANKED <b>+${settle.kept}</b> · FLOOR ${reached} OF ${FINAL_FLOOR}${ih.coinBonus?` · INTERFERENCE +${Math.round(ih.coinBonus*100)}%`:''}`;
+  const payout=result==='dead'?`BANKED <b>+${settle.kept}</b> · LOST ${settle.lost} UNBANKED · DEATH KEEPS ${Math.round(st.deathKeep*100)}%`:`BANKED <b>+${settle.kept}</b>${settle.cash?` (${settle.cash} FROM ${state.scrap} SCRAP)`:''} · FLOOR ${reached} OF ${FINAL_FLOOR}${ih.coinBonus?` · INTERFERENCE +${Math.round(ih.coinBonus*100)}%`:''}`;
   const rs=routeStats(),run={won:result!=='dead',rooms:state.runRooms,kills:state.kills,seconds:state.realElapsed,coins:settle.kept};
   let merged;try{merged=mergeBest(readBest(localStorage),run);if(merged.isNew)writeBest(localStorage,merged.best);}catch{merged=mergeBest(null,run);}
   const killedBy=result==='dead'&&state.lastHitBy?deathCause({name:state.lastHitBy,kind:state.lastHitKind||'shot',type:state.lastHitType||'',spotted:!!state.lastHitSpotted}):'';
@@ -945,7 +961,7 @@ function wireMacroUi(){
 function checkRoomClear(){if(signalOn())return;for(const [i,r] of state.rooms.entries()){
   if(r.cleared||!r.visited)continue;
   const hasEnemy=roomHasLivingEnemies(i,state.enemies);
-  if(!hasEnemy){r.cleared=true;state.roomsCleared++;state.runRooms++;if(roomHasEncounter(r)){roomRewardDrop(r);roomClearTracking(r);const reward=scrapGain(runStats().roomClearScrap);state.scrap+=reward;playRoomClear();roomClearBanner(reward);{const cx=(r.cx+.5)*TILE,cy=(r.cy+.5)*TILE;view.fx.pickup(cx,cy,'#6dffb0');}for(let n=0;n<6;n++)dropPickup('scrap',rand(r.x1+1,r.x2-1)*TILE,rand(r.y1+1,r.y2-1)*TILE,4);roomClearSupplies(r);hud();}}
+  if(!hasEnemy){r.cleared=true;state.roomsCleared++;state.runRooms++;if(roomHasEncounter(r)){roomRewardDrop(r);roomClearTracking(r);const reward=scrapGain(runStats().roomClearScrap);state.scrap+=reward;playRoomClear();roomClearBanner(reward);{const cx=(r.cx+.5)*TILE,cy=(r.cy+.5)*TILE;view.fx.pickup(cx,cy,'#6dffb0');}for(let n=0;n<6;n++)dropPickup('scrap',rand(r.x1+1,r.x2-1)*TILE,rand(r.y1+1,r.y2-1)*TILE,SCRAP.clearPile);roomClearSupplies(r);hud();}}
 }
   checkExtractionOpen();
 }
@@ -1271,7 +1287,7 @@ function setupControls(){
       return;
     }
     if(state.loadoutOpen&&key==='tab'){trapDialogTab(e,$('loadout'),document.activeElement);return;}
-    if(state.supplyOpen){if(key==='tab')trapDialogTab(e,$('supply-panel'),document.activeElement);else if(key==='escape')closeSupply();else if(key>='1'&&key<='3')takeSupply(Number(key)-1);return;}
+    if(state.supplyOpen){if(key==='tab')trapDialogTab(e,$('supply-panel'),document.activeElement);else if(key==='escape')closeSupply();else if(key>='1'&&key<='3')takeSupply(Number(key)-1);else if(key==='r')reshuffleSupply();return;}
     if(key==='tab'){e.preventDefault();if(!state.supplyOpen)toggleLoadout();markAction();}
     if(state.peek&&key!==binding('interact')&&key!=='escape')return;
     if(key===binding('interact')){input.interact=true;input.eHeld=true;input.eDown=true;markAction();}
@@ -1305,7 +1321,7 @@ function setupControls(){
   $('meta-button').addEventListener('click',()=>{renderMeta();$('meta-panel').hidden=false;$('close-meta').focus();});$('close-meta').addEventListener('click',()=>{$('meta-panel').hidden=true;$('meta-button').focus();});$('reset-save').addEventListener('click',resetProgress);
   
   $('loadout').addEventListener('click',e=>{if(e.target===$('loadout')){toggleLoadout(false);return;}const slot=e.target.closest('[data-slot]');if(slot){switchWeapon(Number(slot.dataset.slot));renderLoadout();return;}const shell=e.target.closest('[data-shell]');if(shell){state.shotgunShellId=shell.dataset.shell;hud();toast(`${shellForRun().name} · ${shellForRun().description}`);}});
-  $('close-supply').addEventListener('click',closeSupply);$('supply-panel').addEventListener('click',event=>{if(event.target===$('supply-panel')){closeSupply();return;}const button=event.target.closest('[data-supply]');if(button)takeSupply(Number(button.dataset.supply));});
+  $('close-supply').addEventListener('click',closeSupply);$('supply-panel').addEventListener('click',event=>{if(event.target===$('supply-panel')){closeSupply();return;}if(event.target.closest('[data-supply-reshuffle]')){reshuffleSupply();return;}const button=event.target.closest('[data-supply]');if(button)takeSupply(Number(button.dataset.supply));});
   addEventListener('resize',resize);
 }
 /* ======================================================================================================

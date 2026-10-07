@@ -296,6 +296,10 @@ test('dying keeps 40% of the gross, extracting and winning keep all', () => {
   assert.equal(dead.kept, Math.floor(gross * .4));
   assert.equal(dead.lost, gross - dead.kept);
   assert.ok(out.kept > dead.kept, 'banking early beats dying');
+  assert.equal(settleRun({...run, outcome: 'extract', scrap: 52}).cash, 10, 'extracting cashes leftover scrap');
+  assert.equal(settleRun({...run, outcome: 'extract', scrap: 52}).kept, gross + 10);
+  assert.equal(settleRun({...run, outcome: 'dead', scrap: 500}).cash, 0, 'death loses all scrap');
+  assert.equal(settleRun({...run, outcome: 'dead', scrap: 500}).kept, dead.kept);
   assert.equal(settleRun({...run, outcome: 'dead', keepFraction: .25}).kept, Math.floor(gross * .25));
   assert.equal(settleRun({...run, outcome: 'extract', coinMult: 1.25}).gross, Math.floor(gross * 1.25));
 });

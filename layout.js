@@ -1,3 +1,5 @@
+import {SCRAP} from './economy.js';
+const GATE_COST=SCRAP.gateCost;
 const ROOM_MARGIN = 1;
 
 const isWalkable = value => value === 0 || value === 2;
@@ -208,7 +210,7 @@ export function chooseRewardDoor(cells,doors,rooms,targetIndex){
   for(const candidate of candidates){
     const blocked=new Set(candidate.cells.map(({x,y})=>`${x},${y}`)),canPass=(x,y)=>cells[y]?.[x]===0&&!blocked.has(`${x},${y}`);
     if(shortestFloorPath(cells,startPoint,targetPoint,canPass).length===0&&shortestFloorPath(cells,startPoint,exitPoint,canPass).length>0){
-      return {...candidate.door,cells:candidate.cells,roomIndex:targetIndex,cost:18,opened:false};
+      return {...candidate.door,cells:candidate.cells,roomIndex:targetIndex,cost:GATE_COST,opened:false};
     }
   }
   return null;

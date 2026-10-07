@@ -42,7 +42,7 @@ test('out of range targets are labelled but not active; far ones omitted', () =>
 });
 test('supply drop prompt says what to expect', () => {
   const t = collectInteractables(base({pickups: [{kind: 'supply', x: 110, y: 100, roomIndex: 2, available: true}]})).find(x => x.kind === 'supply');
-  assert.equal(promptParts(t, 'F').head, 'OPEN SUPPLY DROP'); assert.equal(t.reason, 'PICK ONE OF THREE'); assert.equal(RANGE.market, undefined);
+  assert.equal(promptParts(t, 'F').head, 'OPEN SUPPLY DROP'); assert.equal(t.reason, 'BUY WITH SCRAP · PRICES INSIDE'); assert.equal(RANGE.market, undefined);
 });
 test('mod pickups name the mod, say what they replace, and are never auto-collected', () => {
   const pickups = [{kind: 'mod', modId: 'ricochet', x: 110, y: 100, available: true}];
