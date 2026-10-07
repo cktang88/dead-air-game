@@ -904,3 +904,17 @@ html.vhs #game-shell::after { content: '● REC  SP'; position: absolute; right:
 @keyframes vhs-rec { 50% { color: #ff4a5e; } }
 html.vhs #game-shell canvas { filter: contrast(1.06) saturate(1.15); }
 @media (prefers-reduced-motion: reduce) { html.vhs #game-shell::after { animation: none; } }
+
+/* High-resolution HUD scale: the camera shows a fixed WORLD height, so bigger screens get sharper pictures; the HUD is
+   scaled up with the viewport height so it does not shrink to nothing on 1440p / 4K at 1x device pixel ratio. */
+:root { --ui-k: 1; }
+@media (min-height: 1250px) { :root { --ui-k: 1.3; } }
+@media (min-height: 1750px) { :root { --ui-k: 1.7; } }
+@media (min-height: 2100px) { :root { --ui-k: 2; } }
+#hud { transform: scale(var(--ui-k)); transform-origin: left bottom; }
+#hud-right { transform: scale(var(--ui-k)); transform-origin: right bottom; }
+#feed { transform: scale(var(--ui-k)); transform-origin: right top; }
+#topbar { width: calc(100% / var(--ui-k)); transform: scale(var(--ui-k)); transform-origin: left top; }
+#top-center { transform: translateX(-50%) scale(var(--ui-k)); transform-origin: center top; }
+#manual-chip { top: calc(62px * var(--ui-k)); }
+#manual-chip.show { transform: scale(var(--ui-k)); transform-origin: left top; }

@@ -123,9 +123,10 @@ export function createRenderer(container, state) {
   };
 
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    vis.dpr = dpr;
     const w = window.innerWidth, h = window.innerHeight;
+    // backing store: native DPR up to 2, but never more than ~4K worth of pixels (frame cost); CSS stretches the canvas
+    const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(3840 * 2160 / Math.max(1, w * h)));
+    vis.dpr = dpr;
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     canvas.style.width = '100%'; canvas.style.height = '100%';
     resizeCamera(cam, w, h); cam.base = cam.scale;
@@ -1262,7 +1263,7 @@ export function createRenderer(container, state) {
     for (const c of state.crates) if (c.flash > 0) c.flash = Math.max(0, c.flash - dt * 7);
     vis.flashHit = Math.max(0, (vis.flashHit || 0) - dt * 14); vis.hurtSat = Math.max(0, vis.hurtSat - dt * 2.4);
     // camera
-    const look = vis.mouseActive && state.mode === 'play' ? lookAheadOffset(vis.mouseX, vis.mouseY, w, h, 46) : {x: 0, y: 0};
+    const look = vis.mouseActive && state.mode === 'play' ? lookAheadOffset(vis.mouseX, vis.mouseY, w, h, 96) : {x: 0, y: 0};
     // a door peek pans the camera through the door; otherwise follow the player
     const cf = state.camFocus || {x: 0, y: 0};
     if (state.peek) followStep(cam, state.peek.focus.x, state.peek.focus.y, dt, 4.2); else followStep(cam, p.x + look.x + cf.x, p.y + look.y + cf.y, dt, 6.5);

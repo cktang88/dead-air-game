@@ -249,7 +249,7 @@ function createRoomMap(){
   const cfg=state.floorCfg;state.levelSeed=floorSeed(state.seed,state.floor);
   let dungeon=generateDungeon(ROT,state.levelSeed);
   if(cfg.boss){// The boss needs room to dodge: look for a generous arena as the final room.
-    for(let attempt=1;attempt<=16&&arenaScore(dungeon)<150;attempt++){try{const alt=generateDungeon(ROT,state.levelSeed+attempt*7919);if(arenaScore(alt)>arenaScore(dungeon)){dungeon=alt;state.levelSeed+=attempt*7919;}}catch{}}
+    for(let attempt=1;attempt<=16&&arenaScore(dungeon)<220;attempt++){try{const alt=generateDungeon(ROT,state.levelSeed+attempt*7919);if(arenaScore(alt)>arenaScore(dungeon)){dungeon=alt;state.levelSeed+=attempt*7919;}}catch{}}
   }
   state.tileMap=dungeon.cells;state.solidMap=dungeon.cells.map(row=>row.slice());state.lockedDoors=dungeon.lockedDoors;state.doors=[...dungeon.doors,...state.lockedDoors];
   state.mapW=dungeon.width;state.mapH=dungeon.height;

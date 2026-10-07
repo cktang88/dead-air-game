@@ -111,7 +111,11 @@ function installHooks() {
   const s = D.state, v = D.view, evs = [];
   let prevB = [];
   const orig = v.consume.bind(v);
+  const eng = window.__eng = {fire: [], hit: []}, seenB = new WeakSet();
   v.consume = function (list) {
+    // engagement-distance sampling: where enemies fire from, where the player lands hits
+    for (const b of s.bullets) if (b.owner === 'enemy' && !seenB.has(b)) { seenB.add(b); const p = s.player; if (p) { const en = s.enemies.find(x => x.id === b.enemyId); eng.fire.push([en ? en.type : '?', Math.round(Math.hypot(b.x - p.x, b.y - p.y))]); } }
+    for (const e of list) if (e.type === 'hit' && e.target === 'enemy' && s.player) eng.hit.push(Math.round(Math.hypot(e.x - s.player.x, e.y - s.player.y)));
     for (const e of list) {
       if (e.type === 'playerHurt') {
         let id = null, best = 40;
@@ -897,6 +901,7 @@ async function playSeed(browser, seed, o, ctx) {
     if (o.shots) await bot.shot(last || {}, 'end-' + res.result);
     // final state
     const fin = await page.evaluate(() => { const S = window.__bot.snap(); return {cleared: S.cleared, kills: S.kills, scrap: S.scrap, t: S.t, st: S.st, rstate: S.rstate, hp: S.hp, ev: S.ev}; }).catch(() => null);
+    res.engage = await page.evaluate(() => window.__eng).catch(() => null);
     if (fin) { for (const e of fin.ev) if (e.k === 'hurt') bot.stats.hurt.push(e); res.final = fin; }
     const L = last || {};
     if (last) floors.push({floor: bot.floorNo, cleared: L.cleared, rooms: bot.rooms.length, route: bot.routeRooms.length, t: +L.t.toFixed(0)}); res.floors = floors;
@@ -944,6 +949,9 @@ function summarize(results, o) {
   sum.avgScrapEarned = +mean(ok.map(r => r.scrapEarned)).toFixed(0); sum.avgScrapSpent = +mean(ok.map(r => r.scrapSpent)).toFixed(0);
   sum.starvationRuns = by(r => r.starvationEvents > 0); sum.starvationEvents = ok.reduce((a, r) => a + (r.starvationEvents || 0), 0); sum.dryEvents = ok.reduce((a, r) => a + (r.dryEvents || 0), 0);
   const addMap = (key, sel) => { const m = {}; for (const r of ok) for (const [k, v] of Object.entries(sel(r) || {})) m[k] = (m[k] || 0) + v; return Object.fromEntries(Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, +(v / Math.max(1, ok.length)).toFixed(2)])); };
+  { const fire = {}, hits = []; for (const r of ok) { for (const [t, d] of r.engage?.fire || []) (fire[t] ||= []).push(d); hits.push(...(r.engage?.hit || [])); }
+    const q = (a, f) => a.length ? a.slice().sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * f))] : null;
+    sum.engage = {playerHit: {n: hits.length, p25: q(hits, .25), p50: q(hits, .5), p75: q(hits, .75), p90: q(hits, .9)}, enemyFire: Object.fromEntries(Object.entries(fire).map(([t, a]) => [t, {n: a.length, p25: q(a, .25), p50: q(a, .5), p75: q(a, .75), p90: q(a, .9)}]))}; }
   sum.damagePerRunByEnemy = addMap('e', r => r.damage?.byEnemy); sum.damagePerRunByRoomRole = addMap('r', r => r.damage?.byRole);
   sum.avgDamagePerRun = +mean(ok.map(r => r.damage?.total || 0)).toFixed(2);
   sum.deathsByEnemy = {}; sum.deathsByRoom = {}; for (const r of results) if (r.result === 'death') { sum.deathsByEnemy[r.deathCause] = (sum.deathsByEnemy[r.deathCause] || 0) + 1; sum.deathsByRoom[r.deathRoom] = (sum.deathsByRoom[r.deathRoom] || 0) + 1; }
@@ -963,6 +971,7 @@ function table(results, sum) {
   lines.push(`median rooms cleared ${sum.medianRoomsCleared} / visited ${sum.medianRoomsVisited} (avg ${sum.avgRoomsTotal} total, ${sum.avgRouteRooms} on route; median route cleared ${sum.medianRouteCleared})`);
   lines.push(`avg kills ${sum.avgKills}, median game time ${sum.medianGameSec}s (wins ${sum.medianGameSecWins}s), median wall ${sum.medianWallSec}s, avg damage taken/run ${sum.avgDamagePerRun}`);
   lines.push(`scrap earned/spent per run ${sum.avgScrapEarned}/${sum.avgScrapSpent}; ammo starvation in ${sum.starvationRuns} runs (${sum.starvationEvents} events, ${sum.dryEvents} dry-active-gun events)`);
+  lines.push('engagement distance px: ' + JSON.stringify(sum.engage));
   lines.push('damage per run by source: ' + JSON.stringify(sum.damagePerRunByEnemy));
   lines.push('damage per run by room role: ' + JSON.stringify(sum.damagePerRunByRoomRole));
   lines.push('deaths by enemy: ' + JSON.stringify(sum.deathsByEnemy) + ' by room: ' + JSON.stringify(sum.deathsByRoom));
