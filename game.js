@@ -34,6 +34,7 @@ import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadiu
 import {noiseRayLengths} from './stealth2d.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
 import {supplyOffers,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
+import {applyFloorLook} from './floor-palette.js';
 import {extractionStatus, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
@@ -255,7 +256,7 @@ function createRoomMap(){
   // Deeper floors turn more ordinary rooms into WARDEN rooms.
   const wardenPool=state.rooms.map((room,index)=>({room,index})).filter(item=>item.index>=2&&item.index<state.rooms.length-1&&item.room.role==='combat'&&!item.room.branch);
   for(let n=0;n<cfg.eliteRooms&&wardenPool.length;n++){const {room}=wardenPool.splice(Math.floor(random()*wardenPool.length),1)[0];room.role='elite';room.name='WARDEN';}
-  assignRoomRewards(state.rooms,random);
+  assignRoomRewards(state.rooms,random);applyFloorLook(state.rooms,state.floor);
   state.doorLinks=computeDoorLinks({cells:state.tileMap,rooms:state.rooms,doors:state.doors});state.doorMarkers=[];
 }
 function makeLevel(){

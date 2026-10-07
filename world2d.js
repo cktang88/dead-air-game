@@ -20,7 +20,7 @@ export const ROLE_TINT = {
 };
 const COMBAT_TINTS = ['#ff5367', '#eaaa66', '#79d6ae', '#a888e8'];
 // combat rooms wash their floor with their own accent (not just an index colour) so each reads as a place at 1x
-export const roomTint = (room, index) => ROLE_TINT[room.role] || [room.theme?.accent || COMBAT_TINTS[index % 4], room.theme?.accent ? 0.14 : 0.075];
+export const roomTint = (room, index, look) => (look && (room.role === 'entry' || room.role === 'extraction') ? [look.entry, 0.1] : null) || ROLE_TINT[room.role] || [room.theme?.accent || COMBAT_TINTS[index % 4], room.theme?.accent ? 0.14 : 0.075];
 
 export class WorldLayer {
   constructor() {
@@ -57,7 +57,7 @@ export class WorldLayer {
     return p;
   }
 
-  setLevel({tileMap, rooms, doors, seed}) {
+  setLevel({tileMap, rooms, doors, seed, look = null}) {
     this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.version++;
     const h = tileMap.length, w = tileMap[0].length;
     const kind = new Uint8Array(w * h).fill(2);
@@ -101,12 +101,13 @@ export class WorldLayer {
       const accent = room.theme?.accent || '#ffb070', emergency = room.role === 'hazard';
       for (const d of room.theme?.decor || []) {
         if (d.kind !== 'light') continue;
-        if (emergency) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 84, col: '#ff3a3a', mode: 'pulse', ph: hash2(d.x * 8, d.y * 8, seed) * 6, a: 0.2, room: index});
+        if (look?.id === 'emergency' && !emergency) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 90, col: '#ff2a3a', mode: 'pulse', ph: hash2(d.x * 8, d.y * 8, seed) * 6, a: 0.13, room: index});
+        else if (emergency) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 84, col: '#ff3a3a', mode: 'pulse', ph: hash2(d.x * 8, d.y * 8, seed) * 6, a: 0.2, room: index});
         else if (d.steady) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 120, col: accent, mode: 'steady', ph: 0, a: 0.2, room: index});   // fixed-lit rooms (the Signal Check)
         else if (d.flicker) live.lamps.push({x: d.x * TILE, y: d.y * TILE, r: 74, col: accent, mode: 'flicker', ph: hash2(d.x * 8, d.y * 8, seed) * 50, a: 0.16, room: index});
       }
     });
-    this.level = {tileMap, rooms, doors, seed, w, h, kind, tileRoom, stains, isFloor, cover, live};
+    this.level = {tileMap, rooms, doors, seed, w, h, kind, tileRoom, stains, isFloor, cover, live, look};
     this.cw = CW;
   }
 
@@ -202,7 +203,8 @@ export class WorldLayer {
       const room = L.tileRoom[y * L.w + x], mat = matOf(x, y);
       paintFloorTile(g, mat, x, y, {seed: L.seed, accent: room >= 0 ? L.rooms[room].theme?.accent : null, wallN: wallAt(x, y - 1), wallS: wallAt(x, y + 1), wallE: wallAt(x + 1, y), wallW: wallAt(x - 1, y)});
       (paths[mat] ||= []).push(x, y);
-      if (room >= 0) { const [col, a] = roomTint(L.rooms[room], room); g.fillStyle = rgba(col, a); g.fillRect(x * TILE, y * TILE, TILE, TILE); }
+      if (room >= 0) { const [col, a] = roomTint(L.rooms[room], room, L.look); g.fillStyle = rgba(col, a); g.fillRect(x * TILE, y * TILE, TILE, TILE); }
+      if (L.look) { g.fillStyle = rgba(L.look.wash[0], L.look.wash[1]); g.fillRect(x * TILE, y * TILE, TILE, TILE); }
     }
     // material overlays: grime everywhere, fibres on carpet, grit on dirt
     const overlay = (mat, name, alpha) => {
@@ -255,7 +257,7 @@ export class WorldLayer {
     // practical lamps and ambient room glow (additive)
     g.globalCompositeOperation = 'lighter';
     for (const [index, room] of L.rooms.entries()) {
-      const accent = room.theme?.accent || roomTint(room, index)[0];
+      const accent = room.theme?.accent || roomTint(room, index, L.look)[0];
       for (const d of room.theme?.decor || []) {
         if (d.kind !== 'light' || d.flicker || room.role === 'hazard') continue;
         const px = d.x * TILE, py = d.y * TILE;
@@ -370,6 +372,7 @@ export class WorldLayer {
       const n = hash2(x, y, L.seed + 5);
       g.fillStyle = n > 0.5 ? `rgba(255,246,235,${(n - 0.5) * 0.07})` : `rgba(10,6,16,${(0.5 - n) * 0.12})`;
       g.fillRect(x * TILE, y * TILE, TILE, TILE);
+      if (L.look) { g.fillStyle = rgba(L.look.wall[0], L.look.wall[1]); g.fillRect(x * TILE, y * TILE, TILE, TILE); }
     }
     // inner darkening fading toward the void so walls look thick
     for (let y = ty0; y < ty1; y++) for (let x = tx0; x < tx1; x++) {

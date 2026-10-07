@@ -34,7 +34,8 @@ export class Lighting {
     this.dirty = true;
   }
 
-  setLevel({tileMap, rooms}) {
+  setLevel({tileMap, rooms, look = null}) {
+    this.look = look;
     const h = tileMap.length, w = tileMap[0].length;
     const room = new Int16Array(w * h).fill(-1), floor = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (tileMap[y][x] === 0 || tileMap[y][x] === 4) floor[y * w + x] = 1;
@@ -160,7 +161,7 @@ export class Lighting {
     if (dead > 0) { g.fillStyle = `rgba(70,8,20,${0.28 * dead})`; g.fillRect(0, 0, lw, lh); }
     if (won) { g.fillStyle = 'rgba(120,255,190,0.07)'; g.fillRect(0, 0, lw, lh); }
     g.fillStyle = slow > 0.01 ? `rgba(34,64,140,${0.05 * slow})` : 'rgba(0,0,0,0)'; g.fillRect(0, 0, lw, lh);
-    g.fillStyle = `rgba(255,150,70,${0.05 * (1 - slow)})`; g.fillRect(0, 0, lw, lh);
+    g.fillStyle = this.look ? `rgba(${this.look.grade[0]},${this.look.grade[1] * (1 - slow)})` : `rgba(255,150,70,${0.05 * (1 - slow)})`; g.fillRect(0, 0, lw, lh);
     g.globalCompositeOperation = 'source-over';
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
