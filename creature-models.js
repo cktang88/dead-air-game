@@ -58,7 +58,7 @@ export const ELITE_RUSHER_SPEC = {
 function rPal(c) {
   return {
     c: c.shell, C: c.plate, d: c.groove, k: c.bone, K: c.boneDark, b: c.belly, B: c.bellyDark, f: c.flesh,
-    e: {c: c.glow, emit: true}, E: {c: c.eye, emit: true}, v: {c: c.vein, emit: true}, m: c.mandible, t: c.tooth, w: {c: c.steel, emit: true}, g: mixc(c.flesh, '#ff8aa0', 0.35),
+    q: mixc(c.steel, c.bone, 0.2), e: {c: c.glow, emit: true}, E: {c: c.eye, emit: true}, v: {c: c.vein, emit: true}, m: c.mandible, t: c.tooth, w: {c: c.steel, emit: true}, g: mixc(c.flesh, '#ff8aa0', 0.35),
     s: mixc(c.groove, '#000000', 0.5), P: mixc(c.shell, c.bone, 0.25), F: mixc(c.shell, c.groove, 0.55),
   };
 }
@@ -131,16 +131,16 @@ function mandibleGrid(side) {
 function bladeCells(len, spec) {
   const cells = [];
   for (let a = 0; a < len; a += 0.5) {
-    const u = a / len, hw = Math.max(0.5, 1.5 * (1 - u ** 1.5) + 0.2), bc = -2.2 * u * u, thick = u < 0.55 ? 2 : 1;
-    for (let b = -2.6; b <= 2.6; b += 0.5) {
+    const u = a / len, hw = Math.max(0.5, 2.3 * (1 - u ** 1.4) + 0.3), bc = -3.2 * u * u, thick = u < 0.4 ? 3 : u < 0.75 ? 2 : 1;
+    for (let b = -3.4; b <= 3.4; b += 0.5) {
       const off = b - bc; if (Math.abs(off) > hw) continue;
-      const edge = off < -hw + 0.7;                                 // inner (cutting) edge
-      const back = off > hw - 0.7;
-      for (let c = 0; c < thick; c++) cells.push([a, b, c, edge ? 'w' : back ? 'K' : (u < 0.35 ? 'c' : 'K')]);
+      const edge = off < -hw + 0.9;                                 // inner (cutting) edge
+      const back = off > hw - 0.8;
+      const tip = u > 0.93;
+      for (let c = 0; c < thick; c++) cells.push([a, b, c, tip ? 'w' : edge ? 'q' : back ? 'K' : (u < 0.28 ? 'c' : 'k')]);
     }
   }
-  // spine ridge and serrations along the back edge
-  for (let a = 2; a < len - 3; a += 2) cells.push([a, 1.7 - 2.6 * (a / len) ** 2, 1, 'K']);
+  for (let a = 3; a < len - 3; a += 1.5) cells.push([a, 2.0 - 3.2 * (a / len) ** 2, 2.5, 'K']);   // spine serrations
   void spec;
   return cells;
 }
@@ -150,7 +150,7 @@ export function bladeModel(spec, side, pitch) {
   const key = `${spec.id}.blade${side}.${Math.round(pitch * 20)}`;
   let m = _bladeCache.get(key);
   if (!m) {
-    const len = spec.elite ? 15 : 12, r = pitchedGrid(bladeCells(len, spec), pitch, 9);
+    const len = spec.elite ? 19 : 16, r = pitchedGrid(bladeCells(len, spec), pitch, 9);
     const g = side > 0 ? r.grid : flipY(r.grid);
     const pivY = side > 0 ? r.pivot.y : g.d - 1 - r.pivot.y;
     m = {model: {id: key, unit: RU, layerH: RU, pivot: {x: r.pivot.x, y: pivY + 0.5}, palette: rPal(spec.c), grid: g, buckets: 32}, pz: r.pz * RU, len: len * RU};

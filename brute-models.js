@@ -6,8 +6,8 @@ import {BU, mixc, pitchedGrid} from './creature-models.js';
 export const BRUTE_SPEC = {
   id: 'brute', elite: false,
   c: {
-    skin: '#9b8296', skinDark: '#6f5a73', cloth: '#4b3d57', leather: '#5d3f36', leatherHi: '#7e5848', plate: '#6f7788', plateHi: '#b3bccd', rust: '#a1593a',
-    hazard: '#e0b83c', hazardDark: '#2a2430', mask: '#34383f', lens: '#ff9a3a', lensHi: '#fff0b0', steel: '#8f95a3', wood: '#7a5638', pants: '#3b3441', boot: '#2b2630',
+    skin: '#9b8296', skinDark: '#6f5a73', cloth: '#4b3d57', leather: '#5d3f36', leatherHi: '#7e5848', plate: '#586070', plateHi: '#98a2b6', rust: '#a1593a',
+    hazard: '#e0b83c', hazardDark: '#2a2430', mask: '#34383f', lens: '#ff9a3a', lensHi: '#fff0b0', steel: '#767c8a', wood: '#7a5638', pants: '#3b3441', boot: '#2b2630',
     bootHi: '#4d4556', brass: '#d6b45f', tank: '#7d8a6e', tankHi: '#b2c19a', led: '#ff4a5e',
   },
 };
@@ -101,7 +101,7 @@ function bruteHead(spec) {
 function bruteArmBead(kind) {
   const g = new VoxelGrid(6, 6, 5);
   if (kind === 'upper') { g.ellipsoid(3, 3, 2.5, 2.9, 2.9, 2.4, 'n', 2.2); g.ellipsoid(3, 3, 3.6, 2.2, 2.3, 1.2, 'n', 2.2); g.set(1, 3, 4, 'N'); }
-  else { g.ellipsoid(3, 3, 2.5, 2.9, 2.9, 2.4, 'a', 2.6); g.box(1, 1, 4, 5, 5, 5, 'W'); g.set(0, 3, 2, 'y'); g.set(5, 3, 2, 'y'); }
+  else { g.ellipsoid(3, 3, 2.5, 2.9, 2.9, 2.4, 'h', 2.6); g.box(1, 1, 4, 5, 5, 5, 'a'); g.set(2, 2, 4, 'W'); g.set(0, 3, 2, 'y'); g.set(5, 3, 2, 'y'); }
   return g;
 }
 function bruteFist() {
@@ -121,11 +121,11 @@ export function hammerModel(spec, pitch) {
   const key = `${spec.id}.hammer.${Math.round(pitch * 100)}`;
   let m = _hamCache.get(key);
   if (!m) {
-    const cells = [], big = spec.elite ? 1.2 : 1, L = 25, hx0 = 21, hl = 10 * big, hw = 5 * big, hh = 4.2 * big;
+    const cells = [], big = spec.elite ? 1.2 : 1, L = 25, hx0 = 21, hl = 9 * big, hw = 4.4 * big, hh = 3.8 * big;
     for (let a = -3; a < L; a += 0.5) for (let b = -1; b <= 1; b += 0.5) for (let c = -1; c <= 1; c += 0.5) if (b * b + c * c <= 1.3) cells.push([a + 3, b + 6, c + 6, a < 6 ? 'S' : (a < 7 ? 'y' : 'w')]);
     for (let a = hx0 - 1; a < hx0 + hl; a += 0.5) for (let b = -hw; b < hw; b += 0.5) for (let c = -hh; c < hh; c += 0.5) {
       const end = a < hx0 + 0.9 || a > hx0 + hl - 1.1, edge = Math.abs(b) > hw - 0.8 || Math.abs(c) > hh - 0.8;
-      const ch = end ? 'W' : (a > hx0 + hl * 0.4 && a < hx0 + hl * 0.6 ? (Math.floor((b + hw) / 1.5) % 2 ? 'Y' : 'z') : (edge ? 'a' : 's'));
+      const ch = end ? 's' : (a > hx0 + hl * 0.4 && a < hx0 + hl * 0.6 ? (Math.floor((b + hw) / 1.5) % 2 ? 'Y' : 'z') : (edge ? 'h' : 'a'));
       cells.push([a + 3, b + 6, c + 6 + 0, ch]);
     }
     if (spec.elite) for (const b of [-3, 0, 3]) for (let k = 0; k < 4; k++) cells.push([hx0 + hl / 2 + 3, b + 6, hh + 6 + k * 0.5, k < 2 ? 'W' : 'k']);

@@ -134,6 +134,18 @@ and `p` exposes `headYaw headZ torsoZ torsoYaw leanX antenna shrug`. Add your ow
 `tools/stack-sheet.html` draws any kit at 8 facings, walk cycles, strafes, recoil/hurt/sprint/reload, death frames and idle fidgets on one canvas. Playwright: load it and screenshot (`window.__ready`).
 Real fights: serve the repo, load `index.html?debug`, use `window.__deadair.spawnEnemy(type, x, y, room)`; `?stack=0` gives the legacy art for A/B and perf comparison.
 
+## Non-humanoid bodies: rusher, brute, the Conductor
+
+`creature-core.js` (item pool, depth sort, 3D two-bone `solveLeg`, `pieceChain` bead helper), `creature-models.js` (rusher kit, `pitchedGrid`), `brute-models.js`, `conductor-models.js`,
+`rusher-pose.js`, `brute-pose.js`, `conductor-pose.js` (poses), `creature-glue.js` + `conductor2d.js` (renderer hooks). Page: `tools/creature-sheet.html?kind=rusher|rusher.elite|brute|brute.elite|conductor|conductor.2|conductor.3&zoom=3&rows=stand,walk,wind,strike,act,dead,fidget`.
+
+* **Limbs as bead chains.** A stack part cannot tilt, so a limb is 3-4 small rounded stacks laid on the 3D bone line (`pieceChain`); `solveLeg(..., pole)` takes any bend hint (knee up, elbow out).
+* **Pitch variants.** Things that must lean (rusher blades, the hammer, the Conductor's mast and coat tails) are baked at a handful of pitches by `pitchedGrid(cells, pitch)`; the pose picks the nearest and sets height from the model's `pz`.
+* **Damage levels = kits by id** (`cond0/1/2.*`, `rusher.elite`): boss phases swap whole kits (torn coat, cracked casing, bent mast).
+* **Procedural items** (`item.draw`): glows, the CRT face (redrawn each frame on the head's top face so it reads from any facing), antennae, hoses, chains, cables, baton trail.
+* **Idle fidgets per body plan:** `registerIdleFidget({id, only: 'rusher'|'brute', ...})`; `fidgetAt(idleT, seed, only)` filters, so humanoids never play them.
+* render2d hooks: `isCreature(e)`, `drawCreature`, `drawCreatureCorpse`, `updateCreature` (dust, slam shockwave + camera shake, steam when enraged, drool), `updateConductor`. Elites are type brute/chaser with `e.elite`.
+
 ## Gotchas
 
 * Don't call `drawStack` before `setSpriteScale` has run (the first resize does it); the engine re-quantises on scale changes.

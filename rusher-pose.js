@@ -44,9 +44,9 @@ export function rusherPose(kit, inp, out) {
   const cb = Math.cos(bodyYaw), sb = Math.sin(bodyYaw);
   const bob = Math.sin(ph * TAU * 2) * 0.28 * amp, breath = Math.sin(t * 3.1 + seed) * 0.12 * (1 - amp);
   const base = dead === null ? RUSHER_RIG.base : 0.15;
-  const frontUp = wind * 2.4 + alert * 1.7 + _cp.sniff * 1.3 + (strike >= 0 ? -0.8 * air : 0) - hurt * 0.4;
+  const frontUp = outQuad(wind) * 4.6 + alert * 1.7 + _cp.sniff * 1.3 + (strike >= 0 ? -0.8 * air : 0) - hurt * 0.4;
   const rearUp = -wind * 0.7 + air * 1.2 + _cp.scratch * 0.5;
-  const zb = base + bob + breath + _cp.bodyZ + air * 4.2;
+  const zb = base + bob + breath + _cp.bodyZ + air * 6.5;
   const jx = Math.sin(t * 73 + seed) * 0.28 * wind + Math.sin(t * 90) * 0.35 * _cp.shake, jy = Math.cos(t * 67 + seed) * 0.28 * wind + Math.cos(t * 83) * 0.3 * _cp.shake;
   const squash = 1 + hurt * 0.1;
   const inv = dead !== null && deadT > 0.3;
@@ -129,6 +129,7 @@ export function rusherPose(kit, inp, out) {
       fx += (cb * (-0.6 * brace) - sb * s * 1.6 * brace); fy += (sb * (-0.6 * brace) + cb * s * 1.6 * brace);
       if (strike >= 0) { const tk = air * 3.8; lift += tk; fx -= cb * air * 1.8 * (L.hx > 1 ? -1 : 1) ; fy -= sb * air * 1.8 * (L.hx > 1 ? -1 : 1); fx = lerp(fx, WX(hxl, hyl), air * 0.35); fy = lerp(fy, WY(hxl, hyl), air * 0.35); }
       if (_cp.scratch > 0 && i === 2) { lift += 3.2 * _cp.scratch; fx += cb * 1.5 * Math.sin(t * 30) * _cp.scratch; }
+      if (L.hx > 1) lift += wind * 3.4;
       fz = lift;
     } else {
       // belly-up: legs pull into a curl above the body and twitch, fading out
@@ -154,7 +155,7 @@ export function rusherPose(kit, inp, out) {
     ex += sway; bYaw += sway * 0.08;
     if (_cp.groom > 0) { const g = _cp.groom, a = s > 0 ? 0 : Math.PI; ex = lerp(ex, 3.3, g); ey = lerp(ey, s * 1.6, g); ez = lerp(ez, 3.2 + 0.7 * Math.sin(t * 9 + a), g); bYaw = lerp(bYaw, -s * 0.5, g); bPitch = lerp(bPitch, 1.0, g); }
     if (alert > 0) { ez += alert * 1.2; ey += s * alert * 0.8; bPitch += alert * 0.5; bYaw += s * alert * 0.3; }
-    if (wind > 0) { const w = outQuad(wind); ex = lerp(ex, 0.0, w); ey = lerp(ey, s * 4.1, w); ez = lerp(ez, 4.4, w); bYaw = lerp(bYaw, s * 0.35, w); bPitch = lerp(bPitch, 1.15, w); }
+    if (wind > 0) { const w = outQuad(wind); ex = lerp(ex, -0.6, w); ey = lerp(ey, s * 5.2, w); ez = lerp(ez, 6.6, w); bYaw = lerp(bYaw, s * 0.55, w); bPitch = lerp(bPitch, 1.15, w); }
     if (strike >= 0) { const q = outCubic(clamp(strike * 1.8)); ex = lerp(0, 3.3, q); ey = lerp(s * 4.1, s * 1.1, q); ez = lerp(4.4, 0.8, q); bYaw = lerp(s * 0.35, -s * 0.55, q); bPitch = lerp(1.15, -0.35, q); }
     if (dead !== null) { const c = outCubic(clamp(deadT / 0.7)); ex = lerp(2.4, 0.6, c); ey = lerp(s * 4.0, s * 2.2, c); ez = lerp(1.1, 6.2, c); bYaw = lerp(s * 0.5, s * 0.9, c) + Math.sin(deadT * 19 + s) * 0.18 * Math.max(0, 1 - deadT); bPitch = lerp(0.2, 1.15, c); }
     const exw = WXd(sx0 + ex, sy0 + (ey - sy0 * 0) * 0.0 + ey - s * 2.3 + s * 0), eyw = WYd(sx0 + ex, ey);
@@ -185,8 +186,8 @@ function drawEyes(ctx, x, y, it) {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   for (const s of [-1, 1]) {
     const ox = -ca * 0.0 - sa * s * 2.9 * 0.55 + ca * 0.5, oy = ca * s * 2.9 * 0.55 + sa * 0.5 - 0.2;
-    const r = 2.6 + a * 2.6, gr = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-    gr.addColorStop(0, hot ? 'rgba(255,250,220,0.9)' : 'rgba(255,230,110,0.7)'); gr.addColorStop(0.5, 'rgba(255,170,60,0.28)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
+    const r = 1.8 + a * 1.5, gr = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+    gr.addColorStop(0, hot ? 'rgba(255,190,120,0.8)' : 'rgba(255,230,110,0.6)'); gr.addColorStop(0.5, 'rgba(255,120,50,0.22)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
     ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x + ox, y + oy, r, 0, TAU); ctx.fill();
   }
   ctx.restore();
