@@ -33,9 +33,13 @@ export function makeCanvas(w, h) {
 // ---------------------------------------------------------------- sprite cache
 let PX = 2;
 const cache = new Map();
+const scaleListeners = [];
+export const onSpriteScale = (fn) => { scaleListeners.push(fn); };
+export const getSpriteScale = () => PX;
 export function setSpriteScale(pxPerUnit) {
   const px = Math.max(1, Math.round(pxPerUnit * 4) / 4);
   if (px !== PX) { PX = px; cache.clear(); }
+  for (const fn of scaleListeners) fn(pxPerUnit);
 }
 function cached(key, build) { let v = cache.get(key); if (!v) cache.set(key, v = build(PX)); return v; }
 
@@ -276,8 +280,10 @@ export function actorSprite(kind) {
 }
 
 // A darkened, slumped version used once an enemy is down.
+export const corpseOverrides = {};   // kind -> (px) => {half, img}; stacked actors bake their own flat corpse (actor-stack2d.js)
 export function corpseSprite(kind) {
   return cached('corpse|' + kind, () => {
+    if (corpseOverrides[kind]) return corpseOverrides[kind](PX);
     const s = actorSprite(kind), look = ACTOR_LOOK[kind];
     const c = makeCanvas(s.base.width, s.base.height), g = c.getContext('2d');
     g.drawImage(s.base, 0, 0); g.drawImage(s.detail, 0, 0);
@@ -289,7 +295,7 @@ export function corpseSprite(kind) {
 }
 
 // ---------------------------------------------------------------- guns
-const GUN_ART = {
+export const GUN_ART = {
   'PISTOL': {parts: [[0.0, 0.34, 0.55, 'a'], [0.1, 1, 0.9, 'b'], [0.7, 0.5, 1.0, 'm']]},
   'SMG': {parts: [[-0.1, 0.55, 0.02, 'a'], [0, 1, 0.58, 'b'], [0.56, 0.4, 1, 'm']], mag: [0.24, 0.16, 0.8], extra: 'drum'},
   'SHOTGUN': {parts: [[-0.12, 0.8, 0.2, 'a'], [0.2, 1.02, 0.46, 'b'], [0.46, 0.8, 1, 'm']], pump: [0.5, 0.2, 1.22], twin: true},

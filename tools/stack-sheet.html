@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Stack contact sheet</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="1600" height="900"></canvas>
+<script type="module">
+// Contact sheet for stacked models. ?kind=player|gunner  ?zoom=1..4  ?rows=stand,walk,act  ?gun=<catalog id>
+import {setSpriteScale} from '../sprites2d.js';
+import {beginStackFrame, stackStats} from '../stack2d.js';
+import {kitFor, gunStack, gunGeometry} from '../models2d.js';
+import {humanoidPose, newRigOut, drawRig, reloadPose, DEAD_VARIANT} from '../rig2d.js';
+import {GUNS} from '../catalog.js';
+const q = new URLSearchParams(location.search);
+const kind = q.get('kind') || 'player', zoom = +(q.get('zoom') || 2), rows = (q.get('rows') || 'stand,walk,act').split(','), cols = +(q.get('cols') || 8);
+const gun = q.get('gun') ? GUNS.find((g) => g.id === q.get('gun')) : (kind === 'gunner' ? {category: 'ASSAULT RIFLE', visual: {length: 37, width: 6, art: 'CARBINE'}, color: 0xff5a4a} : GUNS.find((g) => g.id === 'ar_ash'));
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+setSpriteScale(zoom);
+const kit = kitFor(kind), out = newRigOut(), geo = gunGeometry(gun);
+const bg = (x, y, w, h) => { ctx.fillStyle = '#2b2736'; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(255,255,255,0.03)'; for (let i = 0; i < w; i += 32) ctx.fillRect(x + i, y, 1, h); for (let j = 0; j < h; j += 32) ctx.fillRect(x, y + j, w, 1); };
+function pose(o) {
+  const ang = o.ang ?? 0, kick = o.kick || 0;
+  let rpz = null; if (o.reload !== undefined) { rpz = reloadPose(o.reload, {}); }
+  const g = gunStack(gun, {enemy: kind !== 'player', noMag: !!rpz && rpz.mag > 0.02});
+  humanoidPose(kit, {
+    id: 3, t: o.t ?? 1, bodyYaw: o.body ?? ang, aimYaw: ang, moveYaw: o.move ?? ang, amp: o.amp || 0, phase: o.phase || 0, sprint: o.sprint || 0, kick,
+    hurt: o.hurt || 0, idleT: o.idleT || 0, gunModel: g, gunGeo: {...geo}, gunRot: rpz ? rpz.tilt : (o.gunRot || 0), handDx: rpz ? rpz.hx : 0, handDy: rpz ? -rpz.hy * 0.9 : 0,
+    mag: rpz ? rpz.mag : 0, magModel: kit.mag, dead: o.dead ?? null, fallYaw: o.fall ?? 0, lunge: o.lunge || 0, spin: o.spin || 0,
+  }, out);
+  return out;
+}
+function cellDraw(x, y, w, h, label, o, variant) {
+  bg(x, y, w, h);
+  beginStackFrame();
+  const p = pose(o);
+  drawRig(ctx, p, x + w / 2, y + h * 0.58, {variant, flash: o.flash || 0});
+  ctx.fillStyle = '#aaa'; ctx.font = `${10 / zoom}px monospace`; ctx.fillText(label, x + 4, y + 12 / zoom);
+}
+function drawAll() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#1a1722'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.scale(zoom, zoom);
+  const cw = c.width / zoom, W = cw / cols, H = +(q.get('h') || Math.max(70, 90 / Math.max(1, zoom / 2)));
+  let r = 0;
+  const draw1 = (i, rr, label, o, variant) => cellDraw((i % cols) * W, (rr + Math.floor(i / cols)) * H, W - 1, H - 1, label, o, variant);
+  const adv = Math.ceil(8 / cols);
+  if (rows.includes('stand')) { for (let i = 0; i < 8; i++) draw1(i, r, `stand ${i * 45}`, {ang: i * Math.PI / 4}); r += adv; }
+  if (rows.includes('walk')) {
+    for (let i = 0; i < 8; i++) draw1(i, r, `walk E ph${i}/8`, {ang: 0, amp: 1, phase: i / 8});
+    r += adv;
+    for (let i = 0; i < 8; i++) draw1(i, r, `walk S ph${i}/8`, {ang: Math.PI / 2, amp: 1, phase: i / 8});
+    r += adv;
+    for (let i = 0; i < 8; i++) draw1(i, r, `strafe aimE mv${i * 45}`, {ang: 0, move: i * Math.PI / 4, amp: 1, phase: 0.2});
+    r += adv;
+  }
+  if (rows.includes('act')) {
+    const L = [['recoil0', {ang: 0.3, kick: 0}], ['recoil1', {ang: 0.3, kick: 1}], ['hurt', {ang: 0.3, hurt: 1, flash: 0.8}], ['sprint', {ang: 0, amp: 1, sprint: 1, phase: 0.3}],
+      ['rl.2', {ang: 0, reload: 0.2}], ['rl.45', {ang: 0, reload: 0.45}], ['rl.7', {ang: 0, reload: 0.7}], ['rl.9', {ang: 0, reload: 0.9}]];
+    L.forEach(([n, o], i) => draw1(i, r, n, o)); r += adv;
+    [0.2, 0.5, 0.8, 1].map((d) => ({dead: d, fall: 0.5, ang: 0.5, spin: 1})).forEach((o, i) => draw1(i, r, 'dead ' + o.dead, o, DEAD_VARIANT));
+    draw1(4, r, 'idle look', {ang: 0.7, idleT: 4.6}); draw1(5, r, 'idle antenna', {ang: 0.7, idleT: 9.4}); draw1(6, r, 'idle shrug', {ang: 1.6, idleT: 15.4}); draw1(7, r, 'aim N', {ang: -Math.PI / 2});
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#9f9'; ctx.font = '12px monospace'; ctx.fillText(`bakes ${stackStats.bakes} ${stackStats.mb.toFixed(1)}MB bakeMs ${stackStats.bakeMs.toFixed(0)}`, 8, c.height - 8);
+}
+window.__sheet = {drawAll};
+requestAnimationFrame(() => { drawAll(); drawAll(); window.__ready = true; });
+</script>

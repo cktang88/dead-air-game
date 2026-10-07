@@ -9,6 +9,10 @@ import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inO
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
+import {beginStackFrame} from './stack2d.js';
+import {isStacked, feetDrop, RIG} from './actor-stack2d.js';
+import {kitFor, gunStack, gunGeometry} from './models2d.js';
+import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
 import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
@@ -95,10 +99,10 @@ export function createRenderer(container, state) {
   const lighting = new Lighting();
   const timeFx = createTimeFx();
   const trail = new Trail();
-  const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24};
+  const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24}, _rig = newRigOut(), _rigCorpse = newRigOut();
   const GHOST_TIME = 0.24;
   const vis = {ghosts: Array.from({length: 24}, () => ({on: false, pk: null, t: 0, x0: 0, y0: 0, side: 1})), fl: {x: 0, y: 0, vx: 0, vy: 0}, camX: newSpring(0), camY: newSpring(0), zoom: newSpring(0), zbase: 1, bodyAng: 0, mvAng: 0, pPhase: 0, pMv: 0, swapT: 1, lastGun: -1, prevGun: 0, fresh: true, motion: 1, flashK: 1, tick: 0, wbT: 2, hurtSat: 0, killFlash: 0, seated: false, seatFx: false, angInit: false, slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
-  const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0};
+  const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0, actorMs: 0};
   let levelReady = false;
   let vignette = null, vignetteKey = '';
 
@@ -235,6 +239,8 @@ export function createRenderer(container, state) {
       v.brace = damp(v.brace || 0, braceT, 9, step);
       if (v.brace > 0.6 && !v.braced) { v.braced = true; const sa = e.shieldAng || 0; for (let i = 0; i < 3; i++) fx.dust(e.x + Math.cos(sa) * 12 + (i - 1) * 4, e.y + Math.sin(sa) * 12 + (i - 1) * 4, Math.cos(sa) * 60, Math.sin(sa) * 60); }
       else if (v.brace < 0.2) v.braced = false;
+      v.idleT = v.speed < 8 && !(e.aimTimer > 0) ? (v.idleT || 0) + step : 0;
+      v.antX = damp(v.antX || 0, Math.max(-3, Math.min(3, -mvx * 0.03)), 7, step); v.antY = damp(v.antY || 0, Math.max(-3, Math.min(3, -mvy * 0.03)), 7, step);
       v.dustT -= step;
       if (v.speed > 22 && v.dustT <= 0) { v.dustT = 0.16; fx.dust(e.x - Math.cos(v.ang) * e.radius * 0.5, e.y - Math.sin(v.ang) * e.radius * 0.5, mvx, mvy); }
     } else if (v.deathT !== undefined) {
@@ -295,6 +301,8 @@ export function createRenderer(container, state) {
         if (sp > 30 && vis.dustT <= 0) { vis.dustT = sp > 100 ? 0.07 : 0.12; fx.dust(p.x - state.aim.x * 3, p.y - state.aim.y * 3, mvx, mvy); }
         if (sp > 8) vis.mvAng = dampAngle(vis.mvAng, Math.atan2(mvy, mvx), 16, step);
         vis.pMv = damp(vis.pMv, moveAmount(sp, 100), 12, step);
+        vis.idleT = sp < 8 ? (vis.idleT || 0) + step : 0;
+        vis.antX = damp(vis.antX || 0, Math.max(-3, Math.min(3, -mvx * 0.025)), 7, step); vis.antY = damp(vis.antY || 0, Math.max(-3, Math.min(3, -mvy * 0.025)), 7, step);
         vis.pPhase = walkPhase(vis.pPhase, sp, STRIDE.player * (1 + 0.15 * (state.sprintBlend || 0)), step);
       }
       vis.px = p.x; vis.py = p.y;
@@ -390,10 +398,10 @@ export function createRenderer(container, state) {
     for (const e of state.enemies) {
       if (!inView(e, b, 40)) continue;
       const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
-      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y, look.r * 0.95, 1.5, dying ? 0.6 : 1);
+      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (!dying && isStacked(kindOf(e)) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
     }
     const p = state.player;
-    if (p) drawBlobShadow(ctx, p.x, p.y, 10, 1.5);
+    if (p) drawBlobShadow(ctx, p.x, p.y + (isStacked('player') ? feetDrop() : 0), 10, 1.5);
     for (const t of state.thrown) { const a = grenadeAir(t); drawBlobShadow(ctx, t.x, t.y, Math.max(2, 4 - a.z * 0.12), 5, 0.8 * (1 - a.z * 0.04)); }
   }
 
@@ -712,18 +720,21 @@ export function createRenderer(container, state) {
     if (windP > 0) { const rb = outCubic(windP) * 4.5; ctx.translate(-Math.cos(ang) * rb, -Math.sin(ang) * rb); }
     if (lunge > 0) { const l = outQuad(lunge) * 7; ctx.translate(Math.cos(ang) * l, Math.sin(ang) * l); }
     if (aimP > 0 && !e.elite) { ctx.translate(-Math.cos(ang) * aimP * 1.2, -Math.sin(ang) * aimP * 1.2); }
+    const stk = isStacked(kind);
     walkPose(v.phase || 0, _wp);
-    drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
+    if (!stk) drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
     // squash and stretch: along travel while running, bigger on the wind-up, a punch when hit, a hop when alerted
     const bob = 1 + 0.035 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.017 * Math.sin(vis.time * 2.3 + (e.id || 0) * 31) * (1 - amp);
     const hop = alertAge < 0.2 ? 0.12 * Math.sin(alertAge / 0.2 * Math.PI) : 0;
     const wind = 1 + (windup ? 0.1 * outCubic(windP) : 0) + kick * 0.05 + punch * 0.13 + hop - brace * 0.04;
     ctx.scale(scale * wind * bob * breath, scale * wind * bob * breath);
     actorGlow(look.r, look.color, 0.2);
-    ctx.save(); ctx.rotate(mvAng); ctx.scale(1 + 0.08 * amp + lunge * 0.14, 1 - 0.05 * amp - lunge * 0.1); ctx.rotate(-mvAng);
-    ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
-    ctx.restore();
-    actorRim(look.r, tint(look.color, 0.2), 0.42);
+    if (!stk) {
+      ctx.save(); ctx.rotate(mvAng); ctx.scale(1 + 0.08 * amp + lunge * 0.14, 1 - 0.05 * amp - lunge * 0.1); ctx.rotate(-mvAng);
+      ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+      ctx.restore();
+      actorRim(look.r, tint(look.color, 0.2), 0.42);
+    }
     ctx.save(); ctx.rotate(ang);
     if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -742,12 +753,22 @@ export function createRenderer(container, state) {
         const tremble = aimP > 0.3 ? Math.sin(vis.time * 46 + (e.id || 0) * 9) * 0.012 * aimP : 0;
         const gunRot = (1 - raise) * 0.42 * (e.side || 1) + rel * 1.15 + tremble - kick * 0.06;
         ctx.save(); ctx.translate(look.r * 0.2 - (1 - raise) * 1.4 - kick * 3, yOff + Math.sin((v.phase || 0) * TAU) * 0.6 * amp); ctx.rotate(gunRot);
-        const m = drawGun(ctx, gun, {reach: 3, enemy: true, slide: kick, noMag: rel > 0.3 && rel < 0.95});
-        const hc = shade(look.color, 0.7);
-        drawHand(ctx, m.rear, 0, hc, 2.3); drawHand(ctx, m.front - rel * 5, 0.6 + rel * 3.5, hc, 2.3);
-        if (rel > 0.5 && e.reloadTimer > 0.2) drawMagSprite(ctx, m.front - rel * 5 - 2, 0.6 + rel * 3.5, 0.3, 4.2, 2.4);
+        if (!stk) {
+          const m = drawGun(ctx, gun, {reach: 3, enemy: true, slide: kick, noMag: rel > 0.3 && rel < 0.95});
+          const hc = shade(look.color, 0.7);
+          drawHand(ctx, m.rear, 0, hc, 2.3); drawHand(ctx, m.front - rel * 5, 0.6 + rel * 3.5, hc, 2.3);
+          if (rel > 0.5 && e.reloadTimer > 0.2) drawMagSprite(ctx, m.front - rel * 5 - 2, 0.6 + rel * 3.5, 0.3, 4.2, 2.4);
+        }
         ctx.restore();
-        ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+        if (!stk) ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+        else {
+          // stacked body: drawn un-rotated (the pose carries every yaw itself)
+          ctx.save(); ctx.rotate(-ang);
+          humanoidPose(kitFor(kind), {id: e.id || 0, t: vis.time, bodyYaw: ang, aimYaw: ang, moveYaw: mvAng, amp, phase: v.phase || 0, kick, hurt: Math.max(punch, (v.flash || 0) * 0.7), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: v.idleT || 0,
+            gunModel: gunStack(gun, {enemy: true, noMag: rel > 0.3 && rel < 0.95}), gunGeo: gunGeometry(gun), gunRot, gunDx: 0.1 - (1 - raise) * 1.4, handDx: -rel * 5, handDy: rel * 3.5, mag: rel > 0.5 && e.reloadTimer > 0.2 ? 1 : 0, magModel: kitFor(kind).mag, lunge, antennaX: v.antX || 0, antennaY: v.antY || 0}, _rig);
+          drawRig(ctx, _rig, 0, 0, {alpha: 1});
+          ctx.restore();
+        }
         if (e.type === 'sniper' && aimP === 0) {
           // idle scope glint: a slow sparkle on the lens so the long rifle reads as a sniper before it aims
           const tw = Math.max(0, Math.sin(vis.time * 2.1 + (e.id || 0) * 17)) ** 8, lens = 3 + gun.visual.length * 0.7 * 0.62 + 3;
@@ -785,7 +806,7 @@ export function createRenderer(container, state) {
     }
     ctx.restore();
     if (e.type === 'riot') drawRiotShield(e, v, e.shieldAng || 0, false, 1);
-    if (v.flash > 0) {
+    if (v.flash > 0 && !stk) {
       ctx.globalAlpha = Math.min(1, v.flash * 1.6);
       ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
       ctx.save(); ctx.rotate(ang); ctx.drawImage(spr.whiteDetail, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.restore();
@@ -850,8 +871,22 @@ export function createRenderer(container, state) {
         ctx.restore();
       }
     }
-    ctx.rotate(ang); ctx.scale(sx, sy);
     const cs = corpseSprite(kind);
+    if (isStacked(kind)) {
+      if (t < 1) {
+      // the body topples away from its feet: the pose animates, then the baked flat corpse (same pose) fades in underneath the settle
+      const fall = clamp(dt / (D.dur * 0.9));
+      ctx.save(); ctx.scale(base, base);
+      humanoidPose(kitFor(kind), {id: e.id || 0, bodyYaw: ang, aimYaw: ang, moveYaw: ang, dead: fall, fallYaw: ang + Math.PI, spin}, _rigCorpse);
+      drawRig(ctx, _rigCorpse, 0, 0, {anchorZ: RIG.anchorZ * (1 - settle), shadow: false, variant: t > 0.55 ? DEAD_VARIANT : null, flash: v.flash > 0 ? Math.min(1, v.flash * 1.6) : 0});
+      ctx.restore();
+      }
+      ctx.rotate(ang); ctx.scale(sx, sy);
+      if (t >= 1) ctx.drawImage(cs.img, -cs.half, -cs.half, cs.half * 2, cs.half * 2);
+      ctx.restore();
+      return;
+    }
+    ctx.rotate(ang); ctx.scale(sx, sy);
     if (t < 1) {
       ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -942,6 +977,17 @@ export function createRenderer(container, state) {
     ctx.save(); ctx.translate(p.x + vis.fl.x, p.y + vis.fl.y);
     ctx.translate(-Math.cos(ang) * kick * 0.8 + state.recoil.x * 0.06, -Math.sin(ang) * kick * 0.8 + state.recoil.y * 0.06);
     walkPose(vis.pPhase, _wp);
+    const stk = isStacked('player');
+    if (stk) {
+      reloadPose(reloading ? frac : 0, _rp);
+      const sw = vis.swapT < 1 ? swapPose(vis.swapT, _sw) : null, rpz = reloading ? _rp : null;
+      const g0 = (sw && sw.which === 0) ? GUNS[vis.prevGun] || gun : gun;
+      actorGlow(10.5, '#d8fff0', 0.1);
+      humanoidPose(kitFor('player'), {id: 1, t: vis.time, bodyYaw: bAng, aimYaw: ang, moveYaw: vis.mvAng, amp, phase: vis.pPhase, sprint, kick: Math.min(1, kick), hurt: vis.flashHit, flash: vis.flashHit > 0 ? Math.min(1, vis.flashHit * 1.4) : 0, idleT: vis.idleT || 0,
+        gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: (sprint * 0.55 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0)) * flip, gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
+        gunScale: sw ? sw.k : 1, handDx: rpz ? rpz.hx : 0, handDy: rpz ? -rpz.hy * 0.9 : 0, mag: rpz ? rpz.mag : 0, magModel: kitFor('player').mag, antennaX: vis.antX || 0, antennaY: vis.antY || 0}, _rig);
+      drawRig(ctx, _rig, 0, 0, {});
+    } else {
     drawFeet(vis.mvAng, 10.5, vis.pPhase, amp, '#1d3a36');
     // body: breathes at rest, bobs and stretches along travel while walking, stretches more when sprinting
     const bob = 1 + 0.032 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.018 * Math.sin(vis.time * 2.4) * (1 - amp), punch = 1 + vis.flashHit * 0.07;
@@ -974,11 +1020,12 @@ export function createRenderer(container, state) {
     drawHand(ctx, m.front + (rpz ? rpz.hx : 0), hy, hand, 2.8);
     ctx.restore();
     ctx.restore();
+    }
     if (state.armor > 0) {
       ctx.strokeStyle = '#7fdcf0'; ctx.lineWidth = 2; ctx.lineCap = 'round';
       const n = state.armor, gap = 0.5, spinA = vis.time * 0.15; for (let i = 0; i < n; i++) { const a0 = -Math.PI / 2 + spinA + i * (TAU / n) + gap / 2, a1 = -Math.PI / 2 + spinA + (i + 1) * (TAU / n) - gap / 2; ctx.beginPath(); ctx.arc(0, 0, 13.4, a0, a1); ctx.stroke(); }
     }
-    if (vis.flashHit > 0) { ctx.globalAlpha = Math.min(1, vis.flashHit * 1.4); ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
+    if (vis.flashHit > 0 && !stk) { ctx.globalAlpha = Math.min(1, vis.flashHit * 1.4); ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.globalAlpha = 1; }
     if (reloading) {
       ctx.strokeStyle = 'rgba(14,10,20,0.7)'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.arc(0, 0, 16.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
       ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(0, 0, 16.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.stroke();
@@ -1217,10 +1264,12 @@ export function createRenderer(container, state) {
     }
     drawPickups(bp);
     // corpses first, then the living
+    beginStackFrame(); const actorT0 = performance.now();
     for (const e of state.enemies) if (!e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     for (const e of state.enemies) if (e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     drawThrown();
     drawPlayer(now);
+    stats.actorMs += (performance.now() - actorT0 - stats.actorMs) * 0.1;
     drawEffects(bp);
     fx.drawSmoke(ctx, bp);
 
