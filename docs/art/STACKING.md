@@ -140,3 +140,16 @@ Real fights: serve the repo, load `index.html?debug`, use `window.__deadair.spaw
 * Every distinct `variant.key` x model x scale level is a separate bake. Use few variants (floor tints are 4, dead is 1).
 * Models are cached by `id`: change a model's cells => change its `id` (or reload) while iterating in a long-lived page.
 * `emit` colours skip shading but DO go through variants (a dead or floor tint dims lenses too).
+
+## World props (cover, crates, pickups, doors, exit)
+
+Same tilt, light and ink as the actors. `?props=0` (or `STACK_CONFIG.props = false`) restores the painted world art.
+
+| file | what |
+| --- | --- |
+| `prop-stack2d.js` | cover tiles (pillars, sandbag / jersey / partition / vault walls, shelving, server / tape deck / speaker racks, desks with CRT + chair, hospital beds with drip stand). Baked once per (style, join mask, scale) at a fixed yaw into a flat tile image and blitted into the world chunks. `propLive()` lists the animated parts (LEDs, fans, tape reels, CRT flicker, VU meters, heart monitor) drawn live by `drawPropsLive()` |
+| `item-stack2d.js` | crates (3 stencil variants x 3 damage stages), tumbling plank debris, pickups (scrap gear+nut, ammo, medkit, armor, mod, floor gun via `gunStack`, supply drop with parachute and beacon, frequency radio), door / gate leaves and jamb posts, exit radio mast with spinning antenna and rotating light |
+| `tools/prop-sheet.html`, `tools/item-sheet.html` | contact sheets |
+
+How the baked tiles stay seamless: each prop is built in a grid with a 3-cell margin that holds the neighbour's continuation, composited with the engine's edge light and outline, then cropped exactly on the tile edge on every side that joins a neighbour. Tall props lift into the chunk above, so `world2d.paintStackedCover` also blits tiles from the rows below a chunk. Collision footprints are untouched (everything stays inside its tile; desks 2x1, beds 1x2).
+Screenshots: `world-stack-rooms.png` (before / after, 6 room types), `world-stack-pickups.png`, `world-stack-crate-break.png`, `world-stack-prop-sheet.png`, `world-stack-item-sheet.png`.

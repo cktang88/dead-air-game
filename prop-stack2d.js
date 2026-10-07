@@ -425,7 +425,7 @@ export function propSpec(c) {
       if (c.kind === 'pillar') return {key: `vp|${acc}|${Math.floor(rn(c, 20) * 4)}`, joins: {}, build: () => pillar(c, {...PILLAR_OPTS.vault, trim: acc || '#e8c46b'})};
       return {key: `vw|${acc}|${rn(c, 11) > 0.45 ? 1 : 0}`, joins: {}, build: () => vaultwall(c)};
     }
-    case 'sandbag': { const vert = (j.n || j.s) && !(j.e || j.w); return {key: `sb|${kpow(j)}|${(vert ? c.ty : c.tx) & 3}|${rn(c, 160) > 0.965 ? 1 : 0}|${rn(c, 3) > 0.5 ? 1 : 0}`, joins: j, build: () => sandbag(c)}; }
+    case 'sandbag': { const vert = (j.n || j.s) && !(j.e || j.w); return {key: `sb|${kpow(j)}|${(vert ? c.ty : c.tx) & 3}|${rn(c, 160) > 0.965 ? 1 : 0}`, joins: j, build: () => sandbag(c)}; }
     case 'jersey': case 'jersey-hazard': return {key: `${style}|${kpow(j)}|${acc}`, joins: j, build: () => jersey(c, style === 'jersey-hazard')};
     case 'partition': return {key: `pt|${kpow(j)}|${acc}|${hash2(c.tx, c.ty, c.seed + 5) > 0.6 ? 1 : 0}`, joins: j, build: () => partition(c)};
     case 'rack': { const v = rn(c, 1), var1 = v < 0.1 ? 'd' : v < 0.22 ? 'f' : v < 0.3 ? 't' : 's'; return {key: `rk|${var1}|${kpow(j)}|${c.ty & 1}|${c.tx & 3}`, joins: {n: j.n, s: j.s}, build: () => rack(c)}; }

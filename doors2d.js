@@ -4,6 +4,8 @@
 //   * the ghost round hanging in the air in room 1 of the Signal Check.
 // Called by render2d.js in world space, after the baked world and before the actors.
 import {COLORS, withAlpha} from './theme.js';
+import {STACK_CONFIG} from './stack2d.js';
+import {drawPanel, drawPost} from './item-stack2d.js';
 
 const TAU = Math.PI * 2;
 const TILE = 32;
@@ -22,9 +24,22 @@ export function createDoorLayer() {
     const lamp = closed ? (gate ? '#ffb04a' : COLORS.danger) : COLORS.slow;
     ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
     // frame jambs stay when the door is open
-    ctx.fillStyle = '#17141d'; ctx.fillRect(-half - 3, -7, 6, 14); ctx.fillRect(half - 3, -7, 6, 14);
-    ctx.fillStyle = withAlpha(lamp, closed ? 0.55 + 0.45 * pulse : 0.9); ctx.fillRect(-half - 1.5, -2, 3, 4); ctx.fillRect(half - 1.5, -2, 3, 4);
-    if (open < 1) {
+    if (!STACK_CONFIG.props) {
+      ctx.fillStyle = '#17141d'; ctx.fillRect(-half - 3, -7, 6, 14); ctx.fillRect(half - 3, -7, 6, 14);
+      ctx.fillStyle = withAlpha(lamp, closed ? 0.55 + 0.45 * pulse : 0.9); ctx.fillRect(-half - 1.5, -2, 3, 4); ctx.fillRect(half - 1.5, -2, 3, 4);
+    }
+    if (STACK_CONFIG.props) {
+      // stacked leaves and jamb posts, drawn in world space so the height lift stays screen-up
+      ctx.save(); ctx.rotate(vertical ? -Math.PI / 2 : 0); ctx.translate(-cx, -cy);
+      const at = (u) => [cx + (vertical ? 0 : u), cy + (vertical ? u : 0)], col = String(lamp).startsWith('#') ? lamp : '#ff6a78';
+      for (const s of [-1, 1]) { const [px, py] = at(s * half); drawPost(ctx, px, py, col); }
+      if (open < 1) for (const side of [-1, 1]) {
+        const w = half - 3, lx = side < 0 ? -half + 3 - open * (w - 2) : open * (w - 2), [px, py] = at(lx + w / 2);
+        drawPanel(ctx, px, py, vertical, w, gate ? 'gate' : 'door', gate ? '#e9b23c' : col, 1 - open * open * 0.6);
+      }
+      ctx.restore();
+      if (open < 0.05) { ctx.fillStyle = withAlpha(lamp, 0.6 + 0.4 * pulse); ctx.beginPath(); ctx.arc(0, -4, 2.4, 0, TAU); ctx.fill(); }
+    } else if (open < 1) {
       ctx.globalAlpha = 1 - open * open * 0.6;
       for (const side of [-1, 1]) {
         const w = half - 3, lx = side < 0 ? -half + 3 - open * (w - 2) : open * (w - 2);   // left leaf slides left, right leaf slides right

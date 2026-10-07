@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Item contact sheet</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="1800" height="900"></canvas>
+<script type="module">
+// Contact sheet for stacked crates, pickups, door/gate panels, exit mast. ?zoom=4  ?t=1.3 (animation time)
+import {setSpriteScale} from '../sprites2d.js';
+import {beginStackFrame} from '../stack2d.js';
+import {crateModel, drawPickupStack, drawPanel, drawPost, drawExitMast, spawnCrateDebris, stepDebris, drawDebris} from '../item-stack2d.js';
+import {drawIcon, MOD_ICON} from '../icons.js';
+import {GUNS} from '../catalog.js';
+import {drawStack} from '../stack2d.js';
+const q = new URLSearchParams(location.search), zoom = +(q.get('zoom') || 3), T = +(q.get('t') || 1.3);
+setSpriteScale(zoom);
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const cell = (x, y, w, h, label, fn) => { ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#2b3b40'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = 'rgba(255,255,255,0.04)'; for (let i = 0; i < w; i += 32) ctx.fillRect(i, 0, 1, h); for (let j = 0; j < h; j += 32) ctx.fillRect(0, j, w, 1); ctx.fillStyle = '#aaa'; ctx.font = `${9 / zoom}px monospace`; ctx.fillText(label, 3, 9 / zoom); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip(); fn(); ctx.restore(); };
+ctx.fillStyle = '#1a1722'; ctx.fillRect(0, 0, c.width, c.height); ctx.scale(zoom, zoom);
+beginStackFrame();
+const W = 48, H = 56; let i = 0;
+const slot = () => { const n = i++, per = Math.floor(c.width / zoom / W); return [(n % per) * W, Math.floor(n / per) * H]; };
+for (let v = 0; v < 3; v++) for (let s = 0; s < 3; s++) { const [x, y] = slot(); cell(x, y, W - 1, H - 1, `crate v${v} s${s}`, () => drawStack(ctx, crateModel(s, v), W / 2, H * 0.62, {})); }
+const kinds = [['scrap', '#f4c66d'], ['scrap', '#74c9ed'], ['ammo', '#8fe0ff'], ['heal', '#74dfab'], ['armor', '#75cfe0'], ['mod', '#d38ff5'], ['gun', '#74c9ed'], ['supply', '#f4c66d'], ['freq', '#9ad8ff']];
+for (const [k, col] of kinds) { const [x, y] = slot(); cell(x, y, W - 1, H - 1, k, () => { ctx.translate(W / 2, H * 0.5); drawPickupStack(ctx, {kind: k, gunIndex: 5, modId: 'extmag'}, T, 0.7, col, drawIcon, MOD_ICON, GUNS); }); }
+for (const [kind, col] of [['gate', '#e9b23c'], ['door', '#ff6a78']]) { const [x, y] = slot(); cell(x, y, 2 * W - 1, H - 1, kind, () => { drawPost(ctx, 6, H / 2, col); drawPost(ctx, 2 * W - 8, H / 2, col); drawPanel(ctx, 30, H / 2, false, 44, kind, col); drawPanel(ctx, 66, H / 2, false, 44, kind, col); }); i++; }
+{ const [x, y] = slot(); cell(x, y, W - 1, H - 1, 'mast red', () => drawExitMast(ctx, W / 2, H * 0.8, T, false, '#ff5969')); }
+{ const [x, y] = slot(); cell(x, y, W - 1, H - 1, 'mast ready', () => drawExitMast(ctx, W / 2, H * 0.8, T, true, '#6dffb0')); }
+{ const [x, y] = slot(); cell(x, y, 2 * W - 1, H - 1, 'debris', () => { spawnCrateDebris(W, H * 0.6); for (let k = 0; k < 18; k++) stepDebris(1 / 30); drawDebris(ctx, {x0: -999, y0: -999, x1: 999, y1: 999}); }); i++; }
+window.__ready = true;
+</script>
