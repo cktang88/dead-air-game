@@ -19,6 +19,7 @@ const norm = (x, y) => { const l = Math.hypot(x, y); return l > 1e-9 ? {x: x / l
 export const INSTINCT = {
   retreatHp: 0.4,        // at or below this fraction a shooter stops trading shots and breaks line of sight
   recoverHp: 0.55,       // ...and only comes back out once it is above this (hysteresis: no flicker)
+  retreatMax: 7,         // a retreat is a breather: after this many scaled seconds the enemy fights on (no stalemates)
   lineWidth: 20,         // px either side of the aim ray that counts as "in the line" (plus the body radius)
   lineReach: 560,        // the crosshair only worries an enemy within this range
   lineReact: 0.22,       // scaled seconds standing in the line before the sidestep starts (a human beat)

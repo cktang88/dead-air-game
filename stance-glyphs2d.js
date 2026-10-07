@@ -40,7 +40,7 @@ export function drawStanceGlyph(ctx, e, top, time) {
         ctx.fillStyle = color; outline(2.6);
         ctx.beginPath(); ctx.moveTo(-5, -3.2); ctx.lineTo(1, -3.2); ctx.lineTo(1, -6); ctx.lineTo(7, 0); ctx.lineTo(1, 6); ctx.lineTo(1, 3.2); ctx.lineTo(-5, 3.2); ctx.closePath(); ctx.stroke(); ctx.fill();
       } else {
-        const n = e.stance === 'fallback' ? 2 : 1, s = 3.4;
+        const n = e.stance === "fallback" ? 2 : 1, s = 4;
         for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 5; outline(4); chevron(ctx, x, 0, s); ink(2); chevron(ctx, x, 0, s); }
       }
       break;

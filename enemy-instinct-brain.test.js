@@ -131,6 +131,18 @@ test('a badly hurt shooter breaks line of sight instead of trading shots in the 
   assert.equal(fired, 0, 'and it did not trade shots on the way');
 });
 
+test('a retreat is a breather: a hurt shooter fights on after a few seconds (no stalled rooms)', () => {
+  const rng = rngOf(9);
+  const world = makeWorld(pillared(), {playerAim: {x: 0, y: -1}});
+  world.player.x = at(4, 6).x; world.player.y = at(4, 6).y;
+  const e = mk('gunner', {x: at(17, 2).x, y: at(17, 2).y, hp: 12});
+  world.enemies = [e];
+  prime(world, rng);
+  let firedLate = 0;
+  run(world, 30, rng, (t, en, out) => { if (out.fire && t > 7.5) firedLate++; });
+  assert.ok(firedLate >= 1, 'it came back out and shot');
+});
+
 test('a healthy shooter still fights (self-preservation is not cowardice)', () => {
   const rng = rngOf(11);
   const world = makeWorld(pillared(), {playerAim: {x: 0, y: -1}});
@@ -207,6 +219,24 @@ test('rushers do not path straight down the player\'s crosshair', () => {
   let leftLane = false;
   run(world, 3, rng, () => { if (across(world, e) > 30) leftLane = true; });
   assert.ok(leftLane, 'the weave took it out of the lane');
+});
+
+test('a marksman relocates to a fresh nest after every shot', () => {
+  const rng = rngOf(17);
+  // Wide room with several pillars so there are many nests to choose from.
+  const rows = open(40, 17).map((row, y) => ((y === 4 || y === 12) ? row.slice(0, 8) + '###' + row.slice(11, 20) + '###' + row.slice(23, 30) + '###' + row.slice(33) : row));
+  const world = makeWorld(rows, {playerAim: {x: 0, y: -1}});
+  world.player.x = at(3, 8).x; world.player.y = at(3, 8).y;
+  const sniper = mk('sniper', {x: at(30, 8).x, y: at(30, 8).y, mag: 3, ammo: 3});
+  sniper.def = {brain: 'sniper', speed: 24, minRange: 150, range: 520, projectileSpeed: 340, sightRange: 560};
+  world.enemies = [sniper];
+  prime(world, rng);
+  const shotFrom = [];
+  run(world, 40, rng, (t, e, out) => { if (out.fire) shotFrom.push({x: e.x, y: e.y}); });
+  assert.ok(shotFrom.length >= 3, `needs a few shots to compare (got ${shotFrom.length})`);
+  let moves = 0;
+  for (let i = 1; i < shotFrom.length; i++) if (Math.hypot(shotFrom[i].x - shotFrom[i - 1].x, shotFrom[i].y - shotFrom[i - 1].y) >= TILE * 2) moves++;
+  assert.ok(moves >= Math.floor((shotFrom.length - 1) / 2), `relocated ${moves}/${shotFrom.length - 1} times`);
 });
 
 void segmentHitsCircle;

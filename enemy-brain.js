@@ -90,7 +90,7 @@ export function brainState(e, rng = Math.random) {
     zigT: 0, zigDir: rng() < 0.5 ? -1 : 1, zigPhase: rng() * TAU, circleDir: rng() < 0.5 ? -1 : 1, circleT: 0,
     ambush: 0, ambushUsed: false, brute: {phase: 'advance', t: 0, cd: between(rng, 0.5, 1.5), dir: null},
     suspicion: 0, inView: false, spotted: false, pat: null, dodging: false,
-    lineT: 0, lineCd: 0, sideT: 0, retreating: false, pushT: 0, pushKick: false, shaken: 0, enrage: 0, mates: null, packT: 0, packSpent: 0, stance: null, peekHold: 0, openT: 0, recheckT: 0, breakGoal: null, breakT: 0,
+    lineT: 0, lineCd: 0, sideT: 0, retreating: false, pushT: 0, pushKick: false, shaken: 0, enrage: 0, mates: null, packT: 0, packSpent: 0, stance: null, peekHold: 0, openT: 0, recheckT: 0, breakGoal: null, breakT: 0, coverRetry: 0, retreatT: 0,
     prof,
   };
   return e.ai;
@@ -267,7 +267,7 @@ export function findCover(e, target, world, o = {}) {
   for (const hide of spots) {
     const d0 = dist(e, hide);
     if (d0 > R * tile || dist(hide, target) < minR * 0.7) continue;
-    if (o.exclude?.some(x => dist(x, hide) < tile * 1.5)) continue;   // a marksman never re-uses the nest it just fired from
+    if (o.exclude?.some(x => dist(x, hide) < (o.excludeRadius ?? tile * 1.5))) continue;   // a marksman never re-uses the nest it just fired from
     if (!hidden(hide)) continue;
     const ht = nav.tileOf(hide.x, hide.y);
     let peek = null, peekD = Infinity;
@@ -579,7 +579,10 @@ function rangedStep(c) {
   const prof = ai.prof;
   const reloading = e.reloadTimer > 0 || (e.mag > 0 && e.ammo <= 0);
   ai.retreating = wantsRetreat(e.hp / e.maxHp, ai.retreating);
-  const hurt = ai.retreating;                       // SELF-PRESERVATION: at ~40% HP stop trading shots, break line of sight
+  // SELF-PRESERVATION: at ~40% HP stop trading shots and break line of sight. It is a breather, not a hideout:
+  // after retreatMax scaled seconds the enemy has caught its breath and fights on (hiding must never stall a room).
+  ai.retreatT = ai.retreating ? ai.retreatT + dt : 0;
+  const hurt = ai.retreating && ai.retreatT < INSTINCT.retreatMax;
   const shaken = ai.shaken > 0;                     // an ally just dropped next to us: get low
   const pushing = ai.pushT > 0 && !hurt && !shaken; // the player is reloading or limping: this is the window
   const minRange = def.minRange ?? def.range * 0.42;
@@ -598,12 +601,13 @@ function rangedStep(c) {
     ai.recheckT = 0.25;
     compromised = world.los(p.x, p.y, ai.cover.hide.x, ai.cover.hide.y);
   }
-  const wantsCover = !ai.cover || ai.coverT <= 0 || drifted || exposedAtHide || compromised;
+  // A failed search is not repeated every frame: wait a beat before looking again (cover searches are the expensive query).
+  const wantsCover = (!ai.cover ? ai.coverRetry <= 0 : (ai.coverT <= 0 || drifted || exposedAtHide || compromised));
   if (wantsCover && world.coverBudget !== undefined && world.coverBudget <= 0) {
     ai.coverT = Math.min(ai.coverT, 0) + 0.05; // another enemy used this frame's cover searches: retry next frames
   } else if (wantsCover) {
     const rally = hurt ? rallyPoint(e, living(world, e), target) : null;
-    const opts = {minRange: band.min, maxRange: band.max, tiles: 6, rally, exclude: ai.nest ? [ai.nest] : undefined};
+    const opts = {minRange: band.min, maxRange: band.max, tiles: 6, rally, exclude: ai.nest ? [ai.nest] : undefined, excludeRadius: world.nav ? world.nav.tile * 3 : undefined};
     if (world.coverBudget !== undefined) world.coverBudget--;
     let found = findCover(e, target, world, opts);
     // No cover with a perfect firing band: take any cover with a workable one before standing in the open.
@@ -611,7 +615,13 @@ function rangedStep(c) {
       if (world.coverBudget !== undefined) world.coverBudget--;
       found = findCover(e, target, world, {...opts, relaxed: true});
     }
+    // A marksman with nowhere new to go re-uses its old nest rather than standing in the open.
+    if (!found && opts.exclude && (world.coverBudget === undefined || world.coverBudget > 0)) {
+      if (world.coverBudget !== undefined) world.coverBudget--;
+      found = findCover(e, target, world, {...opts, exclude: undefined});
+    }
     ai.cover = found;
+    ai.coverRetry = found ? 0 : 0.45;
     ai.nest = null;
     ai.coverT = between(rng, 1.4, 2.4);
     if (compromised && found) ai.phase = 'duck';
@@ -664,7 +674,7 @@ function rangedStep(c) {
     const atHide = dist(e, ai.cover.hide) <= 16;
     if (ai.phase === 'duck') {
       out.intent = reloading ? 'reload' : 'cover';
-      out.stance = shaken ? 'wary' : hurt ? 'fallback' : null;
+      out.stance = shaken ? 'wary' : hurt ? 'fallback' : !ai.sees && ai.lost > 0.8 ? 'hold' : null;
       if (!atHide) go(c, ai.cover.hide, 1, 12);
       const suppress = ai.role === 'suppress' ? 0.5 : 1;
       // Do not lean out into a crosshair that is already parked on the corner: hold the duck a moment.
@@ -898,7 +908,7 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
     windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, suspicion: ai.suspicion, inView: ai.inView, dodging: false, spotted: ai.spotted, role: ai.role, goal: null, faceOverride: null, stance: null,
   };
   for (const key of ['clock']) ai[key] += dt;
-  for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT', 'lineCd', 'sideT', 'pushT', 'shaken', 'enrage', 'packT', 'peekHold', 'recheckT', 'breakT']) ai[key] = Math.max(0, ai[key] - dt);
+  for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT', 'lineCd', 'sideT', 'pushT', 'shaken', 'enrage', 'packT', 'peekHold', 'recheckT', 'breakT', 'coverRetry']) ai[key] = Math.max(0, ai[key] - dt);
   ai.sinceFire += dt; ai.sinceStart += dt;
   const d = Math.hypot(p.x - e.x, p.y - e.y);
   const prof = ai.prof = PROFILES[e.type] ?? ai.prof;
@@ -944,7 +954,7 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
         out.fire = true; ai.sinceFire = 0; ai.shotsLeft--;
         ai.cd = between(rng, ...prof.fireGap);
         if (ai.shotsLeft > 0) ai.cd = Math.min(ai.cd, 0.7);
-      } else ai.cd = 0.25;
+      } else ai.cd = 0.6;
       out.aiming = false; out.windup = 0;
       out.intent = ok ? 'aim' : 'hold';
     } else out.windup = ai.windup;
