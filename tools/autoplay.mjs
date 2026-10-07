@@ -16,6 +16,9 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const {GUNS, ENEMY_TYPES} = await import(pathToFileURL(path.join(ROOT, 'catalog.js')).href);
 const {THROWABLES} = await import(pathToFileURL(path.join(ROOT, 'tactical.js')).href);
+const {visionFor} = await import(pathToFileURL(path.join(ROOT, 'stealth.js')).href);
+const {UPGRADES} = await import(pathToFileURL(path.join(ROOT, 'frequencies.js')).href);
+const UP_BY_ID = new Map(UPGRADES.map(u => [u.id, u]));
 
 // ───────────────────────────── CLI ─────────────────────────────
 const HELP = `usage: node tools/autoplay.mjs [options]
@@ -28,16 +31,19 @@ const HELP = `usage: node tools/autoplay.mjs [options]
                         answer esm.sh imports. Default: $DEADAIR_VENDOR, else the session scratchpad
                         vendor/out if present, else the real network.
   --workers N           parallel browsers                                               [min(3,cpus-1)]
-  --speed X             sim speed multiplier (1 = real time; extra time via advanceTime) [1]
+  --speed X             calm-step size: the bot advances the sim 40ms*X per decision while idle/walking (smaller steps
+                        automatically while shooting / under telegraphs / bullets)                         [8]
   --timeout SEC         wall-clock limit per seed                                        [600]
   --max-game-time SEC   game-clock limit per seed (counted as 'timeout')                 [900]
   --shots [SEC]         save periodic screenshots every SEC game seconds                 [off, 30]
   --width/--height PX   viewport                                                         [1280x720]
-  --extract             at the bank/descend choice, bank (extract) instead of descending
+  --realtime            leave the game's own rAF loop running (default: the bot steps the sim with advanceTime only)
+  --extract             at the bank/descend choice, bank (extract) instead of descending (same as --extract-at 1)
+  --extract-at N        bank (extract) after clearing floor N; default: always descend
   --verbose             log the bot's task decisions
 `;
 function parseArgs(argv) {
-  const o = {seeds: '10', seedBase: 7001, skill: 0.5, speed: 1, timeout: 600, maxGameTime: 900, shots: 0, width: 1280, height: 720, verbose: false, workers: Math.max(1, Math.min(3, os.cpus().length - 1))};
+  const o = {seeds: '10', seedBase: 7001, skill: 0.5, speed: 8, timeout: 600, maxGameTime: 900, shots: 0, width: 1280, height: 720, verbose: false, workers: Math.max(1, Math.min(3, os.cpus().length - 1))};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
     switch (a) {
@@ -54,7 +60,9 @@ function parseArgs(argv) {
       case '--shots': o.shots = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? +next() : 30; break;
       case '--width': o.width = +next(); break;
       case '--height': o.height = +next(); break;
-      case '--extract': o.extract = true; break;
+      case '--realtime': o.realtime = true; break;
+      case '--extract': o.extractAt = 1; break;
+      case '--extract-at': o.extractAt = +next(); break;
       case '--verbose': o.verbose = true; break;
       case '-h': case '--help': console.log(HELP); process.exit(0);
       default: console.error('unknown option ' + a + '\n' + HELP); process.exit(2);
@@ -120,6 +128,8 @@ function installHooks() {
   window.__bot = {
     rooms() { return s.rooms.map(r => ({i: r.index, role: r.role, branch: !!r.branch, name: r.name, cx: r.cx, cy: r.cy, x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2, depth: r.depth, secret: !!r.secret, path: r.pathLength})); },
     solid() { return s.solidMap.map(r => r.slice()); },
+    // closable doors are solid until opened, but always open when walked into: the bot's nav treats them as passable
+    doorCells() { const o = []; for (const d of s.doorProps || []) if (!d.gate) for (const c of d.cells) o.push([c.x, c.y]); return o; },
     snap() {
       const p = s.player;
       const out = {mode: s.mode, outcome: s.outcome || null, floor: s.floor, rm: s.runModal || null, paused: s.paused, t: s.realElapsed, st: s.elapsed, ts: s.timeScaleSmoothed, ev: evs.splice(0)};
@@ -129,13 +139,14 @@ function installHooks() {
         cur: s.currentRoom, slots: s.weaponSlots.slice(), active: s.activeSlot, wi: s.weaponIndex, ammo: s.weaponAmmo.slice(), reserve: s.reserveAmmo.slice(),
         reloading: s.reloadTimer > 0, burst: !!s.weaponBurst, aim: {x: s.aim.x, y: s.aim.y}, thr: Object.assign({}, s.throwables), thrIdx: s.throwableIndex, inv: s.invuln,
         modal: {cache: !!s.cacheOpen, merchant: !!s.merchantOpen, gun: s.pendingGunPickup ? s.pendingGunPickup.gunIndex : null, loadout: !!s.loadoutOpen, pending: !!s.pendingLoadoutChange},
-        extraction: !!s.extractionOpen, gear: s.gear, floor: s.floor, rm: s.runModal || null, runRooms: s.runRooms || 0,
+        extraction: !!s.extractionOpen, gear: s.gear, freq: Object.assign({}, s.freq || {}), floor: s.floor, rm: s.runModal || null, runRooms: s.runRooms || 0,
         cam: {x: v.cam.x, y: v.cam.y, w: v.cam.w, h: v.cam.h, scale: v.cam.scale},
-        enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0, sf: e.shieldFacing})),
+        enemies: s.enemies.filter(e => e.alive).map(e => ({id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, room: e.roomIndex, aimT: e.aimTimer || 0, wind: e.meleeWindup || 0, rel: e.reloadTimer || 0, stun: e.stun || 0, sa: typeof e.shieldAng === 'number' ? e.shieldAng : null, aware: !!e.aware, susp: e.suspicion || 0, posture: e.posture || null, locked: !!e.locked, face: e.face ? {x: e.face.x, y: e.face.y} : null, aim: e.aim ? {x: e.aim.x, y: e.aim.y} : null, intent: e.intent || null, ammo: e.ammo, hr: e.def?.hitRadius || 11})),
         bullets: s.bullets.filter(b => b.owner === 'enemy').map(b => ({x: b.x, y: b.y, vx: b.vx, vy: b.vy, id: b.enemyId, d: b.damage || 1})),
         cover: s.cover.map(c => ({x: c.x, y: c.y, r: c.radius, crate: !!c.crate})),
         crates: s.crates.map(c => ({x: c.x, y: c.y, hp: c.hp})),
         pickups: s.pickups.filter(k => k.available).map(k => ({kind: k.kind, x: k.x, y: k.y, room: k.roomIndex, gun: k.gunIndex, claimed: !!k.claimed, declined: !!k.declined, value: k.value})),
+        closedDoors: (s.doorProps || []).filter(d => !d.gate && d.state === 'closed').flatMap(d => d.cells.map(c => c.x + ',' + c.y)),
         gates: s.lockedDoors.map(g => ({x: (g.x + 0.5) * 32, y: (g.y + 0.5) * 32, cost: g.cost, opened: !!g.opened, room: g.roomIndex})),
         rstate: s.rooms.map(r => (r.cleared ? 2 : 0) | (r.visited ? 1 : 0)),
         active_i: s.interact && s.interact.active ? {kind: s.interact.active.kind, id: s.interact.active.id, ok: s.interact.active.enabled} : null,
@@ -161,7 +172,7 @@ class Nav {
     for (let j = 0; j < this.gh; j++) for (let i = 0; i < this.gw; i++) this.clear[j * this.gw + i] = this.wallDist((i + .5) * CELL, (j + .5) * CELL, 30);
     this.dyn = new Uint8Array(this.gw * this.gh);
     this.g = new Float32Array(this.gw * this.gh); this.par = new Int32Array(this.gw * this.gh); this.closed = new Uint8Array(this.gw * this.gh);
-    this.obstacles = []; this.zones = []; this.perm = [];
+    this.obstacles = []; this.zones = []; this.perm = []; this.closedDoors = new Set();
   }
   isSolid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.tw || ty >= this.th || this.solid[ty][tx] !== 0; }
   setOpen(tx, ty) { this.solid[ty][tx] = 0; for (let j = ty * 4 - 2; j < ty * 4 + 6; j++) for (let i = tx * 4 - 2; i < tx * 4 + 6; i++) if (i >= 0 && j >= 0 && i < this.gw && j < this.gh) this.clear[j * this.gw + i] = this.wallDist((i + .5) * CELL, (j + .5) * CELL, 30); }
@@ -185,7 +196,7 @@ class Nav {
   /** bullet line of sight: walls (incl. closed gates) and cover/crate circles */
   los(ax, ay, bx, by) {
     const len = hyp(bx - ax, by - ay), n = Math.max(1, Math.ceil(len / 6));
-    for (let k = 1; k < n; k++) { const t = k / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t; if (this.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) return false; }
+    for (let k = 1; k < n; k++) { const t = k / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t; const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); if (this.isSolid(tx, ty) || this.closedDoors.has(tx + ',' + ty)) return false; }
     for (const o of this.obstacles) {
       if (o.soft) continue;
       const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1, t = clamp(((o.x - ax) * dx + (o.y - ay) * dy) / l2, 0, 1);
@@ -268,13 +279,14 @@ class Bot {
     this.declined = new Set(); this.unreachable = new Map(); this.doneMarket = new Set(); this.pulled = new Map();
     this.stats = {scrapEarned: 0, scrapSpent: 0, starve: 0, dry: 0, hurt: [], kills: [], shotsFired: 0, stillTicks: 0, ticks: 0, throws: 0, taskTicks: {}, trapped: false, merchantBuys: [], cacheChoices: [], gunSwaps: 0, freqPicks: 0, decisions: [], errors: []};
     this.lastScrap = null; this.wasStarved = false; this.wasDry = false; this.nextShot = opts.shots || 1e9; this.shotN = 0; this.lastSnap = null;
-    this.lastMoveWant = 0; this.pausedFor = 0;
+    this.lastMoveWant = 0; this.pausedFor = 0; this.fireUntil = 0; this.fireOffUntil = 0; this.stalkId = null; this.stalkT = 0; this.urgent = false; this.peeked = new Set(); this.lastFlash = -9;
   }
   async init(first = true) {
     if (first) await this.page.evaluate(installHooks);
-    this.floorNo = null; this.plan = null; this.task = null; this.target = null; this.seen.clear(); this.prevEn.clear(); this.unreachable.clear(); this.badRooms.clear(); this.gateOpen = new Set(); this.permBlocks = []; this.doneMarket.clear(); this.pulled.clear(); this.anchor = null; this.idle = null; this.recover = null;
+    this.floorNo = null; this.plan = null; this.task = null; this.target = null; this.seen.clear(); this.prevEn.clear(); this.unreachable.clear(); this.badRooms.clear(); this.gateOpen = new Set(); this.permBlocks = []; this.peeked = new Set(); this.doneMarket.clear(); this.pulled.clear(); this.anchor = null; this.idle = null; this.recover = null;
     this.rooms = await this.page.evaluate(() => window.__bot.rooms());
     this.nav = new Nav(await this.page.evaluate(() => window.__bot.solid()));
+    for (const [x, y] of await this.page.evaluate(() => window.__bot.doorCells())) if (this.nav.solid[y]?.[x] === 1) this.nav.setOpen(x, y);
     this.routeRooms = this.rooms.filter(r => !r.branch).map(r => r.i);
   }
   // ── input primitives (real events) ──
@@ -304,7 +316,7 @@ class Bot {
       const pv = this.prevEn.get(e.id);
       if (pv && S.t > pv.t) { e.vx = (e.x - pv.x) / (S.t - pv.t) * .5 + (pv.vx || 0) * .5; e.vy = (e.y - pv.y) / (S.t - pv.t) * .5 + (pv.vy || 0) * .5; } else { e.vx = 0; e.vy = 0; }
       this.prevEn.set(e.id, {x: e.x, y: e.y, t: S.t, vx: e.vx, vy: e.vy});
-      e.shielded = false; if (e.type === 'riot' && typeof e.sf === 'number' && !(e.stun > 0)) { e.shielded = angDiff(Math.atan2(S.py - e.y, S.px - e.x), e.sf) < 1.1; }
+      e.shielded = false; if (e.type === 'riot' && typeof e.sa === 'number' && !(e.stun > 0)) { e.shielded = angDiff(Math.atan2(S.py - e.y, S.px - e.x), e.sa) < 1.3; }
       e.melee = ['chaser', 'brute', 'riot', 'boss'].includes(e.type);
       if (e.onScreen && e.los) {
         if (!this.seen.has(e.id)) this.seen.set(e.id, {first: S.t, react: this.react * (.7 + .6 * this.rng())});
@@ -427,10 +439,18 @@ class Bot {
   async handleModals(S) {
     const p = this.page;
     if (S.rm === 'freq') {
-      const btns = await p.$$('#run-modal [data-freq]'); if (btns.length) { await btns[Math.floor(this.rng() * btns.length)].click(); this.stats.freqPicks++; return true; }
+      const ids = await p.$$eval('#run-modal [data-freq]', bs => bs.map(b => b.dataset.freq));
+      if (ids.length) {
+        // prefer stations already held (-> crossfades), then rank-ups, then a fixed taste (defensive time economy first)
+        const owned = S.freq || {}, heldStations = {}; for (const [id, rk] of Object.entries(owned)) { const u = UP_BY_ID.get(id); if (u) heldStations[u.station] = Math.max(heldStations[u.station] || 0, rk); }
+        const taste = {reload_kill: 6, borrowed: 5, jam: 5, silent: 4, through: 4, arc: 3, held_breath: 4, freeze: 5, blindside: 3};
+        const score = id => { const u = UP_BY_ID.get(id); if (!u) return 0; return (heldStations[u.station] ? 10 + 2 * heldStations[u.station] : 0) + (owned[id] ? 3 : 0) + (taste[id] || 1) + this.rng() * 0.5; };
+        const bestId = ids.reduce((a, b) => score(b) > score(a) ? b : a);
+        const btn = await p.$(`#run-modal [data-freq="${bestId}"]`); if (btn) { await btn.click(); this.stats.freqPicks++; (this.stats.freqChosen ??= []).push(bestId); return true; }
+      }
     }
     if (S.rm === 'decision') {
-      const act = this.o.extract ? 'extract' : 'descend'; const b = await p.$(`#run-modal [data-act="${act}"]`); if (b) { await b.click(); this.stats.decisions.push(act + '@' + S.floor); } return true;
+      const act = (this.o.extractAt && S.floor >= this.o.extractAt) ? 'extract' : 'descend'; const b = await p.$(`#run-modal [data-act="${act}"]`); if (b) { await b.click(); this.stats.decisions.push(act + '@' + S.floor); } return true;
     }
     if (S.modal.cache) {
       const n = this.needs(S); const order = [];
@@ -474,6 +494,8 @@ class Bot {
     const dry = S.reloading || S.ammo[S.wi] === 0, lowHp = S.hp <= Math.max(1, S.mhp * 0.34);
     const shielded = (q) => { let c = 0; for (const e of reacted) if (!e.melee && this.nav.los(q.x, q.y, e.x, e.y)) c++; return c; };
     const coverW = dry ? 9 : lowHp ? 5 : 0.4;
+    const flankRiot = reacted.some(e => e.type === 'riot' && e.shielded && e.d < 340);   // a shield facing us cannot be shot: walk (0.35x) round to its back
+    const sniperW = reacted.some(e => e.type === 'sniper' && e.aware) ? 1.6 : 0;
     let best = null; const cands = [{x: 0, y: 0, still: true}, ...DIRS];
     for (const d of cands) {
       let sc = 0; const T = 0.5, mv = d.still ? 0 : PSPEED * T;
@@ -493,13 +515,19 @@ class Bot {
         sc += (after - e.d) * w * (e.d < 140 ? 1 : .4) * (0.5 + this.dodgeSkill * .5);
         if (after < 26) sc -= 25;
       }
-      for (const e of reacted) if (e.type === 'riot' && typeof e.sf === 'number' && e.d < 260) sc += (angDiff(Math.atan2(q.y - e.y, q.x - e.x), e.sf) - angDiff(Math.atan2(P.y - e.y, P.x - e.x), e.sf)) * 14;
-      // sidestep telegraphed shots
-      for (const e of reacted) if (!e.melee && (e.aimT > 0) && e.d > 20) {
-        const ax = (P.x - e.x) / e.d, ay = (P.y - e.y) / e.d; const perp = Math.abs(d.x * -ay + d.y * ax);
-        sc += perp * 7 * this.dodgeSkill * (d.still ? 0 : 1);
+      for (const e of reacted) if (e.type === 'riot' && typeof e.sa === 'number' && e.d < 260) { const gain = angDiff(Math.atan2(q.y - e.y, q.x - e.x), e.sa) - angDiff(Math.atan2(P.y - e.y, P.x - e.x), e.sa); sc += gain * (e.shielded ? 45 : 14);
+        if (e.shielded) sc += (Math.abs(e.d - 85) - Math.abs(hyp(e.x - q.x, e.y - q.y) - 85)) * 0.18; }
+      // step out of the lane of a telegraphed shot (the aim is locked for the whole wind-up); break a marksman's laser
+      for (const e of reacted) if (!e.melee && (e.aimT > 0 || e.locked) && e.d > 20) {
+        let ax = e.aim ? e.aim.x : (P.x - e.x) / e.d, ay = e.aim ? e.aim.y : (P.y - e.y) / e.d; const al = hyp(ax, ay) || 1; ax /= al; ay /= al;
+        const along = (q.x - e.x) * ax + (q.y - e.y) * ay, perp = Math.abs((q.x - e.x) * -ay + (q.y - e.y) * ax);
+        const urgent = e.aimT > 0 && e.aimT < 0.5 ? 1 : 0.45;
+        if (along > 0 && perp < 28) sc -= (28 - perp) * 1.7 * (0.4 + this.dodgeSkill) * urgent;
+        if (e.type === 'sniper' && urgent === 1 && this.nav.los(q.x, q.y, e.x, e.y)) sc -= 8;
       }
-      sc += shielded(q) * -coverW * (dry || lowHp ? 1 : 1);
+      sc += shielded(q) * -coverW;
+      if (sniperW) for (const e of reacted) if (e.type === 'sniper' && e.aware && this.nav.los(q.x, q.y, e.x, e.y)) sc -= sniperW;
+      if (flankRiot && d.still) sc -= 40;
       // distance band to primary target
       if (target && !target.melee) {
         const want = clamp(gun.range * 0.6, 90, 240), da = hyp(target.x - q.x, target.y - q.y);
@@ -534,6 +562,7 @@ class Bot {
     const dry = S.ammo[S.wi] + S.reserve[S.wi] === 0 && !starved; if (dry && !this.wasDry) this.stats.dry++; this.wasDry = dry;
 
     const en = this.visibleEnemies(S);
+    this.nav.closedDoors = new Set(S.closedDoors || []);
     this.nav.setObstacles(S.cover.map(c => ({x: c.x, y: c.y, r: c.r}))); this.nav.perm = this.permBlocks;
     for (const g of S.gates) if (g.opened && !this.gateOpen.has(g.x + ',' + g.y)) { this.gateOpen.add(g.x + ',' + g.y); const fresh = await p.evaluate(() => window.__bot.solid()); for (let y = 0; y < fresh.length; y++) for (let x = 0; x < fresh[y].length; x++) if (fresh[y][x] === 0 && this.nav.solid[y][x] !== 0) this.nav.setOpen(x, y); }
 
@@ -566,8 +595,22 @@ class Bot {
     let target = null, bestS = 1e9;
     for (const e of reacted) { const s = e.d + (e.shielded ? 150 : 0) - (e.aimT > 0 || e.wind > 0 ? 60 : 0) - (this.target?.id === e.id ? 45 : 0) + (e.type === 'brute' ? 20 : 0); if (s < bestS) { bestS = s; target = e; } }
     this.target = target;
-    const threats = en.filter(e => e.vis && e.reacted); const bulletsNear = S.bullets.some(b => hyp(b.x - P.x, b.y - P.y) < 220);
-    const inCombat = threats.length > 0 || (bulletsNear && this.rng() < this.dodgeSkill + .3);
+    const threats = en.filter(e => e.vis && e.reacted);
+    // only bullets actually heading for us matter (rounds hang in slow time: do not freeze waiting on harmless ones)
+    const bulletsNear = S.bullets.some(b => { const rx = P.x - b.x, ry = P.y - b.y, dd = hyp(rx, ry), sp = hyp(b.vx, b.vy) || 1; if (dd > 240) return false; const t = (rx * b.vx + ry * b.vy) / (sp * sp); if (t <= 0) return dd < 40; return hyp(rx - b.vx * t, ry - b.vy * t) < 26; });
+    // enemies that have not noticed us are stalked (flank from behind / SILENT shots) instead of fought
+    const noticed = e => e.aware || (e.melee && e.d < 150) || e.aimT > 0 || e.wind > 0 || e.locked || e.susp > 0.7;
+    const awareThr = threats.filter(noticed), unawareThr = threats.filter(e => !noticed(e));
+    let stalk = null;
+    if (!awareThr.length && unawareThr.length && !bulletsNear) {
+      stalk = unawareThr.reduce((a, b) => a.d < b.d ? a : b);
+      if (this.stalkId !== stalk.id) { this.stalkId = stalk.id; this.stalkT = S.t; }
+      if (S.t - this.stalkT > 10) stalk = null;   // out of patience: just fight
+    } else if (!unawareThr.length) this.stalkId = null;
+    if (stalk) this.stats.stalkTicks = (this.stats.stalkTicks || 0) + 1;
+    const inCombat = !stalk && (threats.length > 0 || bulletsNear);
+    this.urgent = bulletsNear || awareThr.some(e => e.aimT > 0 || e.wind > 0 || e.locked || (e.melee && e.d < 170) || e.d < 130);
+    if (stalk) { target = stalk; this.target = stalk; }
     this.stats.combatTicks = (this.stats.combatTicks || 0) + (inCombat ? 1 : 0);
 
     // stand-still (slow-time) decisions
@@ -576,6 +619,20 @@ class Bot {
     // navigation goal
     let goalDir = null, steer = null;
     const toTask = () => this.steerTo(S, {x: task.x, y: task.y}, task.tol);
+    let stalkInfo = null;
+    if (stalk) {
+      const vis = visionFor(stalk.type), f = stalk.face || {x: 1, y: 0}, fl = hyp(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
+      const sleeping = stalk.posture === 'sleep', toMe = {x: P.x - stalk.x, y: P.y - stalk.y};
+      const dot = (fx * toMe.x + fy * toMe.y) / (stalk.d || 1);
+      const behind = sleeping || dot < -0.3, inCone = !sleeping && stalk.d < vis.range && dot > Math.cos(vis.half + 0.1);
+      stalkInfo = {sleeping, behind, inCone};
+      const closeEnough = Math.min(gun.range * 0.6, 150);
+      let goal = null, tol = 14;
+      if (sleeping || behind) { goal = {x: stalk.x, y: stalk.y}; tol = Math.max(40, Math.min(closeEnough, 110)); }
+      else { goal = {x: stalk.x - fx * 75, y: stalk.y - fy * 75}; if (this.nav.pointBlocked(goal.x, goal.y)) goal = {x: stalk.x - fx * 45, y: stalk.y - fy * 45}; }
+      steer = this.steerTo(S, goal, tol); if (steer) goalDir = steer.dir;
+      if (!steer) this.stalkT = -99;
+    } else
     if (!inCombat || !target || target.d > Math.min(gun.range * 0.8, 260)) {
       const tgt = (inCombat && target && target.d > Math.min(gun.range * .8, 260)) ? this.steerTo(S, {x: target.x, y: target.y}, Math.min(gun.range * 0.7, 220)) : toTask();
       steer = tgt; if (steer) goalDir = steer.dir;
@@ -589,6 +646,15 @@ class Bot {
       const near = hyp(task.x - P.x, task.y - P.y) < task.tol + 16 || task.interact === 'market' || task.interact === 'exit';
       if (S.active_i.kind === want && (S.active_i.ok !== false || want === 'exit') && near && !inCombat) { this.lastE = S.t; await this.press('KeyE'); if (want === 'gate') { this.task.done = true; } }
       else if (S.active_i.kind === 'gun' && task.kind === 'gun') { this.lastE = S.t; await this.press('KeyE'); }
+    }
+    // doors: HOLD-E peeks through in frozen time before committing (a tap would just open it)
+    if (S.active_i?.kind === 'door' && !inCombat && !stalk && !this.peeked.has(S.active_i.id) && S.t - this.lastE > 0.7) {
+      this.peeked.add(S.active_i.id);
+      if (S.enemies.some(e => hyp(e.x - P.x, e.y - P.y) < 450)) {
+        await this.setKeys([]); await this.setFire(false);
+        await p.keyboard.down('KeyE'); if (this.o.realtime) await p.waitForTimeout(520); else await p.evaluate(() => window.advanceTime(350)); await p.keyboard.up('KeyE'); if (!this.o.realtime) await p.evaluate(() => window.advanceTime(34));
+        this.lastE = S.t; this.stats.peeks = (this.stats.peeks || 0) + 1;
+      }
     }
     if (task.interact === 'locker' && steer?.arrived && S.active_i?.kind !== 'locker') this.task.done = true;
     // markets: standing in room with the panel not opening means it is done
@@ -617,7 +683,8 @@ class Bot {
     if (!this.anchor || hyp(S.px - this.anchor.x, S.py - this.anchor.y) > 70 || inCombat) this.anchor = {x: S.px, y: S.py, t: S.t};
     else if (S.t - this.anchor.t > 70 && task.kind !== 'idle') { if (!this.stats.trapped) { this.stats.trapped = {t: S.t, x: S.px, y: S.py, room: S.cur, task: task.kind, shot: await this.shot(S, 'trapped'), around: this.around(S)}; } if (S.t - this.anchor.t > 110) { res.forceEnd = 'stuck'; res.softlockNote = this.gateTraps.length ? 'paid-for gate collider blocks the way (game bug)' : 'unknown'; } }
 
-    const sprint = move && !inCombat && !bulletsNear && !S.enemies.some(e => e.d < 260 && e.los) && S.hp > 0;
+    // sprint only to reposition (it is loud and runs the world at 1x): never near living enemies in view or in this room
+    const sprint = move && !inCombat && !stalk && !bulletsNear && !S.enemies.some(e => e.d < 480 && (e.los || e.room === S.cur)) && S.hp > 0;
     const keys = move ? KEYFOR(move) : []; if (sprint) keys.push('ShiftLeft');
     await this.setKeys(keys);
     if (!move) this.stats.stillTicks++;
@@ -633,19 +700,40 @@ class Bot {
       tx = P.x + Math.cos(ang) * dist; ty = P.y + Math.sin(ang) * dist;
       await this.aimWorld(S, tx, ty);
       const err = Math.abs(Math.atan2(S.aim.x * (ty - P.y) - S.aim.y * (tx - P.x), S.aim.x * (tx - P.x) + S.aim.y * (ty - P.y)));
-      firing = !target.shielded && target.d <= gun.range * 0.9 && err < Math.atan2(11, Math.max(40, target.d)) + 0.03 + 0.04 * (1 - this.k) && target.los;
+      let want = !target.shielded && target.d <= gun.range * 0.9 && err < Math.atan2(11, Math.max(40, target.d)) + 0.03 + 0.04 * (1 - this.k) && target.los;
+      if (stalk && stalkInfo) want = want && (stalkInfo.behind || target.d < 95 || target.susp > 0.55);   // SILENT shots only (or first strike when about to be spotted)
+      // deliberate fire: short controlled windows with a pause (each shot lets world time through; heavy guns get one shot per click)
+      if (want) {
+        if (S.t >= this.fireOffUntil && S.t >= this.fireUntil) { const n = (gun.damage >= 35 || gun.rate >= .4 || gun.burst) ? 1 : (this.k > .6 ? 3 : 4); this.fireUntil = S.t + Math.max(0.05, gun.rate * (n - 0.5)); this.fireOffUntil = this.fireUntil + Math.max(0.12, gun.rate * 0.9); }
+        firing = S.t < this.fireUntil;
+      }
     } else if (move) { await this.aimWorld(S, P.x + move.x * 160, P.y + move.y * 160); }
     // blocked by a crate/cover while stuck: shoot it
     if (!firing && this.recover?.shoot && ammoNow > 0 && !S.reloading) { await this.aimWorld(S, this.recover.shoot.x, this.recover.shoot.y); firing = true; }
-    await this.setFire(firing); if (firing) this.stats.shotsFired++;
+    await this.setFire(firing); if (firing) this.stats.shotsFired++; this.firingNow = firing; this.calmFight = inCombat || !!stalk;
 
-    // reload / weapon swap
+    // reload (behind cover / when nothing ranged can see us) / swap guns before the active one runs dry
     if (!S.reloading && S.t - this.lastReload > 0.8) {
       const magMax = GUNS[S.wi].mag, low = ammoNow <= Math.max(1, Math.floor(magMax * 0.3)) || ammoNow < magMax && !inCombat && ammoNow < magMax * .6;
-      if (ammoNow === 0 && S.reserve[S.wi] === 0) {
-        const alt = S.slots.findIndex((gi, i) => i !== S.active && S.ammo[gi] + S.reserve[gi] > 0);
-        if (alt >= 0) { this.lastReload = S.t; await this.press('Digit' + (alt + 1)); }
-      } else if (low && S.reserve[S.wi] > 0 && (!target || ammoNow === 0 || this.rng() < .3 * this.k + .1)) { this.lastReload = S.t; await this.press('KeyR'); }
+      const exposed = threats.some(e => !e.melee && e.los && e.d < 420);
+      const total = i => S.ammo[S.slots[i]] + S.reserve[S.slots[i]];
+      const alt = S.slots.findIndex((gi, i) => i !== S.active && total(i) > 0);
+      const nearDry = total(S.active) <= Math.max(2, Math.floor(magMax * 0.3)) && alt >= 0 && total(alt) >= Math.max(total(S.active) * 2, GUNS[S.slots[alt]].mag * 0.6);
+      if ((ammoNow === 0 && S.reserve[S.wi] === 0 && alt >= 0) || (nearDry && ammoNow <= 3)) { this.lastReload = S.t; this.stats.swapsBeforeDry = (this.stats.swapsBeforeDry || 0) + (ammoNow > 0 ? 1 : 0); await this.press('Digit' + (alt + 1)); }
+      else if (low && S.reserve[S.wi] > 0 && (!exposed || ammoNow === 0 || this.rng() < .12)) { this.lastReload = S.t; await this.press('KeyR'); }
+    }
+
+    // shield breakers: flash (stuns, drops the shield) or frag on a riot that is facing us
+    if (S.t - this.lastThrow > 4) {
+      const riot = threats.find(e => e.type === 'riot' && e.shielded && e.d > 70 && e.d < 190 && e.los);
+      const id = riot ? ((S.thr.flash || 0) > 0 ? 'flash' : (S.thr.frag || 0) > 0 && riot.d > 110 ? 'frag' : null) : null;
+      if (id && this.rng() < 0.5 + 0.5 * this.k) {
+        this.lastThrow = S.t; this.stats.throws++; this.stats.riotThrows = (this.stats.riotThrows || 0) + 1;
+        const fi = THROWABLES.findIndex(t => t.id === id); let idx = S.thrIdx;
+        await this.setFire(false); await this.aimWorld(S, riot.x, riot.y);
+        for (let g = 0; g < THROWABLES.length && idx !== fi; g++) { await this.press('KeyQ'); idx = (idx + 1) % THROWABLES.length; }
+        await this.page.waitForTimeout(40); await this.press('KeyG');
+      }
     }
 
     // grenades at clumps
@@ -662,6 +750,11 @@ class Bot {
           await this.page.waitForTimeout(40); await this.press('KeyG');
         }
       }
+    }
+    if (this.o.verbose && S.t - (this.lastTrace || -9) >= 4) {
+      this.lastTrace = S.t;
+      const near = S.enemies.slice().sort((a, b) => a.d - b.d).slice(0, 4).map(e => `${e.type}${e.vis ? '*' : ''}@${Math.round(e.d)}r${e.room}${e.aware ? 'A' : ''}${e.posture ? ':' + e.posture[0] : ''}`).join(' ');
+      this.log(`[${S.t.toFixed(0)}] fl${S.floor} rm${S.cur} hp${S.hp}/${S.mhp} ts${S.ts?.toFixed?.(2)} task=${task.kind} combat=${inCombat ? 1 : 0} stalk=${stalk ? 1 : 0} still=${move ? 0 : 1} ammo=${S.ammo[S.wi]}/${S.reserve[S.wi]} alive=${S.enemies.length} [${near}]`);
     }
     // periodic screenshots
     if (this.o.shots && S.t >= this.nextShot) { this.nextShot += this.o.shots; await this.shot(S, `t${String(Math.round(S.t)).padStart(4, '0')}`); }
@@ -706,6 +799,8 @@ async function playSeed(browser, seed, o, ctx) {
   const startWall = Date.now();
   const res = {seed, skill: o.skill, result: 'timeout', reason: ''};
   const context = await browser.newContext({viewport: {width: o.width, height: o.height}});
+  // a returning player: the one-time Signal Check tutorial floor is marked done so the seeded run starts directly
+  await context.addInitScript(() => { try { localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); } catch { /* ignore */ } });
   const page = await context.newPage();
   const errors = new Map();
   const noteErr = (t) => { const k = t.slice(0, 200); errors.set(k, (errors.get(k) || 0) + 1); };
@@ -723,12 +818,17 @@ async function playSeed(browser, seed, o, ctx) {
     await page.fill('#seed-input', String(seed));
     await page.click('#start-button');
     await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player, null, {timeout: 20000});
+    // Deterministic stepping: the harness drives the sim ONLY through window.advanceTime (the game's own test hook; inputs stay
+    // held between steps), so wall time no longer limits game time and runs are reproducible. --realtime keeps the rAF loop.
+    if (!o.realtime) await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
     await bot.init();
+    const prof = {snap: 0, tick: 0, adv: 0, advMs: 0, n: 0}; res.prof = prof;
     const floors = []; let prevS = null, last = null, tickReal = Date.now(), lastT = 0, lastProgressWall = Date.now(), lastCleared = -1;
     for (;;) {
       const wall = (Date.now() - startWall) / 1000;
       if (wall > o.timeout) { res.reason = 'wall-clock limit'; break; }
       let S;
+      const tA = Date.now();
       try { S = await page.evaluate(() => window.__bot.snap()); } catch (e) { res.result = 'error'; res.reason = 'evaluate failed: ' + e.message; break; }
       last = S.px != null ? S : last;
       if (S.mode === 'dead' || S.mode === 'won') { res.result = S.mode === 'dead' ? 'death' : S.outcome === 'extract' ? 'extract' : 'win'; res.floorReached = S.floor; for (const e of S.ev) if (e.k === 'hurt') bot.stats.hurt.push(e); for (const e of S.ev) if (e.k === 'kill') bot.stats.kills.push(e); break; }
@@ -739,13 +839,20 @@ async function playSeed(browser, seed, o, ctx) {
         if (bot.floorNo != null) await bot.init(false);
         bot.floorNo = S.floor; res.floorReached = S.floor;
       }
+      const tB = Date.now(); prof.snap += tB - tA; prof.n++;
       try { await bot.tick(S, res); } catch (e) { bot.stats.errors.push(String(e.stack || e).split('\n').slice(0, 3).join(' | ')); if (bot.stats.errors.length > 40) throw e; }
-      prevS = S;
+      prevS = S; const tC = Date.now(); prof.tick += tC - tB;
       if (res.forceEnd) { res.result = 'stuck'; res.reason = 'no displacement for >110s: ' + (res.softlockNote || ''); break; }
       if (S.cleared !== lastCleared) { lastCleared = S.cleared; lastProgressWall = Date.now(); }
       const now = Date.now(), dtReal = Math.min(120, now - tickReal);
-      if (o.speed > 1 && !S.paused) await page.evaluate(ms => window.advanceTime(ms), Math.max(16, (o.speed - 1) * 40)).catch(() => {});
-      await page.waitForTimeout(40); tickReal = Date.now();
+      if ((o.speed > 1 || !o.realtime) && !S.paused && !S.rm) {
+        // fast-forward by stepping the sim with the CURRENT input held; small steps while it matters (shooting, telegraphs,
+        // bullets, melee), big steps while the bot is deliberately idle / reading
+        const calm = o.realtime ? clamp((o.speed - 1) * 50, 16, 600) : clamp(o.speed * 40, 16, 600);
+        const ms = bot.firingNow ? Math.min(calm, 40) : bot.urgent ? Math.min(calm, 80) : bot.calmFight ? Math.min(calm, 160) : calm;
+        await page.evaluate(ms => window.advanceTime(ms), ms).catch(() => {}); prof.adv += Date.now() - tC; prof.advMs += ms;
+      }
+      await page.waitForTimeout(o.speed > 1 ? 8 : 40); tickReal = Date.now();
     }
     await bot.setKeys([]).catch(() => {}); await bot.setFire(false).catch(() => {});
     if (o.shots) await bot.shot(last || {}, 'end-' + res.result);
@@ -845,7 +952,7 @@ async function main() {
       catch (e) { r = {seed, skill: o.skill, result: 'error', reason: 'browser: ' + String(e.message).slice(0, 100), wallSec: 0}; }
       finally { await browser?.close().catch(() => {}); }
       results.push(r);
-      console.log(`seed ${seed}: ${r.result} fl ${r.floorReached} rooms ${r.roomsCleared}/${r.roomsTotal} kills ${r.kills} dmg ${r.damage?.total ?? '-'} game ${r.gameSec}s wall ${r.wallSec}s stuck ${r.stuck?.count ?? 0}${r.deathCause ? ' killed by ' + r.deathCause : ''}${r.result === 'error' ? ' ' + r.reason : ''}`);
+      console.log(`seed ${seed}: ${r.result} fl ${r.floorReached} rooms ${r.roomsCleared}/${r.roomsTotal} kills ${r.kills} dmg ${r.damage?.total ?? '-'} game ${r.gameSec}s wall ${r.wallSec}s stuck ${r.stuck?.count ?? 0}${r.prof ? ` [per tick ms: snap ${(r.prof.snap / r.prof.n).toFixed(0)} tick ${(r.prof.tick / r.prof.n).toFixed(0)} adv ${(r.prof.adv / r.prof.n).toFixed(0)}, adv game-ms ${(r.prof.advMs / r.prof.n).toFixed(0)}, ticks ${r.prof.n}]` : ''}${r.deathCause ? ' killed by ' + r.deathCause : ''}${r.result === 'error' ? ' ' + r.reason : ''}`);
       fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({options: o, results}, null, 1));
     }
   };
