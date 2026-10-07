@@ -2,17 +2,17 @@
 // nothing about being seen, heard or hit is hidden:
 //   * vision cones on the floor for UNAWARE enemies (wall / crate / smoke clipped, brightening with suspicion)
 //   * suspicion meter + '?' above an enemy that is starting to notice you, 'zZ' over sleepers
-//   * expanding noise rings sized to the real hearing radius (walls trim them exactly like the sim does)
+//   * smooth noise rings for shots / kicked doors; sprinting = tiny footstep ripples + a heard glyph on enemies that hear it
 //   * radio-chatter pulses from an alerting enemy to the mates it wakes
 //   * frag grenade damage radius with a filling fuse, sidestep afterimages, player i-frame ring
 // render2d calls `stealth.draw(ctx, state, bounds, time, dt)` once, in world space, after the enemy telegraphs.
 import {COLORS, FONTS, withAlpha} from './theme.js';
-import {SUSPICION, noiseRingRadius, visionFor} from './stealth.js';
+import {SUSPICION, visionFor} from './stealth.js';
 
 const TAU = Math.PI * 2;
 const TILE = 32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const RING_LIFE = 0.4, ALERT_LIFE = 0.8;
+const RING_LIFE = 0.32, STEP_LIFE = 0.45, ALERT_LIFE = 0.8;
 
 const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 function mixHex(a, b, t) {
@@ -43,18 +43,6 @@ export function sightDistance(state, ox, oy, ang, maxLen, step = 10) {
   for (const c of state.cover ?? []) { if (c.crate) continue; if (Math.abs(c.x - ox) < len + 30 && Math.abs(c.y - oy) < len + 30) len = Math.min(len, rayHitCircle(ox, oy, dx, dy, c.x, c.y, c.radius, len)); }
   for (const f of state.effects ?? []) if (f.id === 'smoke' && f.remaining > 0) len = Math.min(len, rayHitCircle(ox, oy, dx, dy, f.x, f.y, f.item.radius, len));
   return Math.max(0, len);
-}
-
-// Free distance along each of `n` evenly spaced rays (used to shape noise rings once, at emission).
-export function noiseRayLengths(state, x, y, radius, n = 40) {
-  const solid = state.solidMap, out = [];
-  for (let i = 0; i < n; i++) {
-    const a = i / n * TAU, dx = Math.cos(a), dy = Math.sin(a);
-    let wall = radius;
-    for (let d = 8; d <= radius; d += 8) if (solid[Math.floor((y + dy * d) / TILE)]?.[Math.floor((x + dx * d) / TILE)] !== 0) { wall = d; break; }
-    out.push(noiseRingRadius(radius, wall));
-  }
-  return out;
 }
 
 export function createStealthLayer() {
@@ -112,28 +100,45 @@ export function createStealthLayer() {
     ctx.restore();
   }
 
-  // ONE crisp ring pulse per player-made noise (shots, sprint, doors), ~0.4s, shaped by the walls that trim the real hearing
-  // radius. Rapid fire merges into the ring already on screen instead of stacking concentric echoes.
+  // Player-made noise, drawn calmly. Shots, suppressed shots and kicked doors get ONE thin, smooth circle (never wall-trimmed:
+  // a jagged polygon read as clutter). Sprinting is constant, so it never draws its radius: each footstep is a tiny soft ripple
+  // at the feet, and only an UNAWARE enemy that can actually hear it (`hearers`, captured when the step was made) gets a
+  // small sound-wave glyph over its head plus a faint arc on the ring facing it. Rapid fire merges into the ring on screen.
   function drawRings(ctx, state, dt) {
     const rings = state.noiseRings;
     if (!rings) return;
     for (let i = rings.length - 1; i >= 0; i--) {
       const r = rings[i]; r.age += dt;
-      if (r.age >= RING_LIFE) { rings.splice(i, 1); continue; }
-      if (r.skip) continue;
+      const sprint = r.kind === 'sprint', life = sprint ? STEP_LIFE : RING_LIFE;
+      if (r.age >= life) { rings.splice(i, 1); continue; }
       if (r.skip === undefined) {
         r.skip = false;
-        for (let j = 0; j < i; j++) { const o = rings[j]; if (!o.skip && o.age < 0.3 && Math.hypot(o.x - r.x, o.y - r.y) < 90) { r.skip = true; break; } }
-        if (r.skip) continue;
+        if (!sprint) for (let j = 0; j < i; j++) { const o = rings[j]; if (!o.skip && o.kind !== 'sprint' && o.age < 0.3 && Math.hypot(o.x - r.x, o.y - r.y) < 90) { r.skip = true; break; } }
       }
-      const t = r.age / RING_LIFE, k = 1 - (1 - t) * (1 - t) * (1 - t), fade = 1 - t * t;
-      const col = r.kind === 'sprint' || r.kind === 'kick' ? COLORS.sprint : r.kind === 'suppressed' || r.kind === 'door' ? COLORS.slow : COLORS.ammo;
-      const n = r.radii.length;
-      ctx.beginPath();
-      for (let j = 0; j <= n; j++) { const a = (j % n) / n * TAU, rr = r.radii[j % n] * k; ctx.lineTo(r.x + Math.cos(a) * rr, r.y + Math.sin(a) * rr); }
-      ctx.closePath();
-      ctx.strokeStyle = 'rgba(10,8,16,' + 0.4 * fade + ')'; ctx.lineWidth = 3.6; ctx.stroke();
-      ctx.strokeStyle = withAlpha(col, 0.8 * fade); ctx.lineWidth = 1.6; ctx.stroke();
+      const t = r.age / life, k = 1 - (1 - t) * (1 - t) * (1 - t), fade = 1 - t * t;
+      if (sprint) {
+        ctx.strokeStyle = withAlpha(COLORS['text-hi'], 0.24 * fade); ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(r.x, r.y, 4 + 11 * k, 0, TAU); ctx.stroke();
+        for (const e of r.hearers ?? []) {
+          if (!e.alive) continue;
+          const a = Math.atan2(e.y - r.y, e.x - r.x);
+          ctx.strokeStyle = withAlpha(COLORS.ammo, 0.2 * fade); ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.arc(r.x, r.y, r.R * (0.55 + 0.45 * k), a - 0.14, a + 0.14); ctx.stroke();
+          ctx.save(); ctx.translate(e.x - 15, e.y - (e.radius || 8) - 8); ctx.lineCap = 'round';
+          for (const [c, w] of [['rgba(10,8,16,' + 0.55 * fade + ')', 3.6], [withAlpha(COLORS.ammo, 0.95 * fade), 1.7]]) {
+            ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = w;
+            ctx.beginPath(); ctx.arc(-3, 0, w > 3 ? 2.2 : 1.7, 0, TAU); ctx.fill();
+            for (let k2 = 0; k2 < 2; k2++) { const rr = 5 + k2 * 4 + t * 2; ctx.beginPath(); ctx.arc(-3, 0, rr, -0.75, 0.75); ctx.stroke(); }
+          }
+          ctx.restore();
+        }
+        continue;
+      }
+      if (r.skip) continue;
+      const col = r.kind === 'kick' ? COLORS.sprint : r.kind === 'suppressed' || r.kind === 'door' ? COLORS.slow : COLORS.ammo;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.R * k, 0, TAU);
+      ctx.strokeStyle = 'rgba(10,8,16,' + 0.25 * fade + ')'; ctx.lineWidth = 2.4; ctx.stroke();
+      ctx.strokeStyle = withAlpha(col, 0.6 * fade); ctx.lineWidth = 1.1; ctx.stroke();
     }
   }
 

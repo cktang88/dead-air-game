@@ -91,3 +91,34 @@ licensed under the [Apache License 2.0](https://github.com/Templarian/MaterialDe
 | `mod-hollow` | game-icons / bullets |
 | `mod-stabilizer` | game-icons / gun-stock |
 | `mod-longbarrel` | game-icons / musket |
+
+## Music
+
+The score is real electronic music, one track per game state, cut into bar-aligned loops (`assets/music/*.mp3`,
+re-encoded at 112 kbps MP3, trimmed to whole bars and cross-faded at the loop point; no other changes). Tempos were
+measured from the source audio. The sandbox cannot reach the composers' own sites, so each file was taken from the public
+GitHub repo [qompassai/light-show](https://github.com/qompassai/light-show) (`game/assets/music/`), whose README and
+`game/assets/music/CREDITS.md` give the composer, title, source and licence for every file; the Eric Skiff licence is also
+stated on the composer's page as recorded in the TMHSDigital/Free-Game-Dev-Assets catalogue. That repo's own `LICENSE`
+covers its code only; the audio is licensed by its composers as below.
+
+| State | File | Track | Author | Licence | Source |
+| --- | --- | --- | --- | --- | --- |
+| Title / menu | `title.mp3` | "We're all under the stars" (Resistor Anthems) | Eric Skiff | CC BY 4.0 | http://EricSkiff.com/music |
+| Explore / calm | `explore.mp3` | "Searching" (Resistor Anthems) | Eric Skiff | CC BY 4.0 | http://EricSkiff.com/music |
+| Tension | `tension.mp3` | "In a Heartbeat" | Kevin MacLeod | CC BY 3.0 | https://incompetech.com/music/royalty-free/ |
+| Combat | `combat.mp3` | "Underclocked (underunderclocked mix)" (Resistor Anthems) | Eric Skiff | CC BY 4.0 | http://EricSkiff.com/music |
+| Boss | `boss.mp3` | "Exhilarate" | Kevin MacLeod | CC BY 4.0 | https://incompetech.com/music/royalty-free/ |
+| Win | `win.mp3` | "We're the Resistors" (Resistor Anthems) | Eric Skiff | CC BY 4.0 | http://EricSkiff.com/music |
+
+Required attribution lines:
+
+> Music: Eric Skiff - We're all under the stars - Resistor Anthems - Available at http://EricSkiff.com/music
+> Music: Eric Skiff - Searching - Resistor Anthems - Available at http://EricSkiff.com/music
+> Music: Eric Skiff - Underclocked (underunderclocked mix) - Resistor Anthems - Available at http://EricSkiff.com/music
+> Music: Eric Skiff - We're the Resistors - Resistor Anthems - Available at http://EricSkiff.com/music
+>
+> "In a Heartbeat" and "Exhilarate" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution
+> ([3.0](http://creativecommons.org/licenses/by/3.0/) / [4.0](http://creativecommons.org/licenses/by/4.0/) respectively).
+
+The room-clear / exit-open stings and the death tape-stop are synthesised in `music.js` (no samples).

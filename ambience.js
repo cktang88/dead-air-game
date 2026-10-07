@@ -7,7 +7,8 @@ import {getAudioRuntime} from './audio.js';
 import {getMusicEngine} from './music.js';
 import {ambienceThemeFor,chatterPlan,makeRng,nextMachineryEvent} from './music-core.js';
 
-const TONE_LEVEL={server:.02,furnace:.032,cold:.02};
+// Room tone is air only (filtered noise): no pitched hum, no drone. Kept very quiet so the music bed owns the mood.
+const TONE_LEVEL={server:.012,furnace:.016,cold:.01};
 const MAX_CHATTERS=2,CHATTER_RANGE=780;
 
 let A=null;
@@ -39,21 +40,16 @@ function gain(v,out){const g=A.ctx.createGain();g.gain.value=v;if(out)g.connect(
 function buildTones(){
   const ctx=A.ctx;
   const mk=name=>{const g=gain(0,A.bus);A.tones[name]=g;return g;};
-  { // server room: mains hum + fan whisper
-    const g=mk('server'),lp=filt('lowpass',420);lp.connect(g);
-    osc('sine',60,gain(.5,lp));osc('sine',120.6,gain(.26,lp));osc('sine',181.5,gain(.1,lp),4);osc('sawtooth',59.6,gain(.05,lp));
-    const fan=filt('bandpass',2400,.9);loopNoise(false,fan);fan.connect(gain(.05,g));
+  { // server room: a faint fan whisper (noise only, no mains hum)
+    const g=mk('server'),fan=filt('bandpass',2200,.7);loopNoise(false,fan);fan.connect(g);
   }
-  { // furnace: low rumble with a slow breathing swell
-    const g=mk('furnace'),a=filt('lowpass',170);loopNoise(true,a);a.connect(gain(1,g));
-    const b=filt('lowpass',650),swell=gain(.5,g);loopNoise(true,b);b.connect(swell);
-    const lfo=ctx.createOscillator();lfo.frequency.value=.11;const depth=gain(.35,swell.gain);lfo.connect(depth);lfo.start();
-    const lfo2=ctx.createOscillator();lfo2.frequency.value=.07;const d2=gain(260,b.frequency);lfo2.connect(d2);lfo2.start();
+  { // furnace: soft low air movement with a slow breathing swell
+    const g=mk('furnace'),a=filt('lowpass',150);loopNoise(true,a);a.connect(gain(.6,g));
+    const b=filt('lowpass',520),swell=gain(.4,g);loopNoise(true,b);b.connect(swell);
+    const lfo=ctx.createOscillator();lfo.frequency.value=.11;const depth=gain(.3,swell.gain);lfo.connect(depth);lfo.start();
   }
-  { // cold storage: two beating sines and a thin refrigerated hiss
-    const g=mk('cold'),lp=filt('lowpass',520);lp.connect(g);
-    osc('sine',92,gain(.5,lp));osc('sine',93.1,gain(.5,lp));osc('sine',138.3,gain(.18,lp),-3);
-    const air=filt('highpass',4800,.5);loopNoise(false,air);air.connect(gain(.03,g));
+  { // cold storage: a thin refrigerated hiss
+    const g=mk('cold'),air=filt('highpass',5200,.5);loopNoise(false,air);air.connect(g);
   }
 }
 
@@ -83,7 +79,7 @@ function burst(t,dur,{type='bandpass',hz=1800,q=.6,vol=.1,pan=0,chop=0,buf=null}
 }
 
 /** Radio static burst, e.g. when you cross a door. */
-export function ambienceStatic(vol=.16,pan=0){
+export function ambienceStatic(vol=.1,pan=0){
   if(!A||A.ctx.state!=='running')return;
   const t=A.ctx.currentTime+.01;
   burst(t,.26,{hz:2200,q:.5,vol,pan,chop:.012});
@@ -105,7 +101,7 @@ function machinery(type){
   }else if(type==='pipe'){
     burst(t,1.5,{hz:420,q:6,vol:.07,pan});
   }else{
-    const g=env(.06,2.2,.7),o=A.ctx.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(52,t);o.frequency.linearRampToValueAtTime(70,t+2.2);o.connect(g);tone(o,2.2);
+    burst(t,.9,{type:'bandpass',hz:300,q:3,vol:.05,pan});
   }
   A.stats.machinery++;
 }
@@ -142,7 +138,7 @@ function startChatter(id,pan,vol){
 }
 
 /** Cut an enemy's radio with a squelch (call when it dies). */
-export function ambienceChatter(id,pan=0,vol=.14){if(A&&A.ctx&&!A.chat.has(id))startChatter(id,pan,vol);}
+export function ambienceChatter(id,pan=0,vol=.08){if(A&&A.ctx&&!A.chat.has(id))startChatter(id,pan,vol);}
 export function ambienceCutChatter(id){
   if(!A)return;
   const v=A.chat.get(id);if(!v)return;
@@ -184,7 +180,7 @@ export function ambienceSync(state,dt=1/60){
     let cd=A.cool.get(e.id);if(cd===undefined){cd=1+A.rng()*7;}
     cd-=dt;
     if(cd<=0&&A.chat.size<MAX_CHATTERS&&!e.aware){
-      const vol=.14*Math.pow(Math.max(0,1-d/CHATTER_RANGE),1.5);
+      const vol=.08*Math.pow(Math.max(0,1-d/CHATTER_RANGE),1.5);
       if(vol>.01)startChatter(e.id,Math.max(-1,Math.min(1,(e.x-p.x)/480)),vol);
       cd=7+A.rng()*10;
     }
