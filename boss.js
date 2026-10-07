@@ -12,7 +12,7 @@
 
 export const BOSS = {
   name: 'THE CONDUCTOR',
-  maxHp: 700,
+  maxHp: 2400,
   radius: 20,
   phaseThresholds: [.66, .33],
   contactDamage: 2,
@@ -24,6 +24,7 @@ export const BOSS = {
   maxAdds: 4,
 };
 
+export const INTRO_TIME = .9, SHIFT_TIME = 1.2; // real seconds
 export const BOSS_ROOM_NAME = 'THE BROADCAST ROOM';
 export const BEATS_PER_BEAT_PATTERN = 8;
 export const BEAT_FALLBACK_HZ = 2.3; // beats per world second when no music clock is supplied
@@ -45,9 +46,33 @@ export const PATTERN_SPECS = {
 };
 
 // TEMPO (phase II): how fast his pattern clock runs for a player speed ratio (0 still .. 1 walking .. 1.4 sprint).
-// Never fully stopped, so a camper is not immune, but standing still is ten times slower than walking.
-export const TEMPO_FLOOR = .1;
-export const tempoRate = speedRatio => Math.min(1, Math.max(TEMPO_FLOOR, Number.isFinite(speedRatio) ? speedRatio : 0));
+// Standing still is slow (a quarter speed) so reading a telegraph is cheap, but never frozen, and FIRING FEEDS HIM: every
+// shot you fire lifts the clock to SHOT_FEED for a moment, so camping behind a held trigger is the worst way to fight him.
+export const TEMPO_FLOOR = .25;
+export const SHOT_FEED = .85;
+export const SHOT_FEED_TIME = .6; // real seconds a shot keeps the clock fed
+export const tempoRate = (speedRatio, fed = false) => Math.min(1, Math.max(TEMPO_FLOOR, fed ? SHOT_FEED : 0, Number.isFinite(speedRatio) ? speedRatio : 0));
+
+// Phase floors for the clock in world rate: phase I and III never run slower than this fraction of real time.
+export const PHASE_CLOCK_FLOOR = {1: .5, 3: .5};
+// His bullets never crawl: world-rate floor for boss-pattern bullets (real-time fraction), so the dodge always matters.
+export const BOSS_BULLET_FLOOR = .35;
+
+// The boss's own clock step (seconds) from the world step `dt` and the real frame step. Intro and phase shifts run on real
+// time (they are staging, not gameplay), the rest on the faster of the world rate and the phase rule.
+export function bossClockDt({phase, mode, dt, frameDt, speedRatio = 1, fed = false}) {
+  if (!(dt > 0)) return 0; // hit-stop / pause: frozen
+  const real = frameDt > 0 ? frameDt : dt;
+  if (mode === 'intro' || mode === 'shift') return real;
+  const rate = phase === 2 ? tempoRate(speedRatio, fed) : Math.max(PHASE_CLOCK_FLOOR[phase] ?? 0, fed ? SHOT_FEED : 0);
+  return Math.max(dt, real * rate);
+}
+
+// Ammo drops that keep the arena from becoming a dead end: every ~12% of his health (so 75% and 50% are always among them), and when the player runs low (cooldown).
+export const AMMO_DROP_FRACTIONS = [.88, .75, .62, .5, .38, .25, .12];
+export const DRY_AMMO_COOLDOWN = 9; // real seconds
+export const bossAmmoDropsDue = (hpFraction, given = []) => AMMO_DROP_FRACTIONS.filter(f => hpFraction <= f && !given.includes(f));
+export const dryAmmoDropDue = (dry, now, lastAt) => Boolean(dry) && now - lastAt >= DRY_AMMO_COOLDOWN;
 
 export function bossPhaseFor(hpFraction) {
   if (hpFraction <= BOSS.phaseThresholds[1]) return 3;
@@ -66,7 +91,7 @@ export function createBoss() {
 
 export function activateBoss(boss) {
   if (boss.active) return boss;
-  boss.active = true; boss.mode = 'intro'; boss.t = .9; boss.intro = .9; boss.invuln = true;
+  boss.active = true; boss.mode = 'intro'; boss.t = INTRO_TIME; boss.intro = INTRO_TIME; boss.invuln = true;
   return boss;
 }
 
@@ -132,7 +157,7 @@ export function stepBoss(boss, dt, ctx) {
   // Phase change: invulnerable beat, bullet wipe, supplies, then adds.
   const phase = bossPhaseFor(ctx.hpFraction);
   if (phase > boss.phase && boss.mode !== 'intro') {
-    boss.phase = phase; boss.mode = 'shift'; boss.t = 1.8; boss.invuln = true; boss.telegraph = null; boss.pattern = null; boss.patternIndex = 0;
+    boss.phase = phase; boss.mode = 'shift'; boss.t = SHIFT_TIME; boss.invuln = true; boss.telegraph = null; boss.pattern = null; boss.patternIndex = 0;
     out.actions.push({type: 'phase', phase});
     return out;
   }

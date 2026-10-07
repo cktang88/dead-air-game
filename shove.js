@@ -12,6 +12,7 @@ export const SHOVE = {
   halfArc: 62 * Math.PI / 180,
   cooldown: 0.7,        // real seconds
   damage: 14,
+  bossDamage: 8,
   stagger: 0.7,         // seconds of stun (world time)
   knock: 260,           // px/s impulse handed to the enemy's knock velocity
   lunge: 70,            // forward nudge on the player so the shove closes distance
@@ -43,7 +44,8 @@ export function shoveTargets(player, aim, enemies, {hitRadius = () => 11} = {}) 
 // What a shove does to one enemy. `dir` = unit vector player -> enemy.
 // Returns {kind: 'takedown'|'hit'|'blocked'|'ignored', damage, stagger, knock, label}.
 export function shoveOutcome({type, hp, aware, asleep = false, elite = false, facing, dir, shieldFacing = null}) {
-  if (type === 'boss') return {kind: 'ignored', damage: 0, stagger: 0, knock: 0, label: ''};
+  // The Conductor is not moved or staggered, but a shove still chips him so a dry player is never helpless.
+  if (type === 'boss') return {kind: 'hit', damage: SHOVE.bossDamage, stagger: 0, knock: 0, label: 'JOLT'};
   const unawareBehind = !aware && (asleep || (facing && strikeFromBehind(facing, dir)));
   if (unawareBehind && !HEAVY.has(type) && !elite) return {kind: 'takedown', damage: Math.max(hp, 1), stagger: 0, knock: SHOVE.knock * 0.4, label: 'SILENT TAKEDOWN'};
   if (type === 'riot') {

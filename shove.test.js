@@ -36,14 +36,14 @@ test('a shove staggers, knocks back, and finishes weakened enemies', () => {
   assert.equal(weak.label, 'FINISHED'); assert.ok(weak.damage >= SHOVE.damage - 1);
 });
 
-test('heavies shrug it off: no takedown on brutes, riots block the front, flanking a riot hurts, the boss ignores it', () => {
+test('heavies shrug it off: no takedown on brutes, riots block the front, flanking a riot hurts, the boss only takes a small jolt', () => {
   const dir = {x: 1, y: 0};
   assert.notEqual(shoveOutcome({type: 'brute', hp: 100, aware: false, facing: {x: 1, y: 0}, dir}).kind, 'takedown');
   assert.notEqual(shoveOutcome({type: 'gunner', hp: 100, aware: false, elite: true, facing: {x: 1, y: 0}, dir}).kind, 'takedown');
   const front = shoveOutcome({type: 'riot', hp: 70, aware: true, facing: {x: -1, y: 0}, shieldFacing: {x: -1, y: 0}, dir});
   assert.equal(front.kind, 'blocked'); assert.equal(front.label, 'SHIELD DOWN'); assert.ok(front.stagger > 0.35, 'long enough to drop the shield (enemy-attacks SHIELD_DOWN_STUN)');
   assert.equal(shoveOutcome({type: 'riot', hp: 70, aware: true, facing: {x: 1, y: 0}, shieldFacing: {x: 1, y: 0}, dir}).label, 'FLANK');
-  assert.equal(shoveOutcome({type: 'boss', hp: 900, aware: true, dir}).kind, 'ignored');
+  { const o = shoveOutcome({type: 'boss', hp: 900, aware: true, dir}); assert.equal(o.kind, 'hit'); assert.ok(o.damage > 0 && o.damage < 15 && o.knock === 0 && o.stagger === 0); }
   const brute = shoveOutcome({type: 'brute', hp: 100, aware: true, facing: {x: -1, y: 0}, dir});
   assert.ok(brute.knock < SHOVE.knock && brute.damage < SHOVE.damage);
 });
