@@ -146,3 +146,21 @@ test('gun models: muzzle length follows visual.length and mag can be left out', 
   assert.ok(full.grid.count() >= noMag.grid.count());
   assert.ok(Math.abs(gunGeometry(gun).L - gun.visual.length * 0.7) < 1e-9);
 });
+
+test('both hands sit on the gun for every weapon class at every aim angle, muzzle stays on the aim line', () => {
+  const kit = kitFor('player'), out = newRigOut();
+  for (const gun of GUNS) {
+    const geo = gunGeometry(gun), model = gunStack(gun, {});
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      humanoidPose(kit, {bodyYaw: a, aimYaw: a, gunModel: model, gunGeo: geo}, out);
+      assert.ok(Math.abs(out.muzzleX - Math.cos(a) * gunMuzzle(gun)) < 1e-6 && Math.abs(out.muzzleY - Math.sin(a) * gunMuzzle(gun)) < 1e-6, gun.id);
+      // distance of each hand from the barrel line (origin -> muzzle) stays small
+      const ox = out.muzzleX - Math.cos(a) * geo.L, oy = out.muzzleY - Math.sin(a) * geo.L;
+      for (const h of [out.handR, out.handL]) {
+        const t = (h.x - ox) * Math.cos(a) + (h.y - oy) * Math.sin(a), d = Math.abs(-(h.x - ox) * Math.sin(a) + (h.y - oy) * Math.cos(a));
+        assert.ok(t > -1 && t < geo.L && d < 3.5, `${gun.id} hand off the gun (t ${t.toFixed(1)}, d ${d.toFixed(1)})`);
+      }
+    }
+  }
+});

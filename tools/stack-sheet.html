@@ -13,7 +13,7 @@ import {GUNS} from '../catalog.js';
 const q = new URLSearchParams(location.search);
 const kind = q.get('kind') || 'player', zoom = +(q.get('zoom') || 2), rows = (q.get('rows') || 'stand,walk,act').split(','), cols = +(q.get('cols') || 8);
 const gun = q.get('gun') ? GUNS.find((g) => g.id === q.get('gun')) : (kind === 'gunner' ? {category: 'ASSAULT RIFLE', visual: {length: 37, width: 6, art: 'CARBINE'}, color: 0xff5a4a} : GUNS.find((g) => g.id === 'ar_ash'));
-const c = document.getElementById('c'), ctx = c.getContext('2d');
+const c = document.getElementById('c'), ctx = c.getContext('2d'); if (q.get('H')) c.height = +q.get('H'); if (q.get('W')) c.width = +q.get('W');
 setSpriteScale(zoom);
 const kit = kitFor(kind), out = newRigOut(), geo = gunGeometry(gun);
 const bg = (x, y, w, h) => { ctx.fillStyle = '#2b2736'; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(255,255,255,0.03)'; for (let i = 0; i < w; i += 32) ctx.fillRect(x + i, y, 1, h); for (let j = 0; j < h; j += 32) ctx.fillRect(x, y + j, w, 1); };
@@ -23,7 +23,7 @@ function pose(o) {
   const g = gunStack(gun, {enemy: kind !== 'player', noMag: !!rpz && rpz.mag > 0.02});
   humanoidPose(kit, {
     id: 3, t: o.t ?? 1, bodyYaw: o.body ?? ang, aimYaw: ang, moveYaw: o.move ?? ang, amp: o.amp || 0, phase: o.phase || 0, sprint: o.sprint || 0, kick,
-    hurt: o.hurt || 0, idleT: o.idleT || 0, gunModel: g, gunGeo: {...geo}, gunRot: rpz ? rpz.tilt : (o.gunRot || 0), handDx: rpz ? rpz.hx : 0, handDy: rpz ? -rpz.hy * 0.9 : 0,
+    hurt: o.hurt || 0, idleT: o.idleT || 0, gunModel: g, gunGeo: {...geo}, gunRot: (rpz ? rpz.tilt * (Math.abs(ang) > Math.PI / 2 && Math.abs(ang) < 4.7 ? -1 : 1) : 0) + (o.gunRot || 0), reloadFrac: o.reload || 0, oneHand: !!o.oneHand,
     mag: rpz ? rpz.mag : 0, magModel: kit.mag, dead: o.dead ?? null, fallYaw: o.fall ?? 0, lunge: o.lunge || 0, spin: o.spin || 0,
   }, out);
   return out;
@@ -50,6 +50,16 @@ function drawAll() {
     r += adv;
     for (let i = 0; i < 8; i++) draw1(i, r, `strafe aimE mv${i * 45}`, {ang: 0, move: i * Math.PI / 4, amp: 1, phase: 0.2});
     r += adv;
+  }
+  if (rows.includes('gun')) {
+    // weapon handling: 8 aim angles, then recoil / sprint / walk / reload phases
+    for (let i = 0; i < 8; i++) draw1(i, r, `aim ${i * 45}`, {ang: i * Math.PI / 4}); r += adv;
+    for (let i = 0; i < 8; i++) draw1(i, r, `kick aim ${i * 45}`, {ang: i * Math.PI / 4, kick: 1}); r += adv;
+    const L = [['walk E', {ang: 0, amp: 1, phase: 0.2}], ['walk S', {ang: Math.PI / 2, amp: 1, phase: 0.2}], ['walk W', {ang: Math.PI, amp: 1, phase: 0.2}], ['sprint E', {ang: 0, amp: 1, sprint: 1, gunRot: 0.55, phase: 0.3}], ['sprint W', {ang: Math.PI, amp: 1, sprint: 1, gunRot: -0.55, phase: 0.3}],
+      ['sprint N', {ang: -Math.PI / 2, amp: 1, sprint: 1, gunRot: 0.55, phase: 0.3}], ['pump kick.5', {ang: 0, kick: 0.5}], ['pump kick.25', {ang: 0, kick: 0.25}]];
+    L.forEach(([n, o], i) => draw1(i, r, n, o)); r += adv;
+    [0.1, 0.3, 0.45, 0.6, 0.7, 0.8, 0.88, 0.95].forEach((f, i) => draw1(i, r, 'reload ' + f, {ang: 0.2, reload: f})); r += adv;
+    [0.1, 0.3, 0.45, 0.6, 0.7, 0.8, 0.88, 0.95].forEach((f, i) => draw1(i, r, 'reload W ' + f, {ang: Math.PI - 0.2, reload: f})); r += adv;
   }
   if (rows.includes('act')) {
     const L = [['recoil0', {ang: 0.3, kick: 0}], ['recoil1', {ang: 0.3, kick: 1}], ['hurt', {ang: 0.3, hurt: 1, flash: 0.8}], ['sprint', {ang: 0, amp: 1, sprint: 1, phase: 0.3}],
