@@ -47,7 +47,7 @@ export const HAT_BY_ID = new Map(HATS.map((h) => [h.id, h]));
 /** Deterministic hat for a secret room: same seed + floor always hides the same one. */
 export function hatFor(seed, floor = 1) {
   let h = (Math.imul((seed | 0) ^ 0x9e3779b1, 2654435761) ^ Math.imul(floor | 0, 40503)) >>> 0;
-  h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13;
+  h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h = (h ^ (h >>> 13)) >>> 0;
   return HATS[h % HATS.length].id;
 }
 
