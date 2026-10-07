@@ -58,12 +58,13 @@ export function drawMetaWorld(ctx, state, now, tile = 32) {
   const placed = [];
   for (const it of [...items.filter(i => !i.hit), ...items.filter(i => i.hit)]) {
     if (it.hit) {
-      const sh = clearShift(it.boxAt(it.x, it.y), rects.concat(placed), cssW, cssH);
-      if (sh) { it.x += sh.dx / sc; it.y += sh.dy / sc; }
+      // a plate that has to move far from its door would mislead; the door is then behind the HUD itself, so the plate hides with it
+      const sh = clearShift(it.boxAt(it.x, it.y), rects.concat(placed), cssW, cssH, state.signal?.active ? 260 : 72);
+      if (sh) { it.x += sh.dx / sc; it.y += sh.dy / sc; } else it.skip = true;
     }
-    if (sc > 0) { const b = it.boxAt(it.x, it.y); placed.push({x0: b.x0 - 4, x1: b.x1 + 4, y0: b.y0 - 4, y1: b.y1 + 4}); }
+    if (sc > 0 && !it.skip) { const b = it.boxAt(it.x, it.y); placed.push({x0: b.x0 - 4, x1: b.x1 + 4, y0: b.y0 - 4, y1: b.y1 + 4}); }
   }
-  for (const it of items) plate(ctx, it.x, it.y, it.info, t, true);
+  for (const it of items) if (!it.skip) plate(ctx, it.x, it.y, it.info, t, true);
   for (const pk of state.pickups) {
     if (pk.kind !== 'freq' || !pk.available) continue;
     const info = REWARDS.freq, bob = Math.sin(t * 3 + pk.x) * 2.4;

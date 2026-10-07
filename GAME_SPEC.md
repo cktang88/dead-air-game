@@ -244,7 +244,7 @@ After the first boss kill: ARMORED SIGNAL (+30% enemy health), OVERDRIVE (+15% e
 
 ## Interface and accessibility
 
-- Keep health, current room, run timer, scrap, active weapon, ammo, and tempo visible during play.
+- Keep health, current room, run timer, scrap, active weapon and ammo visible during play. Time state is diegetic (grade, audio, edge meter), not a panel.
 - Show both weapon slots and carry load at the workbench.
 - Add remappable controls, separate aim/fire from movement, and support keyboard-only menu navigation.
 - Keep keyboard focus inside the workbench while it is open and return it to the game on close; verify keyboard access for every remaining modal.
@@ -277,7 +277,7 @@ After the first boss kill: ARMORED SIGNAL (+30% enemy health), OVERDRIVE (+15% e
 
 - Projectile impacts resolve in swept-contact order; test enemy, crate, wall, cover, and player stops against the same function used by the live collision loop.
 
-- Tempo is slow while idle, between slow and normal while firing (including when moving), 1.00× while moving without firing, and zero in menus.
+- World time follows player speed continuously: 0.08× still, 0.35× walking, 1× sprinting (eased); each shot adds a beat of world time; zero in menus.
 - Every attachment changes only the intended weapon values.
 - Carry weight sums correctly; an overweight swap is rejected; a valid replacement preserves the two-slot invariant.
 - Crate health decreases by actual damage, clamps at zero, and cannot become negative.
@@ -288,7 +288,7 @@ After the first boss kill: ARMORED SIGNAL (+30% enemy health), OVERDRIVE (+15% e
 ### Browser / integration checks
 
 - Start a run and confirm the room layout, HUD, and entry station appear.
-- Move, stop, and fire to verify the tempo indicator changes at runtime.
+- Move, stop, and fire to verify the world grade, audio muffle and edge meter change with speed.
 - Switch both weapon slots and reload each one; verify ammo is independent.
 - Swap to a heavier gun, observe the load meter, and confirm overweight choices cannot be equipped.
 - Shoot a crate until it breaks, confirm its collider disappears, and verify walls remain indestructible.
