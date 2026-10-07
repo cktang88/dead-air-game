@@ -1252,6 +1252,7 @@ export function createRenderer(container, state) {
     drawGates(bp);
     doorLayer.draw(ctx, state, bp, vis.time);
     drawProps(bp);
+    world.drawPropLive(ctx, bp, vis.time);
     drawPillars(bp);
     drawCrates(bp);
     { // selective colour: lift + drain the environment now; actors, pickups and bullets are drawn after at full colour

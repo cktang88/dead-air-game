@@ -108,12 +108,13 @@ const cache = new Map();     // key -> entry
 let bytes = 0;
 export const STACK_CONFIG = {
   enabled: true,
+  props: true,                            // stacked world props (cover, crates, pickups, doors); ?props=0 reverts to the painted art
   kinds: new Set(['player', 'gunner']),   // actor kinds drawn as stacks; everything else keeps the legacy sprites
   cacheBytes: 56 * 1024 * 1024,           // hard cap on baked composites
   bakeBudgetMs: 2.5,                      // per-frame lazy bake allowance; over budget we reuse the nearest baked angle
 };
 try {
-  if (typeof location !== 'undefined') { const q = new URLSearchParams(location.search); if (q.get('stack') === '0') STACK_CONFIG.enabled = false; }
+  if (typeof location !== 'undefined') { const q = new URLSearchParams(location.search); if (q.get('stack') === '0') STACK_CONFIG.enabled = false; if (q.get('props') === '0') STACK_CONFIG.props = false; }
 } catch { /* no location */ }
 export const stackStats = {bakes: 0, bakeMs: 0, draws: 0, entries: 0, mb: 0};
 const LEVELS = [1, 1.5, 2, 2.75, 3.75, 5];
