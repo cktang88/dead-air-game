@@ -106,7 +106,7 @@ export const MANUAL = Object.freeze([
   {id: 'freq', section: 'ECONOMY', title: 'FREQUENCIES', line: 'Frequencies are in-run upgrades from radio stations. They stack, and pairs crossfade.'},
   {id: 'extract', section: 'ECONOMY', title: 'EXTRACT OR DESCEND', line: 'When the route is clear, leave with your coins or go deeper for more.'},
   // ROOMS
-  {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'E opens a door (quietly; at a sprint it is loud). Hold E to peek in frozen time.'},
+  {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'Doors stay shut until you act: tap E to open one, hold E to peek in frozen time.'},
   {id: 'clear', section: 'ROOMS', title: 'CLEARING', line: 'Clearing a room pays scrap and drops a medkit when you are hurt.'},
   {id: 'rewards', section: 'ROOMS', title: 'REWARD DOORS', line: 'The icon over a doorway shows what the room beyond pays.'},
   {id: 'minimap', section: 'ROOMS', title: 'MINIMAP', line: 'Dots are enemies in rooms you have seen.'},
