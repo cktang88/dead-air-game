@@ -30,8 +30,7 @@ import {paceEnemyCount} from './room-templates.js';
 import {generateDungeon} from './dungeon.js';
 import {createNav, stepEnemyBrain, brainState} from './enemy-brain.js';
 import {SHOVE,DRY_DROP_VALUE,isAllDry,shoveOutcome,shoveReady,shoveTargets} from './shove.js';
-import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadius} from './stealth.js';
-import {noiseRayLengths} from './stealth2d.js';
+import {choosePostures, damageModifier, deathCause, hearingReach, setConeScale, shotNoiseRadius} from './stealth.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
 import {supplyOffers,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
 import {applyFloorLook} from './floor-palette.js';
@@ -364,7 +363,7 @@ function breakCrate(crate){
   rollSupplyDrop('crate',crate.x,crate.y);
 }
 // Noise: every entry is {x,y,radius,kind}. The brain hears it (walls cut it to 55%, sleepers hear 70%), and
-// updateEnemies turns it into a visible ring shaped by the same wall rule (stealth2d.noiseRayLengths).
+// updateEnemies turns it into a visible ring shaped by the same wall rule (stealth2d.drawRings: smooth circles; sprint = footstep ripple + heard glyphs).
 function emitNoise(x,y,radius,kind='shot'){state.noises.push({x,y,radius,kind});}
 // Starting postures (stealth.js): patrol walks a loop, guard holds a post facing the doors, sleep has no cone,
 // gather stands in a ring facing the middle. Enemies without a posture (boss adds) stay aware-on-sight.
@@ -1054,7 +1053,7 @@ const enemyWorld={nav:null,player:{x:0,y:0,vx:0,vy:0,radius:8},los:(ax,ay,bx,by)
 function updateEnemies(dt){
   const player=state.player,nav=enemyNav(),pv=player.body.linvel(),world=enemyWorld;
   world.nav=nav;world.enemies=state.enemies;world.noises=state.noises;world.coverBudget=2;world.alerts=enemyAlerts;enemyAlerts.length=0;
-  for(const n of state.noises){if(n.ring||!(n.radius>8))continue;n.ring=true;kn.noiseRing=true;(state.noiseRings??=[]).push({x:n.x,y:n.y,R:n.radius,kind:n.kind||'shot',age:0,radii:noiseRayLengths(state,n.x,n.y,n.radius)});}
+  for(const n of state.noises){if(n.ring||!(n.radius>8))continue;n.ring=true;kn.noiseRing=true;(state.noiseRings??=[]).push({x:n.x,y:n.y,R:n.radius,kind:n.kind||'shot',age:0,hearers:state.enemies.filter(e=>e.alive&&e.type!=='boss'&&!e.aware&&Math.hypot(e.x-n.x,e.y-n.y)<=hearingReach({radius:n.radius,blocked:lineBlocked(e.x,e.y,n.x,n.y),asleep:e.posture==='sleep'}))});}
   const wp=world.player;wp.x=player.x;wp.y=player.y;wp.vx=pv.x;wp.vy=pv.y;
   world.smoke.length=0;for(const effect of state.effects)if(effect.id==='smoke'&&effect.remaining>0)world.smoke.push({x:effect.x,y:effect.y,radius:effect.item.radius});
   world.projectiles.length=0;for(const b of state.bullets)if(b.owner==='player')world.projectiles.push(b);
