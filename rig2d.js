@@ -14,7 +14,7 @@ export const RIG = {
   torsoZ: 7.0,          // torso model layer 0
   headZ: 15.6,          // head model layer 0
   shoulder: {x: 1.0, y: 7.4, z: 14.2},
-  armBone: 6.4,         // length of each arm bone in units
+  armBone: 8.8,         // length of each arm bone in units (= the arm model's 11 cells)
   gunBaseZ: 9.4 - 2.7,  // gun layer 0 so the receiver centre sits on the aim plane
   reach: 5,             // gun origin ahead of the body centre (= gunMuzzle's reach, so the muzzle stays on gunMuzzle(gun))
   legY: 2.5,
@@ -24,14 +24,19 @@ export const RIG = {
 // blade: torso yaw added to the aim (right shoulder back = positive), v: how far right of the aim line the gun sits (units),
 // lean: how far the torso leans into the gun. Pistols are squared up and extended (isosceles); long guns are bladed with the
 // stock in the right shoulder pocket and the muzzle crossed back onto the aim line.
+// Numbers come from the Blender reference renders (docs/art/handling-ref-*.png, refs measured in tools/handling-ref.html's JSON):
+//   blade (deg): smg 18, rifle 32, shotgun 28, sniper 38, amr 42, launcher 36, low-ready 6, pistol 0.
+//   stock sits at 0.84 of the right shoulder's offset from the centre line (3.6 of 4.3 ref units), i.e. v ~ 0.6-0.7 of the bladed shoulder.
+//   trigger hand 0.34-0.50 of the gun length from the stock, support hand 0.50-0.80 (pump 0.68, bolt guns 0.50-0.54, smg front 0.80).
+//   trigger-arm elbow flares ~5 units outward and ~5 forward of the shoulder; support elbow stays under the gun (arm nearly straight).
 export const GRIPS = {
-  pistol: {blade: 0.0, v: 0, lean: 0.2, hip: 0},
-  smg: {blade: 0.28, v: 2.2, lean: 1.0},
-  rifle: {blade: 0.5, v: 3.2, lean: 1.8},
-  shotgun: {blade: 0.45, v: 3.0, lean: 1.5},
-  sniper: {blade: 0.6, v: 3.4, lean: 2.2},
-  amr: {blade: 0.7, v: 3.6, lean: 2.2},
-  launcher: {blade: 0.65, v: 4.0, lean: 1.4},
+  pistol: {blade: 0.0, v: 0, lean: -2.2, hip: 0},   // lean < 0: the body sits back so both arms can reach out isosceles-style to a gun whose muzzle is pinned
+  smg: {blade: 0.31, v: 3.0, lean: 1.0},
+  rifle: {blade: 0.56, v: 4.2, lean: 1.8},
+  shotgun: {blade: 0.49, v: 4.0, lean: 1.5},
+  sniper: {blade: 0.66, v: 4.2, lean: 2.2},
+  amr: {blade: 0.73, v: 4.4, lean: 2.2},
+  launcher: {blade: 0.63, v: 4.4, lean: 1.4},
 };
 export const gripFor = (cls) => GRIPS[cls] || GRIPS.rifle;
 const sstep = (t) => { t = clamp(t); return t * t * (3 - 2 * t); };
@@ -171,8 +176,10 @@ export function humanoidPose(kit, inp, out) {
   const oxA = RIG.reach + gL * (1 - Math.cos(cross)) + (inp.gunDx || 0) - sprint * (geo && geo.cls === 'pistol' ? 3 : 1.5);
   const gx = gtx * 0.35 + gcs * oxA - gsn * gv - gdx * kb, gy = gty * 0.35 + gsn * oxA + gcs * gv - gdy * kb;
   const longGun = hasGun && geo.cls !== 'pistol' && geo.cls !== 'smg';
-  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5 + (longGun ? 1.0 * stance : 0);
-  const gunKey = Math.max(gy + gz * 0.03 + 0.05, ty + tz * 0.03 + 0.1);
+  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5 + (longGun ? 1.0 * stance : 0) - sprint * (longGun ? 1.2 : 0.4);
+  // weapon layer: gun, arms and gloves always draw over the torso AND the head (a held weapon is nearer the camera than the face, and when
+  // aiming away the head would otherwise swallow the extended arms); inside the layer: arms (both bones) < gun and its pump / bolt < gloves < mag, so the gun stays legible and only the hands wrap it
+  const topK = Math.max(ty + tz * 0.03, hy + hz * 0.03) + 0.3, gunKey = topK + 0.1;
   if (inp.gunModel) { const g = add(out, inp.gunModel, gx, gy, gz, gunYaw, gsc, gsc, fl); g.key = gunKey; }
   out.muzzleX = gx + gdx * gL * gsc; out.muzzleY = gy + gdy * gL * gsc;
   const gpt = (p, o, dx = 0, dy = 0) => { const px = (p.x + dx) * gsc, py = (p.y + dy) * gsc; o.x = gx + gdx * px - gdy * py; o.y = gy + gdy * px + gdx * py; o.z = gz + 1.5; return o; };
@@ -180,10 +187,10 @@ export function humanoidPose(kit, inp, out) {
   const hT = _hT, hS = _hS;
   gpt(G.trig, hT);
   const rf = inp.reloadFrac || 0, bolt = G.cls === 'sniper' || G.cls === 'amr';
+  let pumpD = 0, boltD = 0;   // how far the pump / bolt part slides along the barrel (gun-space units, negative = back); the hand that works it moves with it
   // support hand: handguard / pump / grip wrap, then the reload and pump choreography
-  if (G.pump && !rf && kick < 0.999) gpt(G.sup, hS, -4.2 * Math.sin(Math.PI * clamp(1 - kick)) * (kick > 0.001 ? 1 : 0));   // racking the pump after a shot
+  if (G.pump && !rf && kick < 0.999) { pumpD = -4.2 * Math.sin(Math.PI * clamp(1 - kick)) * (kick > 0.001 ? 1 : 0); gpt(G.sup, hS, pumpD); }   // racking the pump after a shot
   else gpt(G.sup, hS);
-  hS.x += 0; 
   if (rf > 0) {
     gpt(G.sup, _hA); gpt(G.mag, _hB, 0, 0.4); _hB.z -= 0.8;
     // vest / belt pouch: front-left of the torso
@@ -195,11 +202,15 @@ export function humanoidPose(kit, inp, out) {
     else {
       const u = (rf - 0.82) / 0.18;
       mixp(hS, _hB, _hA, sstep(u * 1.3));
-      if (bolt) { gpt(G.bolt, _hC, -3.2 * Math.sin(Math.PI * clamp(u * 1.4)), 0); mixp(hT, hT, _hC, Math.sin(Math.PI * clamp(u * 1.2)) ** 0.5); }
-      else if (G.pump) hS.x += 0;
+      if (bolt) { boltD = -3.2 * Math.sin(Math.PI * clamp(u * 1.4)); gpt(G.bolt, _hC, boltD, 0); mixp(hT, hT, _hC, Math.sin(Math.PI * clamp(u * 1.2)) ** 0.5); }
     }
   } else if (!inp.reloadFrac && (inp.handDx || inp.handDy)) {
     gpt(G.sup, hS, inp.handDx || 0, inp.handDy || 0);
+  }
+  if (inp.gunModel && inp.gunModel.parts) {
+    const P = inp.gunModel.parts;
+    if (P.pump) add(out, P.pump, gx + gdx * pumpD * gsc, gy + gdy * pumpD * gsc, gz, gunYaw, gsc, gsc, fl).key = gunKey + 0.01;
+    if (P.bolt) add(out, P.bolt, gx + gdx * boltD * gsc, gy + gdy * boltD * gsc, gz, gunYaw, gsc, gsc, fl).key = gunKey + 0.01;
   }
   // sidearm sprint / one-hand: the free hand tucks to the chest (or hangs at the hip when the other hand holds a shield)
   const tuck = inp.oneHand ? 1 : (G.cls === 'pistol' ? sstep((sprint - 0.35) / 0.4) : 0);
@@ -216,19 +227,19 @@ export function humanoidPose(kit, inp, out) {
     const H = side > 0 ? hT : hS, hxw = H.x, hyw = H.y, hz = H.z;
     const dx = hxw - shx, dy = hyw - shy, d = Math.hypot(dx, dy);
     // pistols are held at near full extension (isosceles): bones shorten instead of folding the elbows out
-    const L = (G.cls === 'pistol' && !rf && tuck < 0.5) ? Math.max(3.2, d / 1.8) : Math.max(RIG.armBone, d / 1.92);
+    const L = Math.max(RIG.armBone * (G.cls === 'pistol' && !rf && tuck < 0.5 ? 0.92 : 1), d / 1.94);
     solveElbow(shx, shy, hxw, hyw, L, side, torsoYaw, _e1);
     const z0 = RIG.shoulder.z + (tz - RIG.torsoZ) - 1.0, z1 = hz - 0.4;
     const zm = (z0 + (z0 + z1) / 2) / 2 - 1.5, zn = ((z0 + z1) / 2 + z1) / 2 - 1.5;
     const up = add(out, kit.arm, shx, shy, zm, Math.atan2(_e1.y - shy, _e1.x - shx), Math.hypot(_e1.x - shx, _e1.y - shy) / RIG.armBone, 1, fl);
-    up.key = Math.max(up.key, tk + 0.12);
+    up.key = topK;
     const lo = add(out, kit.arm, _e1.x, _e1.y, zn, Math.atan2(hyw - _e1.y, hxw - _e1.x), Math.hypot(hxw - _e1.x, hyw - _e1.y) / RIG.armBone, 1, fl);
-    lo.key = Math.max(lo.key, up.key + 0.01, (rf > 0 ? tk : gunKey) + 0.04);
+    lo.key = topK + 0.05;
     const gl = add(out, side > 0 ? kit.gloveR : kit.gloveL, hxw, hyw, hz - 1.4, Math.atan2(hyw - _e1.y, hxw - _e1.x) * 0.35 + gunYaw * 0.65, 1, 1, fl);
-    gl.key = Math.max(gl.key, lo.key + 0.02);
+    gl.key = gunKey + 0.06 + ((side > 0 ? hT.y > hS.y : hS.y > hT.y) ? 0.001 : 0);
   }
   const hlx = hS.x, hly = hS.y, handZ = hS.z, gyc = gdx, gys = gdy;
-  if ((inp.mag || 0) > 0.02 && inp.magModel) { const m = add(out, inp.magModel, hlx + gyc * 1.2, hly + gys * 1.2, handZ + 0.4, gunYaw + 0.4, 1, 1, 0); m.key = out.items[out.n - 2].key + 0.05; }
+  if ((inp.mag || 0) > 0.02 && inp.magModel) { const m = add(out, inp.magModel, hlx + gyc * 1.2, hly + gys * 1.2, handZ + 0.4, gunYaw + 0.4, 1, 1, 0); m.key = gunKey + 0.1; }
   out.shadowX = 0; out.shadowY = 0;
   sortItems(out);
   return out;
@@ -266,15 +277,15 @@ export function drawRig(ctx, out, x, y, {variant = null, anchorZ = RIG.anchorZ, 
 
 // The radio antenna: a bendy 2-segment rod with a blinking LED. (x, y) is the socket screen position.
 function drawAntenna(ctx, x, y, it) {
-  const len = 14, bx = it.a, by = it.b;
+  const len = 9.5, bx = it.a, by = it.b;
   const tipX = x + bx * 1.5, tipY = y - len * STACK_TILT * 1.5 + by * 1.5, midX = x + bx * 0.45, midY = y - len * STACK_TILT * 0.75 + by * 0.4;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#120f18'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(midX, midY, tipX, tipY); ctx.stroke();
-  ctx.strokeStyle = '#6f6d7a'; ctx.lineWidth = 0.7; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(midX, midY, tipX, tipY); ctx.stroke();
-  ctx.fillStyle = '#120f18'; ctx.beginPath(); ctx.arc(tipX, tipY, 1.7, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#120f18'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(midX, midY, tipX, tipY); ctx.stroke();
+  ctx.strokeStyle = '#6f6d7a'; ctx.lineWidth = 0.45; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(midX, midY, tipX, tipY); ctx.stroke();
+  ctx.fillStyle = '#120f18'; ctx.beginPath(); ctx.arc(tipX, tipY, 1.2, 0, TAU); ctx.fill();
   const blink = (Math.sin((performance.now() / 1000) * 5 + x * 0.1) > 0.3) ? 1 : 0.35;
-  ctx.fillStyle = `rgba(255,74,94,${blink})`; ctx.beginPath(); ctx.arc(tipX, tipY, 1.05, 0, TAU); ctx.fill();
-  if (blink > 0.9) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,74,94,0.28)'; ctx.beginPath(); ctx.arc(tipX, tipY, 2.2, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = `rgba(255,74,94,${blink})`; ctx.beginPath(); ctx.arc(tipX, tipY, 0.7, 0, TAU); ctx.fill();
+  if (blink > 0.9) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,74,94,0.22)'; ctx.beginPath(); ctx.arc(tipX, tipY, 1.7, 0, TAU); ctx.fill(); }
   ctx.restore();
 }
 

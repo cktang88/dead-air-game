@@ -984,8 +984,9 @@ export function createRenderer(container, state) {
       const sw = vis.swapT < 1 ? swapPose(vis.swapT, _sw) : null, rpz = reloading ? _rp : null;
       const g0 = (sw && sw.which === 0) ? GUNS[vis.prevGun] || gun : gun;
       actorGlow(10.5, '#d8fff0', 0.1);
+      // gunRot below is actor-relative: reload tilts toward the actor's right and low-ready cants toward the support (left) side at every aim (no screen flip)
       humanoidPose(kitFor('player'), {id: 1, t: vis.time, bodyYaw: bAng, aimYaw: ang, moveYaw: vis.mvAng, amp, phase: vis.pPhase, sprint, kick: Math.min(1, kick), hurt: vis.flashHit, flash: vis.flashHit > 0 ? Math.min(1, vis.flashHit * 1.4) : 0, idleT: vis.idleT || 0,
-        gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: (sprint * 0.55 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0)) * flip, gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
+        gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: -sprint * 0.45 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0), gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
         gunScale: sw ? sw.k : 1, reloadFrac: rpz ? Math.max(0.001, frac) : 0, mag: rpz ? rpz.mag : 0, magModel: kitFor('player').mag, antennaX: vis.antX || 0, antennaY: vis.antY || 0}, _rig);
       drawRig(ctx, _rig, 0, 0, {});
     } else {

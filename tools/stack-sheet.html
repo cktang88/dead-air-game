@@ -23,7 +23,7 @@ function pose(o) {
   const g = gunStack(gun, {enemy: kind !== 'player', noMag: !!rpz && rpz.mag > 0.02});
   humanoidPose(kit, {
     id: 3, t: o.t ?? 1, bodyYaw: o.body ?? ang, aimYaw: ang, moveYaw: o.move ?? ang, amp: o.amp || 0, phase: o.phase || 0, sprint: o.sprint || 0, kick,
-    hurt: o.hurt || 0, idleT: o.idleT || 0, gunModel: g, gunGeo: {...geo}, gunRot: (rpz ? rpz.tilt * (Math.abs(ang) > Math.PI / 2 && Math.abs(ang) < 4.7 ? -1 : 1) : 0) + (o.gunRot || 0), reloadFrac: o.reload || 0, oneHand: !!o.oneHand,
+    hurt: o.hurt || 0, idleT: o.idleT || 0, gunModel: g, gunGeo: {...geo}, gunRot: (rpz ? rpz.tilt : 0) + (o.gunRot || 0), reloadFrac: o.reload || 0, oneHand: !!o.oneHand,
     mag: rpz ? rpz.mag : 0, magModel: kit.mag, dead: o.dead ?? null, fallYaw: o.fall ?? 0, lunge: o.lunge || 0, spin: o.spin || 0,
   }, out);
   return out;
@@ -55,8 +55,8 @@ function drawAll() {
     // weapon handling: 8 aim angles, then recoil / sprint / walk / reload phases
     for (let i = 0; i < 8; i++) draw1(i, r, `aim ${i * 45}`, {ang: i * Math.PI / 4}); r += adv;
     for (let i = 0; i < 8; i++) draw1(i, r, `kick aim ${i * 45}`, {ang: i * Math.PI / 4, kick: 1}); r += adv;
-    const L = [['walk E', {ang: 0, amp: 1, phase: 0.2}], ['walk S', {ang: Math.PI / 2, amp: 1, phase: 0.2}], ['walk W', {ang: Math.PI, amp: 1, phase: 0.2}], ['sprint E', {ang: 0, amp: 1, sprint: 1, gunRot: 0.55, phase: 0.3}], ['sprint W', {ang: Math.PI, amp: 1, sprint: 1, gunRot: -0.55, phase: 0.3}],
-      ['sprint N', {ang: -Math.PI / 2, amp: 1, sprint: 1, gunRot: 0.55, phase: 0.3}], ['pump kick.5', {ang: 0, kick: 0.5}], ['pump kick.25', {ang: 0, kick: 0.25}]];
+    const L = [['walk E', {ang: 0, amp: 1, phase: 0.2}], ['walk S', {ang: Math.PI / 2, amp: 1, phase: 0.2}], ['walk W', {ang: Math.PI, amp: 1, phase: 0.2}], ['sprint E', {ang: 0, amp: 1, sprint: 1, gunRot: -0.45, phase: 0.3}], ['sprint W', {ang: Math.PI, amp: 1, sprint: 1, gunRot: -0.45, phase: 0.3}],
+      ['sprint N', {ang: -Math.PI / 2, amp: 1, sprint: 1, gunRot: -0.45, phase: 0.3}], ['pump kick.5', {ang: 0, kick: 0.5}], ['pump kick.25', {ang: 0, kick: 0.25}]];
     L.forEach(([n, o], i) => draw1(i, r, n, o)); r += adv;
     [0.1, 0.3, 0.45, 0.6, 0.7, 0.8, 0.88, 0.95].forEach((f, i) => draw1(i, r, 'reload ' + f, {ang: 0.2, reload: f})); r += adv;
     [0.1, 0.3, 0.45, 0.6, 0.7, 0.8, 0.88, 0.95].forEach((f, i) => draw1(i, r, 'reload W ' + f, {ang: Math.PI - 0.2, reload: f})); r += adv;
