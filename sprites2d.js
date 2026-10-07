@@ -136,19 +136,38 @@ export const ACTOR_LOOK = {
   player: {r: 10.5, color: '#62e1ad', half: 15},
   chaser: {r: 10, color: '#e95563', half: 17},
   gunner: {r: 10.5, color: '#e9a45a', half: 15},
-  brute: {r: 14.5, color: '#a17ae7', half: 20},
-  guard: {r: 10.5, color: '#58aeca', half: 16},
-  sniper: {r: 9.5, color: '#4fd0c4', half: 15},
-  riot: {r: 11.5, color: '#8aa0b4', half: 17},
+  brute: {r: 15.5, color: '#a17ae7', half: 22},
+  guard: {r: 12.5, color: '#58aeca', half: 19},
+  sniper: {r: 9, color: '#4fd0c4', half: 16},
+  riot: {r: 12.5, color: '#8aa0b4', half: 18},
   elite: {r: 19.5, color: '#ff9566', half: 27},
 };
 
-function disc(g, r, color, rim = 1.5) {
-  g.fillStyle = INK; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+// Body silhouettes by type so a glance tells them apart: round gunner, octagon-plated warden, slim marksman,
+// square-shouldered riot, wide brute. Facing +x; rx is the length along the facing, ry the width across it.
+const BODY_SHAPE = {
+  guard: {sides: 8, rx: 1, ry: 1},
+  sniper: {sides: 0, rx: 0.78, ry: 1},
+  riot: {sides: 4, rx: 1, ry: 1, round: 3.2},
+  brute: {sides: 0, rx: 0.9, ry: 1.12},
+};
+function shapePath(g, r, shape) {
+  g.beginPath();
+  if (!shape || !shape.sides) { g.ellipse(0, 0, r * (shape?.rx ?? 1), r * (shape?.ry ?? 1), 0, 0, TAU); return; }
+  const n = shape.sides, off = n === 4 ? Math.PI / 4 : Math.PI / n;
+  const k = n === 4 ? 1.05 : 1.04;
+  for (let i = 0; i < n; i++) { const a = off + i * TAU / n; const x = Math.cos(a) * r * k * shape.rx, y = Math.sin(a) * r * k * shape.ry; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.closePath();
+}
+function disc(g, r, color, rim = 1.5, kind) {
+  const shape = BODY_SHAPE[kind];
+  g.lineJoin = 'round';
+  g.fillStyle = INK; shapePath(g, r, shape); g.fill(); if (shape?.sides) { g.strokeStyle = INK; g.lineWidth = shape.round || 1.6; g.stroke(); }
   const inner = r - rim;
   const grad = g.createLinearGradient(-inner, -inner, inner, inner);
   grad.addColorStop(0, tint(color, 0.2)); grad.addColorStop(0.55, color); grad.addColorStop(1, shade(color, 0.78));
-  g.fillStyle = grad; g.beginPath(); g.arc(0, 0, inner, 0, TAU); g.fill();
+  g.fillStyle = grad; shapePath(g, inner, shape); g.fill();
+  if (shape?.sides) { g.strokeStyle = grad; g.lineWidth = (shape.round || 1.6) - 0.9; g.stroke(); }
   g.strokeStyle = 'rgba(255,255,255,0.28)'; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, inner - 0.7, Math.PI * 1.08, Math.PI * 1.62); g.stroke();
 }
 function inked(g, fill, w = 1) { g.fillStyle = fill; g.fill(); g.lineWidth = w; g.strokeStyle = INK; g.stroke(); }
@@ -202,14 +221,14 @@ const DETAIL = {
     g.strokeStyle = 'rgba(255,255,255,0.2)'; g.lineWidth = 1; g.beginPath(); g.arc(2.4, 0, 4, Math.PI * 1.1, Math.PI * 1.6); g.stroke();
   },
   guard(g, c) {
-    g.beginPath(); g.ellipse(-0.6, 0, 4.6, 9, 0, 0, TAU); inked(g, '#a9bcc5', 1);
-    g.beginPath(); g.arc(0.6, 0, 6.3, 0, TAU); inked(g, '#d4e6ee', 1);
-    g.fillStyle = c; g.fillRect(-4.8, -1.1, 10.4, 2.2);
-    rrect(g, 3.6, -3.9, 3, 7.8, 1.1); inked(g, '#10252d', 0.8);
-    g.fillStyle = '#7fe8ff'; g.fillRect(4.6, -2.7, 1.1, 5.4);
-    rrect(g, 4.2, -15.5, 4.6, 11.5, 1.8); inked(g, '#9fb8c4', 1);
-    g.strokeStyle = 'rgba(255,255,255,0.65)'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(5, -14.6); g.lineTo(5, -5); g.stroke();
-    g.fillStyle = c; g.fillRect(5.6, -11.8, 1.8, 5.2);
+    // WARDEN: heavy plated body, big pauldrons, domed helmet with a glowing visor bar, chest strap
+    for (const sd of [-1, 1]) { rrect(g, -5.2, sd > 0 ? 5.6 : -13.4, 11, 7.8, 3.4); inked(g, shade(c, 0.78), 1.1); g.fillStyle = tint(c, 0.6); g.fillRect(-2, sd * 9.5 - 0.7, 5.5, 1.4); }
+    rrect(g, -10.6, -6.4, 4.8, 12.8, 1.6); inked(g, '#4d6470', 1);
+    g.beginPath(); g.arc(1, 0, 6.4, 0, TAU); inked(g, tint(c, 0.45), 1.1);
+    g.fillStyle = shade(c, 0.6); g.fillRect(-4.6, -1, 5.2, 2);
+    rrect(g, 3.6, -4.2, 3.2, 8.4, 1.1); inked(g, '#10252d', 0.8);
+    g.fillStyle = '#7fe8ff'; g.fillRect(4.6, -3, 1.2, 6);
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 0.9; g.beginPath(); g.arc(1, 0, 5, Math.PI * 1.1, Math.PI * 1.6); g.stroke();
   },
   sniper(g, c) {
     // slim hooded shooter: cloak cape trailing behind, shoulder pads, and a glowing red scope lens
@@ -245,12 +264,12 @@ const DETAIL = {
   },
 };
 
-const BASE_R = {player: 10.5, chaser: 8.2, gunner: 10.5, brute: 13, guard: 10.5, sniper: 9, riot: 11.5, elite: 17.5};
+const BASE_R = {player: 10.5, chaser: 8.2, gunner: 10.5, brute: 14, guard: 12, sniper: 8.6, riot: 11.5, elite: 17.5};
 
 export function actorSprite(kind) {
   return cached('actor|' + kind, () => {
     const look = ACTOR_LOOK[kind], r = BASE_R[kind];
-    const base = paint(look.half, (g) => { if (kind !== 'chaser') disc(g, r, look.color, kind === 'elite' ? 2.2 : 1.5); });
+    const base = paint(look.half, (g) => { if (kind !== 'chaser') disc(g, r, look.color, kind === 'elite' ? 2.2 : 1.5, kind); });
     const detail = paint(look.half, (g) => DETAIL[kind](g, look.color));
     return {half: look.half, base, detail, whiteBase: recolor(base, '#fff'), whiteDetail: recolor(detail, '#fff'), r: look.r};
   });
@@ -286,7 +305,7 @@ const GUN_ART = {
 export function drawGun(g, gun, {reach = 5, enemy = false, glove = '#2a2530', slide = 0, rack = 0, noMag = false} = {}) {
   const art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
   const L = gun.visual.length * 0.7, W = Math.max(3.2, gun.visual.width * 0.78);
-  const body = enemy ? '#2b2530' : '#2a2c33', alt = enemy ? '#3a3039' : '#3d4049', metal = '#8d8b92';
+  const body = enemy ? '#403a49' : '#2a2c33', alt = enemy ? '#5a5266' : '#3d4049', metal = enemy ? '#b4b2bb' : '#8d8b92';
   const accent = enemy ? '#ff5a4a' : '#' + (gun.color & 0xffffff).toString(16).padStart(6, '0');
   g.lineJoin = 'round';
   g.strokeStyle = INK; g.lineWidth = 0.9;

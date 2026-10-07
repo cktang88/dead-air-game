@@ -33,9 +33,11 @@ const MONO = "'DM Mono',ui-monospace,monospace";
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
 
 const ENEMY_GUNS = {
-  gunner: {category: 'ASSAULT RIFLE', visual: {length: 26, width: 5}, color: 0xff5a4a},
-  guard: {category: 'SMG', visual: {length: 23, width: 5}, color: 0x58aeca},
-  sniper: {category: 'SNIPER', visual: {length: 36, width: 5}, color: 0x4fd0c4},
+  // same art ids as the player's guns: a GUNNER carries an assault rifle, a WARDEN a street-sweeper shotgun,
+  // a MARKSMAN a long scoped sniper. Longer than the player's so the weapon reads from across the room.
+  gunner: {category: 'ASSAULT RIFLE', visual: {length: 37, width: 6, art: 'CARBINE'}, color: 0xff5a4a},
+  guard: {category: 'SHOTGUN', visual: {length: 27, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
+  sniper: {category: 'SNIPER', visual: {length: 52, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
 };
 
 // Dashed footprint trail behind moving bodies, aged in real time.
@@ -727,12 +729,15 @@ export function createRenderer(container, state) {
     } else if (e.type === 'riot') {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
       const hc = shade(look.color, 0.7), push = brace * 2.5 - Math.min(3, (e.shieldFlash || 0) * 8);
-      drawHand(ctx, 9 + push * 0.4, -7.5, hc, 3); drawHand(ctx, 9 + push * 0.4, 7.5, hc, 3);
+      // baton in the right fist: a short club that jabs forward on the lunge
+      const bx = 9 + push * 0.4 + (e.meleeWindup > 0 ? -2 : 0) + lunge * 5;
+      ctx.save(); ctx.translate(bx, 7.5); ctx.rotate(-0.4 + lunge * 0.5); ctx.fillStyle = '#2b2530'; ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.fillRect(-2, -1.5, 15, 3); ctx.strokeRect(-2, -1.5, 15, 3); ctx.fillStyle = '#ffd36e'; ctx.fillRect(10, -1.5, 3, 3); ctx.restore();
+      drawHand(ctx, 9 + push * 0.4, -7.5, hc, 3); drawHand(ctx, bx, 7.5, hc, 3);
     } else {
       const gun = ENEMY_GUNS[e.type];
       if (gun && !e.elite) {
         // low-ready carry that snaps up as the aim tell fills; a reload tips the gun and the off hand dips
-        const raise = v.raise || 0, rel = v.rel || 0, yOff = e.type === 'guard' ? 3.5 : 0;
+        const raise = v.raise || 0, rel = v.rel || 0, yOff = 0;
         const tremble = aimP > 0.3 ? Math.sin(vis.time * 46 + (e.id || 0) * 9) * 0.012 * aimP : 0;
         const gunRot = (1 - raise) * 0.42 * (e.side || 1) + rel * 1.15 + tremble - kick * 0.06;
         ctx.save(); ctx.translate(look.r * 0.2 - (1 - raise) * 1.4 - kick * 3, yOff + Math.sin((v.phase || 0) * TAU) * 0.6 * amp); ctx.rotate(gunRot);
@@ -742,6 +747,11 @@ export function createRenderer(container, state) {
         if (rel > 0.5 && e.reloadTimer > 0.2) drawMagSprite(ctx, m.front - rel * 5 - 2, 0.6 + rel * 3.5, 0.3, 4.2, 2.4);
         ctx.restore();
         ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
+        if (e.type === 'sniper' && aimP === 0) {
+          // idle scope glint: a slow sparkle on the lens so the long rifle reads as a sniper before it aims
+          const tw = Math.max(0, Math.sin(vis.time * 2.1 + (e.id || 0) * 17)) ** 8, lens = 3 + gun.visual.length * 0.7 * 0.62 + 3;
+          if (tw > 0.05) { ctx.globalCompositeOperation = 'lighter'; drawStar(lens, 0, 1.5 + tw * 4, '#e8fcff'); ctx.globalCompositeOperation = 'source-over'; }
+        }
         if (aimP > 0 && e.type === 'sniper') {
           // scope glint: the lens flares and sparkles harder as the lock builds
           const lens = 3 + gun.visual.length * 0.7 * 0.62 + 3, flick = 0.65 + 0.35 * Math.sin(vis.time * 34), g = (0.15 + aimP * aimP * 1.3) * flick + (e.locked ? 0.5 : 0);
@@ -760,6 +770,16 @@ export function createRenderer(container, state) {
         ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
         drawHand(ctx, (rl + pump) * fs, -yy * fs - (windup ? 2 * rb : 0), hot, fr + (windup ? rb * 0.8 : 0));
         drawHand(ctx, (rr - pump) * fs, yy * fs + (windup ? 2 * rb : 0), hot, fr + (windup ? rb * 0.8 : 0));
+        if (e.type === 'brute' && !e.elite) {
+          // sledgehammer in the right fist: rests angled forward, hauls back on the wind-up, sweeps across on the strike
+          const hx0 = (rr - pump) + 0, hy0 = yy + (windup ? 2 * rb : 0), ha = windup ? lerp(-0.35, -2.3, rb) : lerp(-0.35, 0.95, clamp(lunge * 1.3));
+          ctx.save(); ctx.translate(hx0, hy0); ctx.rotate(ha);
+          ctx.fillStyle = '#6b4a34'; ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.fillRect(-3, -1.3, 20, 2.6); ctx.strokeRect(-3, -1.3, 20, 2.6);
+          ctx.fillStyle = windup && windP > 0.4 ? mix('#8d8b92', '#ff7a3a', windP) : '#8d8b92'; ctx.fillRect(14, -5.2, 9, 10.4); ctx.strokeRect(14, -5.2, 9, 10.4);
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(15, -4.4, 7, 1.2);
+          ctx.restore();
+          drawHand(ctx, hx0, hy0, hot, fr + (windup ? rb * 0.8 : 0));
+        }
       }
     }
     ctx.restore();
@@ -845,10 +865,10 @@ export function createRenderer(container, state) {
   function drawRiotShield(e, v, a, loose, alpha) {
     const down = e.stun > 0.35, flash = e.shieldFlash || 0, brace = v.brace || 0;
     ctx.save(); ctx.rotate(a + (flash > 0 && !loose ? Math.sin(vis.time * 70) * flash * 0.16 : 0)); if (down || alpha < 1) ctx.globalAlpha = down ? 0.45 : alpha;
-    const R = loose ? 9 : (down ? 11 : 15.5 + brace * 2.4 - Math.min(2.5, flash * 9)), half = 1.12;
+    const R = loose ? 9 : (down ? 11 : 17.5 + brace * 2.4 - Math.min(2.5, flash * 9)), half = 1.3;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = INK; ctx.lineWidth = 8.2; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
-    ctx.strokeStyle = flash > 0 ? mix('#9fb6c8', '#ffffff', clamp(flash * 4, 0, 1)) : '#9fb6c8'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
+    ctx.strokeStyle = INK; ctx.lineWidth = 10.4; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
+    ctx.strokeStyle = flash > 0 ? mix('#9fb6c8', '#ffffff', clamp(flash * 4, 0, 1)) : '#9fb6c8'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(0, 0, R, -half, half); ctx.stroke();
     ctx.strokeStyle = '#5d7387'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R - 2, -half + 0.05, half - 0.05); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, R + 1.6, -half * 0.8, -half * 0.1); ctx.stroke();
     ctx.fillStyle = '#ffd36e'; ctx.strokeStyle = INK; ctx.lineWidth = 0.8;
