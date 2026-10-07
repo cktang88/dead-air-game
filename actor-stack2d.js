@@ -1,6 +1,7 @@
 // Glue between the renderer and the stacked actor kit: which kinds are stacked, their flat baked corpses, shared
 // helpers. Keeping this out of render2d.js lets non-converted kinds keep drawing the legacy way.
-import {STACK_CONFIG, STACK_TILT} from './stack2d.js';
+import {STACK_CONFIG, STACK_TILT, tintVariant} from './stack2d.js';
+import {floorLook} from './floor-palette.js';
 import {kitFor} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT, RIG} from './rig2d.js';
 import {corpseOverrides, makeCanvas} from './sprites2d.js';
@@ -21,4 +22,13 @@ for (const kind of ['player', 'gunner']) {
     drawRig(g, bakeOut, 0, 0, {variant: DEAD_VARIANT, anchorZ: 0, shadow: false});
     return {half, img: c};
   };
+}
+
+const floorVariants = new Map();
+/** A subtle palette variant that leans every stacked part towards the floor's accent (null = untinted). Cached per floor. */
+export function floorStackVariant(floor, amount = 0.1) {
+  const look = floorLook(floor);
+  let v = floorVariants.get(look.id);
+  if (!v) floorVariants.set(look.id, v = tintVariant('floor-' + look.id, look.accent, amount));
+  return v;
 }

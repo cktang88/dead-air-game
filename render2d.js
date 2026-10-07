@@ -10,7 +10,7 @@ import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobSh
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
 import {beginStackFrame} from './stack2d.js';
-import {isStacked, feetDrop, RIG} from './actor-stack2d.js';
+import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
 import {drawIcon, MOD_ICON} from './icons.js';
@@ -766,7 +766,7 @@ export function createRenderer(container, state) {
           ctx.save(); ctx.rotate(-ang);
           humanoidPose(kitFor(kind), {id: e.id || 0, t: vis.time, bodyYaw: ang, aimYaw: ang, moveYaw: mvAng, amp, phase: v.phase || 0, kick, hurt: Math.max(punch, (v.flash || 0) * 0.7), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: v.idleT || 0,
             gunModel: gunStack(gun, {enemy: true, noMag: rel > 0.3 && rel < 0.95}), gunGeo: gunGeometry(gun), gunRot, gunDx: 0.1 - (1 - raise) * 1.4, handDx: -rel * 5, handDy: rel * 3.5, mag: rel > 0.5 && e.reloadTimer > 0.2 ? 1 : 0, magModel: kitFor(kind).mag, lunge, antennaX: v.antX || 0, antennaY: v.antY || 0}, _rig);
-          drawRig(ctx, _rig, 0, 0, {alpha: 1});
+          drawRig(ctx, _rig, 0, 0, {variant: floorStackVariant(state.floor)});
           ctx.restore();
         }
         if (e.type === 'sniper' && aimP === 0) {

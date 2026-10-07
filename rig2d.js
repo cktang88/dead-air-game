@@ -85,7 +85,7 @@ export function humanoidPose(kit, inp, out) {
     if (f) { f.fidget.apply(_fp, f.u, inp); out.fidget = f.fidget.id; }
   }
   // gait numbers
-  const stride = (3.3 + 1.1 * sprint) * amp, liftH = 2.1;
+  const stride = (4.2 + 1.2 * sprint) * amp, liftH = 2.4;
   const bob = _wp.bob * amp, lean = (0.8 * amp + 1.15 * sprint + (inp.lunge || 0) * 2.4) * (dead === null ? 1 : 0);
   const breath = Math.sin(t * 2.4 + seed) * (1 - amp);
   const twist = Math.sin((inp.phase || 0) * TAU) * 0.1 * amp;

@@ -127,11 +127,11 @@ function headModel(spec) {
     g.topCoat('D', 'Z');
   };
   if (spec.helmet === 'visor') {
-    g.ellipsoid(cx - 0.3, cy, 4.8, 5.2, 5.2, 4.2, 'h', 2.4);   // dome
-    g.ellipsoid(cx + 1.2, cy, 6.9, 3.2, 1.0, 1.1, 'H', 2.4);    // ridge
+    g.ellipsoid(cx - 0.9, cy, 4.8, 5.0, 5.2, 4.2, 'h', 2.4);   // dome
+    g.ellipsoid(cx - 1.6, cy, 8.0, 3.2, 1.0, 0.9, 'H', 2.4);    // ridge
     g.box(cx - 5, cy - 5.2, 5, cx - 3, cy + 5.2, 6, 'A');       // rear band
-    glass(3.2, 4.4, 2.6, 4.0, cx + 3.2);                      // wrap-around visor
-    for (let y = 2; y <= 11; y++) for (let z = 2; z <= 6; z++) for (let x = 13; x >= 0; x--) if (g.get(x, y, z) === 'D'.charCodeAt(0)) { g.set(x, y, z, z === 3 ? 'L' : 'D'); break; }
+    glass(3.6, 4.5, 3.5, 5.1, cx + 2.7);                      // wrap-around visor, rising onto the dome so it reads from above
+    for (let y = 2; y <= 11; y++) for (let z = 2; z <= 7; z++) for (let x = 13; x >= 0; x--) if (g.get(x, y, z) === 'D'.charCodeAt(0)) { g.set(x, y, z, z === 4 ? 'L' : 'D'); break; }
     for (let x = 13; x >= 3; x--) { let hit = false; for (let z = 8; z >= 3; z--) { const c = g.get(x, 4, z); if (c === 'Z'.charCodeAt(0)) { g.set(x, 4, z, 'l'); hit = true; break; } } if (hit) break; }
     for (const s of [-1, 1]) g.ellipsoid(cx - 0.8, cy + s * 5, 3.3, 1.6, 1.2, 1.6, 'M');    // ear cups
     g.set(cx + 4, cy - 4.4, 2, 'M'); g.set(cx + 5, cy - 4.4, 2, 'M'); g.set(cx + 5, cy - 3.4, 2, 'M'); // mic boom
