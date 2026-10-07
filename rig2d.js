@@ -42,7 +42,7 @@ export const gripFor = (cls) => GRIPS[cls] || GRIPS.rifle;
 const sstep = (t) => { t = clamp(t); return t * t * (3 - 2 * t); };
 const mixp = (o, a, b, t) => { o.x = a.x + (b.x - a.x) * t; o.y = a.y + (b.y - a.y) * t; o.z = a.z + (b.z - a.z) * t; return o; };
 
-const POOL = 20;
+const POOL = 30;
 export function newRigOut() {
   const items = [];
   for (let i = 0; i < POOL; i++) items.push({model: null, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, flash: 0, key: 0, draw: null, a: 0, b: 0});
@@ -62,19 +62,40 @@ function add(out, model, x, y, z, yaw, sx = 1, sy = 1, flash = 0) {
 // Append your own with registerIdleFidget; later agents hang easter eggs here (checking a watch, kicking a pebble...).
 export const IDLE_FIDGETS = [
   {id: 'look', from: 3.5, dur: 2.4, apply(p, u) { const s = Math.sin(u * TAU); p.headYaw += 0.62 * s * (u < 0.5 ? 1 : 0.75); p.torsoYaw += 0.08 * s; }},
-  {id: 'antenna', from: 5, dur: 1.2, apply(p, u) { p.antenna += Math.sin(u * TAU * 3) * (1 - u) * 1.6; p.headYaw += 0.3 * Math.sin(u * Math.PI); }},
+  {id: 'antenna', only: ['player', 'gunner'], from: 5, dur: 1.2, apply(p, u) { p.antenna += Math.sin(u * TAU * 3) * (1 - u) * 1.6; p.headYaw += 0.3 * Math.sin(u * Math.PI); }},
   {id: 'shrug', from: 8, dur: 1.1, apply(p, u) { const h = Math.sin(u * Math.PI); p.shrug = h; p.torsoZ += 0.5 * h; p.headZ += 0.7 * h; }},
   {id: 'stretch', from: 10, dur: 1.8, apply(p, u) { const h = Math.sin(u * Math.PI); p.leanX -= 1.1 * h; p.headZ += 0.5 * h; p.torsoYaw -= 0.1 * h; }},
 ];
 export function registerIdleFidget(f) { IDLE_FIDGETS.push(f); }
+// Easter-egg fidgets: a quick over-the-shoulder look, tuning the radio (the renderer draws the static bubble when
+// out.fidget === 'radio'), spinning the gun once, and a rare one that only plays once after a full minute of stillness.
+const sm = (u) => u * u * (3 - 2 * u);
+registerIdleFidget({id: 'shoulder', from: 6, dur: 2.2, apply(p, u) { const h = Math.sin(u * Math.PI), k = h < 0.5 ? sm(h * 2) : 1; p.headYaw += 1.15 * k; p.torsoYaw += 0.38 * k; p.headZ += 0.3 * k; }});
+registerIdleFidget({id: 'radio', from: 12, dur: 3.4, apply(p, u) {
+  const h = Math.sin(u * Math.PI), tap = u > 0.18 && u < 0.7 ? Math.sin((u - 0.18) * TAU * 4.2) : 0;
+  p.antenna += Math.sin(u * TAU * 5) * h * 2.4; p.headYaw += 0.55 * sm(Math.min(1, h * 2.2)); p.headZ -= 0.35 * h + 0.15 * Math.abs(tap); p.torsoZ -= 0.15 * h; p.shrug = 0.5 * h;
+}});
+registerIdleFidget({id: 'spin', from: 16, dur: 1.5, apply(p, u) { p.gunRot += TAU * (1 - (1 - u) ** 3); p.torsoZ += Math.sin(u * Math.PI) * 0.25; p.headYaw += 0.2 * Math.sin(u * Math.PI); }});
+registerIdleFidget({id: 'tune', from: 60, dur: 7, once: true, apply(p, u) {
+  const h = Math.sin(u * Math.PI), tilt = Math.sin(u * TAU * 1.5);
+  p.antenna += Math.sin(u * TAU * 7) * h * 2.8; p.headYaw += 0.45 * tilt * h; p.headZ -= 0.5 * h; p.leanX += 0.4 * h; p.shrug = 0.3 * h;
+}});
+/** Presentation switches set by game modes (easter eggs); the pose reads them. */
+export const RIG_FX = {headScale: 1};
 const SLOT = 6.5;   // seconds between fidgets once still
-const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0};
-/** Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure. */
-export function fidgetAt(idleT, seed = 0) {
+const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0, gunRot: 0};
+/**
+ * Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure.
+ * A fidget with `once: true` plays a single time, starting at its own `from` (the rare one-minute idle); the others rotate,
+ * one per slot, among those whose `from` has passed.
+ */
+export function fidgetAt(idleT, seed = 0, kind = '') {
   const first = IDLE_FIDGETS[0].from;
   if (!(idleT > first)) return null;
+  for (const f of IDLE_FIDGETS) if (f.once && idleT >= f.from && idleT - f.from <= f.dur) return {fidget: f, u: (idleT - f.from) / f.dur};
   const slot = Math.floor((idleT - first) / SLOT), within = (idleT - first) - slot * SLOT;
-  const f = IDLE_FIDGETS[(slot + (seed | 0)) % IDLE_FIDGETS.length];
+  const pool = IDLE_FIDGETS.filter((f) => !f.once && (f.from ?? 0) <= idleT && (!f.only || !kind || f.only.includes(kind)));
+  const f = pool[(slot + (seed | 0)) % pool.length];
   if (within > f.dur) return null;
   return {fidget: f, u: within / f.dur};
 }
@@ -100,10 +121,10 @@ export function humanoidPose(kit, inp, out) {
   walkPose(inp.phase || 0, _wp);
   const cb = Math.cos(bodyYaw), sb = Math.sin(bodyYaw), cm = Math.cos(moveYaw), sm = Math.sin(moveYaw), cl = Math.cos(legYaw), sl = Math.sin(legYaw), ca = Math.cos(aimYaw), sa = Math.sin(aimYaw);
   // idle fidgets
-  _fp.headYaw = _fp.headZ = _fp.torsoZ = _fp.torsoYaw = _fp.leanX = _fp.antenna = _fp.shrug = 0;
+  _fp.headYaw = _fp.headZ = _fp.torsoZ = _fp.torsoYaw = _fp.leanX = _fp.antenna = _fp.shrug = _fp.gunRot = 0;
   out.fidget = '';
   if (dead === null && amp < 0.05 && (inp.idleT || 0) > 0) {
-    const f = fidgetAt(inp.idleT, inp.id || 0);
+    const f = fidgetAt(inp.idleT, inp.id || 0, inp.kind || '');
     if (f) { f.fidget.apply(_fp, f.u, inp); out.fidget = f.fidget.id; }
   }
   // gait numbers
@@ -153,7 +174,7 @@ export function humanoidPose(kit, inp, out) {
 
   // ---------------- torso, head
   add(out, kit.torso, tx, ty, tz, torsoYaw, squashX, squashY, fl);
-  add(out, kit.head, hx, hy, hz, headYaw, 1, 1, fl);
+  add(out, kit.head, hx, hy, hz, headYaw, RIG_FX.headScale, RIG_FX.headScale, fl);
 
   // ---------------- antenna (custom item: a springy rod, pack-mounted)
   {
@@ -166,7 +187,7 @@ export function humanoidPose(kit, inp, out) {
   }
 
   // ---------------- gun: root at the shoulder pocket (long guns) / extended at arm's length (pistols), muzzle pinned on the aim line
-  const gunYaw0 = aimYaw + (inp.gunRot || 0);
+  const gunYaw0 = aimYaw + (inp.gunRot || 0) + _fp.gunRot;
   const gsc = inp.gunScale ?? 1, gL = geo ? geo.L : 0;
   const gv = prof.v * stance;                                       // lateral offset of the gun root, to the shooter's right
   const cross = gL > 1 ? Math.asin(clamp(gv / gL, -0.5, 0.5)) : 0;  // barrel crosses back onto the aim line so the muzzle stays on gunMuzzle
@@ -256,7 +277,7 @@ export function solveElbow(sx, sy, hx, hy, L, side, bodyYaw, out = {x: 0, y: 0})
   return out;
 }
 
-function sortItems(out) {
+export function sortItems(out) {
   const a = out.items, n = out.n;
   for (let i = 1; i < n; i++) { const v = a[i]; let j = i - 1; while (j >= 0 && a[j].key > v.key) { a[j + 1] = a[j]; j--; } a[j + 1] = v; }
 }

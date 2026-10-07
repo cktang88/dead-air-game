@@ -17,6 +17,10 @@ export const GOALS = [
   {id:'boss_slayer', name:'THE LAST NOTE', desc:'Defeat THE CONDUCTOR.', metric:'bossKills', goal:1, reward:{coins:300, unlock:['gun:sniper_mule']}},
   {id:'boss_pistol', name:'SIDEARM SOLO', desc:'Land the killing blow on THE CONDUCTOR with a pistol.', metric:'bossPistolKills', goal:1, reward:{coins:200, unlock:['upg:highroller','freq:backlash']}},
   {id:'kills_500', name:'EXTERMINATOR', desc:'Down 500 enemies across all runs.', metric:'totalKills', goal:500, reward:{coins:120}},
+  {id:'secret_room', name:'FOUND THE SECRET ROOM', desc:'Shoot open a cracked wall and step inside.', metric:'secrets', goal:1, reward:{coins:25}},
+  {id:'hidden_tape', name:'ALL EARS', desc:'Find a hidden tape lying in a corner.', metric:'fieldTapes', goal:1, reward:{coins:20}},
+  {id:'return_sender', name:'RETURN TO SENDER', desc:'Kill an enemy mid-shot with a ricochet.', metric:'returns', goal:1, reward:{coins:30}},
+  {id:'stage_manners', name:'STAGE MANNERS', desc:'Watch THE CONDUCTOR through his door, perfectly still, until he bows.', metric:'bows', goal:1, reward:{coins:40}},
   {id:'boss_3', name:'ENCORE', desc:'Defeat THE CONDUCTOR 3 times.', metric:'bossKills', goal:3, reward:{coins:150}},
 ];
 
@@ -24,7 +28,7 @@ export const GOAL_BY_ID = new Map(GOALS.map(goal => [goal.id, goal]));
 
 export function emptyStats() {
   return {runs:0, totalKills:0, deepestFloor:0, extracts:0, wins:0, deaths:0, bossKills:0, bossPistolKills:0, stillRooms:0, slowTriples:0, noHitFloors:0,
-    dailyRuns:0, mostKills:0, fastestWin:0, fastestFloor1:0, bestRunCoins:0, totalBanked:0};
+    dailyRuns:0, secrets:0, fieldTapes:0, bows:0, returns:0, mostKills:0, fastestWin:0, fastestFloor1:0, bestRunCoins:0, totalBanked:0};
 }
 
 // `summary`: {kills, floorReached, outcome:'dead'|'extract'|'won', seconds, bossKilled, bossPistol, stillRooms, slowTriples,
@@ -45,6 +49,10 @@ export function updateStats(stats, summary) {
   if (summary.bossKilled) next.bossKills += 1;
   if (summary.bossPistol) next.bossPistolKills += 1;
   next.stillRooms += Math.floor(n(summary.stillRooms));
+  next.secrets += Math.floor(n(summary.secrets));
+  next.fieldTapes += Math.floor(n(summary.fieldTapes));
+  next.bows += Math.floor(n(summary.bows));
+  next.returns += Math.floor(n(summary.returns));
   next.slowTriples += Math.floor(n(summary.slowTriples));
   next.noHitFloors += Math.floor(n(summary.noHitFloors));
   if (summary.daily) next.dailyRuns += 1;

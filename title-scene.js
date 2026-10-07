@@ -8,7 +8,8 @@
 
 import {actorSprite, glowSprite, ACTOR_LOOK} from './sprites2d.js';
 import {grimeTile} from './textures2d.js';
-import {tickPhase, driftCamera, sceneBullets} from './title-scene-core.js';
+import {tickPhase, driftCamera, sceneBullets, hitBullet, countBullets} from './title-scene-core.js';
+import {loadCosmetics, saveCosmetics, unlockHat} from './easter.js';
 
 const TAU = Math.PI * 2;
 
@@ -22,6 +23,8 @@ export function startTitleScene({reduced = false} = {}) {
   const g = canvas.getContext('2d');
   let pattern = null, W = 0, H = 0, raf = 0, last = performance.now(), t = 0;
   const bullets = sceneBullets();
+  const popped = new Map(), pops = [];   // easter egg: click a hanging round to pop it; pop them all for a party hat
+  let lastS = 3, lastCam = {x: 0, y: 0}, lastPh = {lurch: 0}, caption = 0;
 
   const resize = () => {
     const dpr = Math.min(1.5, window.devicePixelRatio || 1);
@@ -42,6 +45,7 @@ export function startTitleScene({reduced = false} = {}) {
 
   function draw() {
     const S = Math.max(2.2, H / 290), ph = tickPhase(t), cam = driftCamera(t);
+    lastS = S; lastCam = cam; lastPh = ph;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#10151f'; g.fillRect(0, 0, W, H);
     g.save(); g.translate(W * 0.5, H * 0.5); g.scale(S, S); g.translate(-cam.x, -cam.y);
@@ -68,7 +72,9 @@ export function startTitleScene({reduced = false} = {}) {
     for (const [mx, my, col] of [[-94, 22, '#ffe39a'], [128, -33, '#ff8a6a'], [90, 76, '#ff8a6a']]) { const gl = glowSprite(col); g.globalAlpha = 0.85; g.drawImage(gl, mx - 20, my - 20, 40, 40); }
     g.globalAlpha = 1;
     // bullets, brass and glass hanging in the air; the tick lurches them forward
-    for (const b of bullets) {
+    for (let bi = 0; bi < bullets.length; bi++) {
+      const b = bullets[bi];
+      if (popped.has(bi)) continue;
       const adv = b.drift * 9 * Math.sin(t * 0.11) + ph.lurch * b.lurch, x = b.x + Math.cos(b.ang) * adv, y = b.y + Math.sin(b.ang) * adv;
       const L = b.len * (1 + 1.6 * ph.lurchRate);
       g.save(); g.translate(x, y); g.rotate(b.ang);
@@ -83,7 +89,14 @@ export function startTitleScene({reduced = false} = {}) {
       }
       g.restore();
     }
+    for (let i = pops.length - 1; i >= 0; i--) {
+      const pp = pops[i], k = (t - pp.at) / 0.5;
+      if (k >= 1) { pops.splice(i, 1); continue; }
+      g.strokeStyle = `rgba(255,230,160,${1 - k})`; g.lineWidth = 1.6; g.beginPath(); g.arc(pp.x, pp.y, 3 + k * 16, 0, TAU); g.stroke();
+      for (let j = 0; j < 6; j++) { const a = j * TAU / 6 + pp.at; g.beginPath(); g.moveTo(pp.x + Math.cos(a) * (4 + k * 10), pp.y + Math.sin(a) * (4 + k * 10)); g.lineTo(pp.x + Math.cos(a) * (7 + k * 18), pp.y + Math.sin(a) * (7 + k * 18)); g.stroke(); }
+    }
     g.globalCompositeOperation = 'source-over'; g.restore();
+    if (caption > 0) { g.fillStyle = `rgba(255,236,170,${Math.min(1, caption)})`; g.font = `bold ${Math.round(H / 26)}px monospace`; g.textAlign = 'center'; g.fillText('ALL CLEAR · NICE SHOOTING · PARTY HAT UNLOCKED', W / 2, H * 0.94); }
     // grade: cold desaturated wash, a pulse of colour on each tick, vignette
     g.globalCompositeOperation = 'source-over';
     g.fillStyle = `rgba(20,36,66,${0.16 - 0.1 * ph.lurchRate})`; g.fillRect(0, 0, W, H);
@@ -97,12 +110,25 @@ export function startTitleScene({reduced = false} = {}) {
     const on = overlay.classList.contains('show');
     canvas.style.visibility = on ? 'visible' : 'hidden';
     if (!on) return;
-    t += reduced ? 0 : dt; resize(); draw();
+    t += reduced ? 0 : dt; caption = Math.max(0, caption - dt); resize(); draw();
   }
+  const onDown = (e) => {
+    if (!overlay.classList.contains('show') || e.target.closest?.('button,a,input,select,textarea,label,[role=button],summary')) return;
+    const r = canvas.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
+    const pt = {x: (px - W / 2) / lastS + lastCam.x, y: (py - H / 2) / lastS + lastCam.y};
+    const i = hitBullet(bullets, t, lastPh, pt, popped);
+    if (i < 0) return;
+    popped.set(i, t); pops.push({x: pt.x, y: pt.y, at: t});
+    if (popped.size >= countBullets(bullets)) {
+      caption = 5; popped.clear();
+      try { saveCosmetics(localStorage, unlockHat(loadCosmetics(localStorage), 'cone').cosmetics); } catch { /* no storage */ }
+    }
+  };
+  shell.addEventListener('pointerdown', onDown);
   window.addEventListener('resize', resize);
   resize(); t = 3; draw();
   if (!reduced) raf = requestAnimationFrame(frame);
-  return {stop() { cancelAnimationFrame(raf); canvas.remove(); window.removeEventListener('resize', resize); }};
+  return {stop() { cancelAnimationFrame(raf); canvas.remove(); window.removeEventListener('resize', resize); shell.removeEventListener('pointerdown', onDown); }};
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined" && !window.__deadairNoIntro) {
