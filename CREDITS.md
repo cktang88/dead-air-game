@@ -122,3 +122,9 @@ Required attribution lines:
 > ([3.0](http://creativecommons.org/licenses/by/3.0/) / [4.0](http://creativecommons.org/licenses/by/4.0/) respectively).
 
 The room-clear / exit-open stings and the death tape-stop are synthesised in `music.js` (no samples).
+
+## Handling reference renders (study material, not used by the game)
+
+`docs/art/handling-ref-*.png` contain renders of CC0 3D models by [Quaternius](https://quaternius.com) (CC0 1.0 Universal, public domain): the
+"Animated Men Characters" pack (Male_Casual), "Animated FPS Guns" (pistol, P90, shotgun, rifle, sniper rifle) and "Gun Pack Vol.1" (rocket launcher),
+posed and rendered with Blender by `tools/handling-refs/`. No attribution is required; credited as a courtesy.

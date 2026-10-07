@@ -8,10 +8,10 @@ import {add, sortItems, hump, solveLeg, pieceChain} from './creature-core.js';
 
 export const BRUTE_RIG = {anchorZ: 13.5, shadowRx: 17, shadowRy: 9, torsoZ: 8.4, headLift: 14.0, shoulderY: 11.4, shoulderZ: 12.2, bone: 9.3};
 
-registerIdleFidget({id: 'brute.neck', only: 'brute', from: 2.5, dur: 2.2, apply(p, u) { const a = u < 0.35 ? u / 0.35 : u < 0.5 ? 1 : u < 0.8 ? 1 - 2 * (u - 0.5) / 0.3 : -1 + (u - 0.8) / 0.2; p.neck = a * hump(Math.min(1, u * 1.05)) * 1.0 + (u > 0.3 && u < 0.36 ? 0.15 : 0); p.tilt = a; }});
-registerIdleFidget({id: 'brute.roll', only: 'brute', from: 2.5, dur: 2.0, apply(p, u) { p.roll = hump(u); p.rollPhase = u * TAU * 1.0; }});
-registerIdleFidget({id: 'brute.tap', only: 'brute', from: 2.5, dur: 1.8, apply(p, u) { p.tap = Math.max(0, Math.sin(u * TAU * 2.5)) * hump(Math.min(1, u * 1.2)); }});
-registerIdleFidget({id: 'brute.knuckles', only: 'brute', from: 2.5, dur: 2.0, apply(p, u) { p.knuckles = hump(u); p.headZ -= 0.4 * hump(u); }});
+registerIdleFidget({id: 'brute.neck', body: 'brute', from: 2.5, dur: 2.2, apply(p, u) { const a = u < 0.35 ? u / 0.35 : u < 0.5 ? 1 : u < 0.8 ? 1 - 2 * (u - 0.5) / 0.3 : -1 + (u - 0.8) / 0.2; p.neck = a * hump(Math.min(1, u * 1.05)) * 1.0 + (u > 0.3 && u < 0.36 ? 0.15 : 0); p.tilt = a; }});
+registerIdleFidget({id: 'brute.roll', body: 'brute', from: 2.5, dur: 2.0, apply(p, u) { p.roll = hump(u); p.rollPhase = u * TAU * 1.0; }});
+registerIdleFidget({id: 'brute.tap', body: 'brute', from: 2.5, dur: 1.8, apply(p, u) { p.tap = Math.max(0, Math.sin(u * TAU * 2.5)) * hump(Math.min(1, u * 1.2)); }});
+registerIdleFidget({id: 'brute.knuckles', body: 'brute', from: 2.5, dur: 2.0, apply(p, u) { p.knuckles = hump(u); p.headZ -= 0.4 * hump(u); }});
 
 const _bp = {neck: 0, tilt: 0, roll: 0, rollPhase: 0, tap: 0, knuckles: 0, headZ: 0};
 const _wp = {a: 0, b: 0, liftA: 0, liftB: 0, bob: 0};

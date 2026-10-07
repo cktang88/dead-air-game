@@ -1,5 +1,6 @@
 // Particles, flashes, rings, floaters and light events for the Canvas 2D renderer.
 // World-space effects age with the (time-scaled) simulation step; UI feedback ages in real time.
+import {spawnCrateDebris} from './item-stack2d.js';
 import {INK, TAU, glowSprite, hexStr, puffSprite, rgba, shade, tint} from './sprites2d.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -114,10 +115,7 @@ export class Fx {
   }
   breakCrate(crate) {
     // planks fly off, tumbling (their width scales with a fake flip) and bounce before settling as floor decals
-    for (let i = 0; i < 6; i++) {
-      const a = rand(0, TAU), sp = rand(60, 190);
-      this.add({kind: 'plank', x: crate.x + Math.cos(a) * 5, y: crate.y + Math.sin(a) * 5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 2.2, life: rand(0.9, 1.3), size: rand(3.2, 5.2), color: pick(WOOD), rot: rand(0, TAU), vr: rand(-16, 16), z: rand(4, 9), vz: rand(70, 130), g: 360, bounce: 0.38});
-    }
+    spawnCrateDebris(crate.x, crate.y);
     this.chips(crate.x, crate.y, 0, WOOD, 12, Math.PI, [60, 240], [1.6, 3.6], [0.45, 1.0]);
     this.smoke(crate.x, crate.y, 11, 4, '#8f8174', 26, [0.7, 1.2], 0.4);
     this.spark(crate.x, crate.y, 0, 4, Math.PI, [80, 220], '#ffd9a0');
@@ -246,7 +244,7 @@ export class Fx {
         p.vz -= p.g * dt; p.z += p.vz * dt; p.tm += p.vr * 0.7 * dt;
         if (p.z <= 0) {
           p.z = 0;
-          if (p.vz < -24) { p.vz = -p.vz * p.bounce; p.vr *= 0.55; p.vx *= 0.7; p.vy *= 0.7; }
+          if (p.vz < -24) { if (p.kind === 'casing' && this.onTink && ((p.tinks = (p.tinks || 0) + 1) <= 2) && Math.random() < 0.5) this.onTink(p.x, p.y); p.vz = -p.vz * p.bounce; p.vr *= 0.55; p.vx *= 0.7; p.vy *= 0.7; }
           else { p.vz = 0; p.vr *= Math.exp(-16 * dt); p.drag = 11; }
         }
       }

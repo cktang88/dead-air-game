@@ -16,7 +16,7 @@ export const PLAYER_SPEC = {
     pants: '#2e3b46', pantsHi: '#46586a', boot: '#2a2630', bootHi: '#4a4452', sole: '#16131b',
     belt: '#2a2320', buckle: '#d9b45a', pouch: '#4a4a3c', pouchHi: '#6a6a54',
     vest: '#36424e', plate: '#62788a', cloth: '#2f5c56', accent: '#62e1ad', accentDark: '#2f8f70', strap: '#1c222a',
-    glove: '#2a2530', gloveHi: '#4a4350', skin: '#c79574', helmet: '#4fb996', helmetHi: '#a6f0d2',
+    glove: '#a9855c', gloveHi: '#d6b184', skin: '#c79574', helmet: '#4fb996', helmetHi: '#a6f0d2',
     visor: '#0d242a', lens: '#7fe8ff', lensHi: '#ffffff', mic: '#8d8b92', pack: '#34404a', packDark: '#222a32', led: '#ff4a5e', brass: '#e8c978',
   },
 };
@@ -26,7 +26,7 @@ export const GUNNER_SPEC = {
     pants: '#4b3d3a', pantsHi: '#65524b', boot: '#2d2226', bootHi: '#523b36', sole: '#17110f',
     belt: '#3a281c', buckle: '#d9b45a', pouch: '#7a5230', pouchHi: '#a06c3c',
     vest: '#d98f45', plate: '#8b5a30', cloth: '#e9a45a', accent: '#f3b568', accentDark: '#a96a2c', strap: '#5a3a24',
-    glove: '#3a2c26', gloveHi: '#5a463c', skin: '#c79574', helmet: '#8a5a38', helmetHi: '#cf9a5c',
+    glove: '#40291d', gloveHi: '#7a5640', skin: '#c79574', helmet: '#8a5a38', helmetHi: '#cf9a5c',
     visor: '#1c1417', lens: '#ffc261', lensHi: '#fff1c4', mic: '#8d8b92', pack: '#5a4636', packDark: '#3a2c20', led: '#ff4a5e', brass: '#e8c978',
   },
 };
@@ -147,19 +147,25 @@ function headModel(spec) {
   return {id: `${spec.id}.head`, unit: CELL, layerH: CELL, pivot: {x: cx, y: cy}, palette: palette(spec.c), grid: g, buckets: 48};
 }
 
+// Arm: 11 cells (= RIG.armBone 8.8 units) long, thinner than the torso: sleeve, elbow pad, forearm taper and a bracer cuff so the
+// forearm reads as separate from the upper arm even when the pose folds them. The glove is a bigger, lighter leather mitt (it must
+// stand out from both the sleeve and the dark gun it holds).
 function armModel(spec) {
-  const g = new VoxelGrid(8, 4, 3);
-  g.rod(0, 8, 2, 1.5, 1.7, 1.4, 'c', 2.4);
-  g.rod(6, 8, 2, 1.5, 1.6, 1.3, 'u', 2.4);
-  g.ellipsoid(3.6, 2, 2.4, 1.3, 1.3, 0.6, 'q', 2.6);
+  const g = new VoxelGrid(11, 4, 3);
+  g.rod(0, 11, 2, 1.4, 1.25, 1.1, 'c', 2.4);                 // sleeve, whole arm
+  g.rod(5.5, 11, 2, 1.4, 1.08, 1.0, 'c', 2.4);               // forearm taper
+  g.rod(7.5, 11, 2, 1.4, 1.2, 1.05, 'u', 2.4);               // bracer cuff
+  g.ellipsoid(5.4, 2, 2.1, 1.3, 1.25, 0.7, 'q', 2.6);        // elbow pad
+  g.ellipsoid(1.2, 2, 2.2, 1.4, 1.2, 0.6, 'W', 2.6);         // shoulder cap
   return {id: `${spec.id}.arm`, unit: CELL, layerH: CELL, pivot: {x: 0.5, y: 2}, palette: palette(spec.c), grid: g, buckets: 48};
 }
 function gloveModel(spec, side) {
-  const g = new VoxelGrid(6, 6, 3);
-  g.ellipsoid(3, 3, 1.4, 2.5, 2.3, 1.4, 'g', 2.6);
-  g.ellipsoid(3.8, 3, 2.4, 1.2, 1.7, 0.6, 'G', 2.6);
-  g.ellipsoid(2.2, side > 0 ? 1.0 : 5.0, 1.5, 1.3, 0.8, 0.9, 'g');
-  return {id: `${spec.id}.glove${side > 0 ? 'R' : 'L'}`, unit: CELL, layerH: CELL, pivot: {x: 3, y: 3}, palette: palette(spec.c), grid: g, buckets: 48};
+  const g = new VoxelGrid(8, 8, 4);
+  g.ellipsoid(4, 4, 1.6, 3.1, 2.9, 1.6, 'g', 2.6);            // fist
+  g.ellipsoid(4.6, 4, 2.9, 2.2, 2.4, 0.9, 'G', 2.6);          // knuckle / back-of-hand highlight
+  g.ellipsoid(2.6, side > 0 ? 1.4 : 6.6, 1.7, 1.7, 1.0, 1.1, 'g');   // thumb
+  g.box(0, 2.6, 0.5, 1.6, 5.4, 3, 'u');                       // cuff
+  return {id: `${spec.id}.glove${side > 0 ? 'R' : 'L'}`, unit: CELL, layerH: CELL, pivot: {x: 4, y: 4}, palette: palette(spec.c), grid: g, buckets: 48};
 }
 function magModel() {
   const g = new VoxelGrid(7, 4, 3);
@@ -184,67 +190,84 @@ const gunCache = new Map();
 export function gunStack(gun, {enemy = false, noMag = false} = {}) {
   const vis = gun.visual, key = `${vis.art || gun.category}|${vis.length}|${vis.width}|${gun.color}|${enemy ? 1 : 0}|${noMag ? 1 : 0}`;
   let m = gunCache.get(key);
-  if (!m) { m = buildGun(gun, enemy, noMag, key); gunCache.set(key, m); }
+  if (!m) {
+    m = buildGun(gun, enemy, noMag, key, null);
+    // moving parts are separate stacks sharing the main model's grid frame, so the rig can slide them with the hand that works them
+    const art = GUN_ART[vis.art] || GUN_ART[gun.category] || GUN_ART.SMG;
+    m.parts = {};
+    if (art.pump) m.parts.pump = buildGun(gun, enemy, noMag, key + '|pump', 'pump');
+    if (art.bolt !== undefined) m.parts.bolt = buildGun(gun, enemy, noMag, key + '|bolt', 'bolt');
+    gunCache.set(key, m);
+  }
   return m;
 }
 export function gunGeometry(gun) {
   const L = gun.visual.length * 0.7, art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
-  return {L, rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art};
+  const pt = (x, y = 0, dx = 0) => ({x: x * L + dx, y});
+  const sup = art.sup || [0.55, 0, 0], magX = art.mag ? art.mag[0] + art.mag[1] / 2 : 0.3;
+  // grip data (gun space: x along the barrel from the model origin, y to the shooter's right) read by humanoidPose
+  return {L, rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art, cls: art.cls || 'rifle',
+    trig: pt(art.trig ?? 0.2, 0, 0.5), sup: pt(sup[0], sup[1], sup[2]), mag: pt(magX, 0), bolt: pt(art.bolt ?? 0.34, 0.5), pump: !!art.pump};
 }
 /** World units from a gun model's layer 0 up to the centre of its receiver (rigs lift the model by anchorZ minus this). */
 export const GUN_RECEIVER_Z = 4.5 * GUN_UNIT;
-function buildGun(gun, enemy, noMag, key) {
+function buildGun(gun, enemy, noMag, key, only) {
   const u = GUN_UNIT, art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
-  const L = gun.visual.length * 0.7, W = Math.max(3.2, gun.visual.width * 0.78);
+  const L = gun.visual.length * 0.7, W = Math.max(3.4, gun.visual.width * 0.84);
   const Lc = Math.round(L / u), padC = Math.ceil(0.24 * Lc) + 2, Wc = W / u;
   const d = Math.ceil(Wc * 1.5) + 6 | 1, h = 10, cy = d / 2;
   const g = new VoxelGrid(padC + Lc + 3, d, h);
   const xf = (f) => padC + f * Lc;
   const accent = '#' + (gun.color & 0xffffff).toString(16).padStart(6, '0');
   const pal = {
-    b: enemy ? '#403a49' : '#2a2c33', a: enemy ? '#5a5266' : '#3d4049', m: enemy ? '#b4b2bb' : '#8d8b92', A: accent, x: '#33363e', w: '#4a3a30',
+    b: enemy ? '#564e62' : '#474c59', a: enemy ? '#766b84' : '#6f6a62', m: enemy ? '#d3d1da' : '#c3c6d0', A: accent, x: '#4e5360', w: '#7a5238',
     o: '#1f2128', L: {c: '#7fe0ff', emit: true}, y: '#d3ac55', k: '#555a63', t: {c: '#fff', emit: true}, G: enemy ? '#6b6377' : '#4b4f59',
   };
-  const kindCh = {b: 'b', a: 'a', m: 'm'};
   const Z0 = 2;   // receiver base layer
-  for (const [a, t, b, kind] of art.parts) {
-    if (art.twin && kind === 'm') continue;
-    const x0 = xf(Math.min(a, b)), x1 = xf(Math.max(a, b)), th = Math.max(1.2, W * t / u);
-    if (x1 - x0 < 0.5) continue;
-    if (kind === 'm') {
-      g.ellipsoid((x0 + x1) / 2, cy, Z0 + 1.6, (x1 - x0) / 2, Math.min(th / 2, 2.2), Math.min(th / 2, 1.5), 'm', 2.2);  // barrel tube
-    } else {
-      const hz = kind === 'b' ? 2.5 : 2.0;
-      g.ellipsoid((x0 + x1) / 2, cy, Z0 + hz, (x1 - x0) / 2, th / 2, hz, kindCh[kind], 3.4);
+  if (only === 'pump') {
+    if (art.pump) { const px0 = xf(art.pump[0]), px1 = xf(art.pump[0] + art.pump[1]); g.ellipsoid((px0 + px1) / 2, cy, Z0 + 1.6, (px1 - px0) / 2, Math.max(2, Wc * art.pump[2] / 2), 2.2, 'w', 2.6); g.box(px0 + 1, cy - 0.5, Z0 + 3, px1 - 1, cy + 0.5, Z0 + 4, 'b'); }
+  } else if (only === 'bolt') {
+    const bx = xf(art.bolt ?? 0.34);
+    g.box(bx, cy - 0.5, Z0 + 4, bx + 2, cy + 0.5, Z0 + 5, 'm'); g.box(bx + 0.5, cy + 0.5, Z0 + 3, bx + 1.5, cy + 2.4, Z0 + 4.4, 'm'); g.ellipsoid(bx + 1, cy + 2.8, Z0 + 3.7, 0.9, 0.9, 0.9, 'm');   // handle + lateral knob
+  } else {
+    const kindCh = {b: 'b', a: 'a', m: 'm'};
+    for (const [a, t, b, kind] of art.parts) {
+      if (art.twin && kind === 'm') continue;
+      const x0 = xf(Math.min(a, b)), x1 = xf(Math.max(a, b)), th = Math.max(1.2, W * t / u);
+      if (x1 - x0 < 0.5) continue;
+      if (kind === 'm') {
+        g.ellipsoid((x0 + x1) / 2, cy, Z0 + 1.6, (x1 - x0) / 2, Math.min(th / 2, 2.2), Math.min(th / 2, 1.5), 'm', 2.2);  // barrel tube
+      } else {
+        const hz = kind === 'b' ? 2.5 : 2.0;
+        g.ellipsoid((x0 + x1) / 2, cy, Z0 + hz, (x1 - x0) / 2, th / 2, hz, kindCh[kind], 3.4);
+      }
     }
+    if (art.twin) for (const s of [-1, 1]) g.ellipsoid((xf(0.46) + xf(1)) / 2, cy + s * Wc * 0.2, Z0 + 1.6, (xf(1) - xf(0.46)) / 2, 1.4, 1.2, 'm', 2.2);
+    // accent stripe on top of the receiver, rear sight, front sight
+    const sx0 = xf(0.2), sx1 = xf(0.42);
+    g.box(sx0, cy - 0.6, Z0 + 4, sx1, cy + 0.6, Z0 + 5, 'A');
+    g.set(xf(0.3), cy, Z0 + 5, 'b'); g.set(xf(0.3) - 1, cy, Z0 + 5, 'b');
+    g.set(Lc + padC - 2, cy, Z0 + 3, 'b'); g.set(Lc + padC - 2, cy, Z0 + 4, 'b');
+    // pistol grip + trigger guard (below the receiver)
+    const gx = xf(art.parts.length > 1 ? 0.2 : 0.1);
+    for (let z = 0; z < Z0 + 1; z++) g.ellipsoid(gx - (Z0 - z) * 0.5 + 1, cy, z + 0.5, 1.6, Math.min(2.2, Wc * 0.3), 0.5, 'x', 2.4);
+    g.rod(gx + 3, gx + 6, cy, 1.0, 0.7, 0.5, 'k');
+    if (art.mag && !noMag) {
+      const mx = xf(art.mag[0]), mw = Math.max(2, art.mag[1] * Lc), mt = Math.max(2, Wc * 0.55);
+      for (let z = 0; z < Z0 + 2; z++) g.box(mx + (Z0 - z) * 0.5 - (z === 0 ? 0 : 0), cy - mt / 2, z, mx + mw + (Z0 - z) * 0.5, cy + mt / 2, z + 1, z === 0 ? 'y' : 'x');
+    }
+    if (art.extra === 'drum' && !noMag) g.cyl(xf(0.38), cy, 0, Z0 + 1, Wc * 0.55, Wc * 0.55, 'x');
+    if (art.scope) {
+      const s0 = xf(art.scope[0]), s1 = xf(art.scope[0] + art.scope[1]);
+      g.box(s0 + 1, cy - 0.6, Z0 + 4, s0 + 2, cy + 0.6, Z0 + 6, 'k'); g.box(s1 - 2, cy - 0.6, Z0 + 4, s1 - 1, cy + 0.6, Z0 + 6, 'k');
+      g.ellipsoid((s0 + s1) / 2, cy, Z0 + 6.4, (s1 - s0) / 2, 1.6, 1.4, 'o', 2.2);
+      g.ellipsoid(s1 - 0.5, cy, Z0 + 6.4, 1.2, 1.4, 1.2, 'L');         // front lens
+      g.set(s0 - 1, cy, Z0 + 6, 'b'); g.set(s0 - 1, cy, Z0 + 7, 'L');
+      g.set(s1 - 1, cy, Z0 + 7, 't');
+    }
+    if (art.bipod) for (const s of [-1, 1]) { const bx = xf(0.66); for (let z = 0; z < Z0 + 1; z++) g.set(bx + (Z0 - z) * 0.6, cy + s * (Wc * 0.5 + (Z0 - z) * 0.9), z, 'k'); }
+    if (art.bolt === undefined) g.box(xf(0.34), cy - 0.5, Z0 + 4, xf(0.34) + 2, cy + 0.5, Z0 + 5, 'm');   // charging handle (bolt guns get a moving bolt part)
   }
-  if (art.twin) for (const s of [-1, 1]) g.ellipsoid((xf(0.46) + xf(1)) / 2, cy + s * Wc * 0.2, Z0 + 1.6, (xf(1) - xf(0.46)) / 2, 1.4, 1.2, 'm', 2.2);
-  // accent stripe on top of the receiver, rear sight, front sight
-  const sx0 = xf(0.2), sx1 = xf(0.42);
-  g.box(sx0, cy - 0.6, Z0 + 4, sx1, cy + 0.6, Z0 + 5, 'A');
-  g.set(xf(0.3), cy, Z0 + 5, 'b'); g.set(xf(0.3) - 1, cy, Z0 + 5, 'b');
-  g.set(Lc + padC - 2, cy, Z0 + 3, 'b'); g.set(Lc + padC - 2, cy, Z0 + 4, 'b');
-  // pistol grip + trigger guard (below the receiver)
-  const gx = xf(art.parts.length > 1 ? 0.2 : 0.1);
-  for (let z = 0; z < Z0 + 1; z++) g.ellipsoid(gx - (Z0 - z) * 0.5 + 1, cy, z + 0.5, 1.6, Math.min(2.2, Wc * 0.3), 0.5, 'x', 2.4);
-  g.rod(gx + 3, gx + 6, cy, 1.0, 0.7, 0.5, 'k');
-  // charging handle / bolt
-  g.box(xf(0.34), cy - 0.5, Z0 + 4, xf(0.34) + 2, cy + 0.5, Z0 + 5, 'm');
-  if (art.mag && !noMag) {
-    const mx = xf(art.mag[0]), mw = Math.max(2, art.mag[1] * Lc), mt = Math.max(2, Wc * 0.55);
-    for (let z = 0; z < Z0 + 2; z++) g.box(mx + (Z0 - z) * 0.5 - (z === 0 ? 0 : 0), cy - mt / 2, z, mx + mw + (Z0 - z) * 0.5, cy + mt / 2, z + 1, z === 0 ? 'y' : 'x');
-  }
-  if (art.extra === 'drum' && !noMag) g.cyl(xf(0.38), cy, 0, Z0 + 1, Wc * 0.55, Wc * 0.55, 'x');
-  if (art.pump) { const px0 = xf(art.pump[0]), px1 = xf(art.pump[0] + art.pump[1]); g.ellipsoid((px0 + px1) / 2, cy, Z0 + 1.6, (px1 - px0) / 2, Math.max(2, Wc * art.pump[2] / 2), 2.2, 'w', 2.6); g.box(px0 + 1, cy - 0.5, Z0 + 3, px1 - 1, cy + 0.5, Z0 + 4, 'b'); }
-  if (art.scope) {
-    const s0 = xf(art.scope[0]), s1 = xf(art.scope[0] + art.scope[1]);
-    g.box(s0 + 1, cy - 0.6, Z0 + 4, s0 + 2, cy + 0.6, Z0 + 6, 'k'); g.box(s1 - 2, cy - 0.6, Z0 + 4, s1 - 1, cy + 0.6, Z0 + 6, 'k');
-    g.ellipsoid((s0 + s1) / 2, cy, Z0 + 6.4, (s1 - s0) / 2, 1.6, 1.4, 'o', 2.2);
-    g.ellipsoid(s1 - 0.5, cy, Z0 + 6.4, 1.2, 1.4, 1.2, 'L');         // front lens
-    g.set(s0 - 1, cy, Z0 + 6, 'b'); g.set(s0 - 1, cy, Z0 + 7, 'L');
-    g.set(s1 - 1, cy, Z0 + 7, 't');
-  }
-  if (art.bipod) for (const s of [-1, 1]) { const bx = xf(0.66); for (let z = 0; z < Z0 + 1; z++) g.set(bx + (Z0 - z) * 0.6, cy + s * (Wc * 0.5 + (Z0 - z) * 0.9), z, 'k'); }
   g.topCoat('b', 'G');
   return {id: 'gun|' + key, unit: u, layerH: u, pivot: {x: padC, y: cy}, palette: pal, grid: g, buckets: 64};
 }

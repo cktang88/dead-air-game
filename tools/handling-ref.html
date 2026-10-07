@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Handling reference comparison</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="1792" height="900"></canvas>
+<script type="module">
+// Side-by-side sheet: row 1 = 3D reference render (Blender, 8 yaws, same 2.5D camera), row 2 = our rig, per weapon class.
+// ?dirs=0,90,...  ?cls=rifle,pistol,...  ?zoom=2|4  ?ref=<url prefix of ref_<cls>_<deg>.png and ref_<cls>.json> (default /__refs/)  ?dots=0 hides the measured joint markers on the reference row, ?dots=2 also draws them over our row
+// ?phase=aim|kick|sprint|reload   ?noref=1 draws only our row (for the repo sheets without the reference)
+import {setSpriteScale} from '../sprites2d.js';
+import {beginStackFrame, STACK_CONFIG} from '../stack2d.js';
+import {kitFor, gunStack, gunGeometry} from '../models2d.js';
+import {humanoidPose, newRigOut, drawRig, reloadPose} from '../rig2d.js';
+import {GUNS} from '../catalog.js';
+const q = new URLSearchParams(location.search);
+const zoom = +(q.get('zoom') || 4), CELL = 56, refBase = q.get('ref') || '/__refs/', dots = q.get('dots') !== '0', noref = q.get('noref') === '1', phase = q.get('phase') || 'aim';
+const CLS = {pistol: 'pistol_9', smg: 'machine', rifle: 'ar_ash', shotgun: 'shotgun', sniper: 'sniper_lynx', amr: 'sniper_mule', launcher: 'launcher'};
+const list = (q.get('cls') || 'pistol,smg,rifle,shotgun,sniper,launcher').split(',');   // class or class:refname (e.g. rifle:rifle_reload)
+const dirs = (q.get('dirs') || '0,45,90,135,180,225,270,315').split(',').map(Number);
+const SPRINT = {amp: 1, sprint: 1, ph: 0.3, gunRot: -0.45};
+const px = CELL * zoom, cols = dirs.length, rows = list.length * (noref ? 1 : 2);
+const c = document.getElementById('c'), ctx = c.getContext('2d'); c.width = px * cols; c.height = px * rows;
+setSpriteScale(zoom); STACK_CONFIG.bakeBudgetMs = 1e6;
+const kit = kitFor(q.get('kind') || 'player'), out = newRigOut();
+const loadImg = (u) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = u; });
+const bg = (x, y, w, h) => { ctx.fillStyle = '#2b2736'; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(255,255,255,0.04)'; for (let i = 0; i < w; i += 8 * zoom) ctx.fillRect(x + i, y, 1, h); for (let j = 0; j < h; j += 8 * zoom) ctx.fillRect(x, y + j, w, 1); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(x + w / 2, y, 1, h); ctx.fillRect(x, y + h / 2, w, 1); };
+const DOTS = [['shoulderR', '#ff5a5a'], ['shoulderL', '#5aa0ff'], ['elbowR', '#ff9a5a'], ['elbowL', '#5ad0ff'], ['trig', '#ffe14a'], ['sup', '#7dff7d']];
+function marks(x, y, pj) {
+  if (!dots || !pj) return;
+  for (const [n, col] of DOTS) { const p = pj[n]; if (!p) continue; ctx.fillStyle = col; ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x + px / 2 + p[0] * zoom, y + px / 2 + p[1] * zoom, 0.9 * zoom, 0, 7); ctx.fill(); ctx.stroke(); }
+}
+function pose(gun, ang, o = {}) {
+  const geo = gunGeometry(gun), g = gunStack(gun, {});
+  let rf = o.reload || 0, rpz = rf ? reloadPose(rf, {}) : null;
+  humanoidPose(kit, {id: 3, t: 1, bodyYaw: ang, aimYaw: ang, moveYaw: ang, amp: o.amp || 0, phase: o.ph || 0, sprint: o.sprint || 0, kick: o.kick || 0, gunModel: g, gunGeo: {...geo}, gunRot: o.gunRot || 0, reloadFrac: rf,
+    mag: rpz ? rpz.mag : 0, magModel: kit.mag}, out);
+  return out;
+}
+async function main() {
+  ctx.fillStyle = '#1a1722'; ctx.fillRect(0, 0, c.width, c.height);
+  let r = 0;
+  for (const item of list) {
+    const [cl, refName = cl] = item.split(':');
+    const gun = GUNS.find((g) => g.id === CLS[cl]);
+    let meta = null; if (!noref) { try { meta = await (await fetch(refBase + `ref_${refName}.json`)).json(); } catch (e) { meta = null; } }
+    for (let i = 0; i < cols; i++) {
+      const deg = dirs[i], ang = deg * Math.PI / 180, x = i * px;
+      let row = r;
+      if (!noref) {
+        const y = row * px; bg(x, y, px, px);
+        const im = await loadImg(refBase + `ref_${refName}_${String(deg).padStart(3, '0')}.png`);
+        if (im) ctx.drawImage(im, x, y, px, px);
+        marks(x, y, meta && meta.proj[String(deg)]);
+        ctx.fillStyle = '#aaa'; ctx.font = `${11}px monospace`; ctx.fillText(`ref ${refName} ${deg}`, x + 4, y + 12);
+        row++;
+      }
+      const y = row * px; bg(x, y, px, px);
+      beginStackFrame();
+      const o = refName.endsWith('_sprint') ? SPRINT : refName.endsWith('_reload') ? {reload: 0.45, gunRot: reloadPose(0.45, {}).tilt} : phase === 'kick' ? {kick: 1} : phase === 'sprint' ? SPRINT : phase === 'reload' ? {reload: 0.45} : {};
+      const p = pose(gun, ang, o);
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, px, px); ctx.clip(); ctx.translate(x + px / 2, y + px / 2); ctx.scale(zoom, zoom); drawRig(ctx, p, 0, 0, {}); ctx.restore();
+      if (q.get('dots') === '2') marks(x, y, meta && meta.proj[String(deg)]);
+      ctx.fillStyle = '#aaa'; ctx.font = '11px monospace'; ctx.fillText(`ours ${refName} ${deg}`, x + 4, y + 12);
+    }
+    r += noref ? 1 : 2;
+  }
+  window.__ready = true;
+}
+main();
+</script>

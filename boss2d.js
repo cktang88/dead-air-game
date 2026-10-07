@@ -34,7 +34,8 @@ export function drawBoss(ctx, e, now) {
   aura.addColorStop(0, col + (dead ? '11' : '66')); aura.addColorStop(1, col + '00');
   ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(0, 0, 52, 0, TAU); ctx.fill();
   // the body: a stacked model (tailcoat, broadcast mast, CRT head, baton) with its own conducting animation
-  drawConductor(ctx, e, v, t, ang, getBeat());
+  if (v.bowT > 0) { const k = Math.sin(Math.PI * Math.max(0, Math.min(1, 1 - v.bowT / 2.4))); ctx.save(); ctx.rotate(ang); ctx.translate(5 * k, 0); ctx.scale(1 - 0.16 * k, 1 + 0.04 * k); ctx.rotate(-ang); drawConductor(ctx, e, v, t, ang, getBeat()); ctx.restore(); }   // the bow easter egg
+  else drawConductor(ctx, e, v, t, ang, getBeat());
   if (e.alive && phase === 2 && b.mode !== 'intro' && b.mode !== 'shift') {
     // TEMPO: a clock ring around him whose hand sweeps only as fast as you move; bright = running, dim = frozen.
     const k = b.tempo ?? 1; v.tempoAng = (v.tempoAng || 0) + k * 0.06;

@@ -55,6 +55,22 @@ export class Lighting {
     this.key = ''; this.dirty = true;
   }
 
+  // The cracked secret wall opened: `cells` became floor. Refresh the floor mask and the solid tiles' neighbour lists around them.
+  patchTiles(cells) {
+    const L = this.level;
+    if (!L || !cells?.length) return;
+    for (const c of cells) L.floor[c.y * L.w + c.x] = 1;
+    let x0 = L.w, y0 = L.h, x1 = 0, y1 = 0;
+    for (const c of cells) { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x); y1 = Math.max(y1, c.y); }
+    for (let y = Math.max(0, y0 - 3); y <= Math.min(L.h - 1, y1 + 3); y++) for (let x = Math.max(0, x0 - 3); x <= Math.min(L.w - 1, x1 + 3); x++) {
+      if (L.floor[y * L.w + x]) { L.around[y * L.w + x] = null; continue; }
+      const list = [];
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < L.w && ny < L.h && L.floor[ny * L.w + nx]) list.push(ny * L.w + nx); }
+      L.around[y * L.w + x] = list;
+    }
+    this.key = ''; this.dirty = true;
+  }
+
   // Called each frame with the game state; cheap unless the room state changed or a fade is running.
   update(dt, state) {
     const L = this.level;

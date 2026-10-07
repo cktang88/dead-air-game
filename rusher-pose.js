@@ -7,10 +7,10 @@ import {clamp, lerp, outCubic, outQuad, smoothstep, TAU} from './anim.js';
 import {add, sortItems, hump, solveLeg, pieceChain} from './creature-core.js';
 
 // ------------------------------------------------------------------ rusher idle fidgets (registered into the shared list, tagged `only`)
-registerIdleFidget({id: 'rusher.groom', only: 'rusher', from: 2.2, dur: 2.6, apply(p, u) { p.groom = hump(u) ; p.chatter = hump(u) * 0.9; p.headZ -= 0.5 * hump(u); }});
-registerIdleFidget({id: 'rusher.shake', only: 'rusher', from: 2.2, dur: 0.9, apply(p, u) { p.shake = (1 - u) * hump(Math.min(1, u * 1.6)); }});
-registerIdleFidget({id: 'rusher.sniff', only: 'rusher', from: 2.2, dur: 2.2, apply(p, u) { p.sniff = hump(u); p.headYaw += 0.5 * Math.sin(u * TAU * 1.5) * hump(u); p.chatter += 0.4 * hump(u); }});
-registerIdleFidget({id: 'rusher.scratch', only: 'rusher', from: 2.2, dur: 1.6, apply(p, u) { p.scratch = hump(u) * (0.6 + 0.4 * Math.sin(u * TAU * 5)); p.bodyZ -= 0.3 * hump(u); }});
+registerIdleFidget({id: 'rusher.groom', body: 'rusher', from: 2.2, dur: 2.6, apply(p, u) { p.groom = hump(u) ; p.chatter = hump(u) * 0.9; p.headZ -= 0.5 * hump(u); }});
+registerIdleFidget({id: 'rusher.shake', body: 'rusher', from: 2.2, dur: 0.9, apply(p, u) { p.shake = (1 - u) * hump(Math.min(1, u * 1.6)); }});
+registerIdleFidget({id: 'rusher.sniff', body: 'rusher', from: 2.2, dur: 2.2, apply(p, u) { p.sniff = hump(u); p.headYaw += 0.5 * Math.sin(u * TAU * 1.5) * hump(u); p.chatter += 0.4 * hump(u); }});
+registerIdleFidget({id: 'rusher.scratch', body: 'rusher', from: 2.2, dur: 1.6, apply(p, u) { p.scratch = hump(u) * (0.6 + 0.4 * Math.sin(u * TAU * 5)); p.bodyZ -= 0.3 * hump(u); }});
 
 const _cp = {groom: 0, shake: 0, sniff: 0, scratch: 0, chatter: 0, headYaw: 0, headZ: 0, bodyZ: 0};
 const _k = {x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: 0};

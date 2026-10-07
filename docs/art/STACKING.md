@@ -152,3 +152,30 @@ Real fights: serve the repo, load `index.html?debug`, use `window.__deadair.spaw
 * Every distinct `variant.key` x model x scale level is a separate bake. Use few variants (floor tints are 4, dead is 1).
 * Models are cached by `id`: change a model's cells => change its `id` (or reload) while iterating in a long-lived page.
 * `emit` colours skip shading but DO go through variants (a dead or floor tint dims lenses too).
+
+## Heavy humanoids: WARDEN, MARKSMAN, RIOT (+ elite trims)
+
+| file | what |
+| --- | --- |
+| `heavy-models2d.js` | specs + voxel builders: per-type torso / head / legs (swapped into the shared `humanoidKit`), `heavyGun` (twin-barrel shotgun + separate pump, scoped rifle + separate bolt), `riotBaton`, `riotShield(crack)` (4 crack levels, upright) and `riotShieldFlat` (dropped), marksman ghillie strip + wrapped arm |
+| `heavies2d.js` | `drawHeavy(ctx, e, v, t, variant)` (call at the enemy origin, un-rotated), `heavyPose`, `deadRig` + `drawHeavyCorpse`, the fidgets, elite banners, scope / visor lights, `heavyMuzzle(e)` for telegraph lines |
+| `tools/stack-heavy-sheet.html` | `?kind=guard\|sniper\|riot&elite=1&zoom=4&rows=stand,walk,act,dead&cols=4` |
+
+Elites are a different spec (gold / orange trim, extra plates, spikes, a pennant on the antenna slot), not a tint. Type extras are data on top of `humanoidPose`: it still owns arms and gun placement; the
+type code feeds `gunRot gunDx handDx lunge kick hurt sprint`, then offsets parts (`shiftUpper`, `shiftLegs`) and appends extra items located from the gun item (pump, bolt) or torso (strips, shield).
+Moving parts are timed from `v.hvShotAt` (set on the kick edge): pump 0.16-0.6 s after a shot, bolt 0.25-0.95 s. Shield cracks count blocks in `v.cracks` (edge of `e.shieldFlash`).
+`deadRig` is a real topple: parts swing about the feet by height (`z*sin(theta)` along the fall axis), then lie flat with arms splayed and the gun / shield / baton thrown beside the body; the baked corpse decal
+is the same pose (`corpseOverrides['guard'|'guard+'...]`; `game.js` stamps `type + '+'` for elites). Fidgets can be limited per kind with `only: ['riot']` (`fidgetAt(idleT, seed, kind)`).
+
+## World props (cover, crates, pickups, doors, exit)
+
+Same tilt, light and ink as the actors. `?props=0` (or `STACK_CONFIG.props = false`) restores the painted world art.
+
+| file | what |
+| --- | --- |
+| `prop-stack2d.js` | cover tiles (pillars, sandbag / jersey / partition / vault walls, shelving, server / tape deck / speaker racks, desks with CRT + chair, hospital beds with drip stand). Baked once per (style, join mask, scale) at a fixed yaw into a flat tile image and blitted into the world chunks. `propLive()` lists the animated parts (LEDs, fans, tape reels, CRT flicker, VU meters, heart monitor) drawn live by `drawPropsLive()` |
+| `item-stack2d.js` | crates (3 stencil variants x 3 damage stages), tumbling plank debris, pickups (scrap gear+nut, ammo, medkit, armor, mod, floor gun via `gunStack`, supply drop with parachute and beacon, frequency radio), door / gate leaves and jamb posts, exit radio mast with spinning antenna and rotating light |
+| `tools/prop-sheet.html`, `tools/item-sheet.html` | contact sheets |
+
+How the baked tiles stay seamless: each prop is built in a grid with a 3-cell margin that holds the neighbour's continuation, composited with the engine's edge light and outline, then cropped exactly on the tile edge on every side that joins a neighbour. Tall props lift into the chunk above, so `world2d.paintStackedCover` also blits tiles from the rows below a chunk. Collision footprints are untouched (everything stays inside its tile; desks 2x1, beds 1x2).
+Screenshots: `world-stack-rooms.png` (before / after, 6 room types), `world-stack-pickups.png`, `world-stack-crate-break.png`, `world-stack-prop-sheet.png`, `world-stack-item-sheet.png`.

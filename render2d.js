@@ -9,10 +9,12 @@ import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inO
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
-import {beginStackFrame} from './stack2d.js';
+import {beginStackFrame, STACK_CONFIG} from './stack2d.js';
+import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
+import {isHeavy, drawHeavy, drawHeavyCorpse, heavyMuzzle} from './heavies2d.js';
 import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
@@ -22,6 +24,7 @@ import {drawMetaWorld} from './meta-overlay2d.js';
 import {createStealthLayer, sightDistance} from './stealth2d.js';
 import {createDoorLayer} from './doors2d.js';
 import {drawStanceGlyph} from './stance-glyphs2d.js';
+import {createDetails} from './details2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -97,11 +100,12 @@ export function createRenderer(container, state) {
   const fx = new Fx();
   const stealth = createStealthLayer();
   const doorLayer = createDoorLayer();
+  const details = createDetails();
   const world = new WorldLayer();
   const lighting = new Lighting();
   const timeFx = createTimeFx();
   const trail = new Trail();
-  const _wp = {}, _rp = {}, _sw = {}, BOSS_LOOK = {r: 24}, _rig = newRigOut(), _rigCorpse = newRigOut();
+  const _wp = {}, _rp = {}, _rpE = {}, _sw = {}, BOSS_LOOK = {r: 24}, _rig = newRigOut(), _rigCorpse = newRigOut();
   const GHOST_TIME = 0.24;
   const vis = {ghosts: Array.from({length: 24}, () => ({on: false, pk: null, t: 0, x0: 0, y0: 0, side: 1})), fl: {x: 0, y: 0, vx: 0, vy: 0}, camX: newSpring(0), camY: newSpring(0), zoom: newSpring(0), zbase: 1, bodyAng: 0, mvAng: 0, pPhase: 0, pMv: 0, swapT: 1, lastGun: -1, prevGun: 0, fresh: true, motion: 1, flashK: 1, tick: 0, wbT: 2, hurtSat: 0, killFlash: 0, seated: false, seatFx: false, angInit: false, slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
   const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0, actorMs: 0};
@@ -339,6 +343,7 @@ export function createRenderer(container, state) {
       if (gv.t <= 0 && g.id !== 'flash') { gv.t = 0.045; fx.smoke(g.x, g.y, 3.2, 1, '#aaa4ac', 5, [0.35, 0.6], 0.3); }
     }
     updatePickups(step);
+    stepDebris(step);
     for (const c of state.crates) {
       const w = c.wob; if (!w) continue;
       const h = Math.min(step, 1 / 40);
@@ -401,7 +406,7 @@ export function createRenderer(container, state) {
     for (const e of state.enemies) {
       if (!inView(e, b, 40)) continue;
       const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
-      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (dying ? 0 : isCreature(e) || e.type === 'boss' ? creatureDrop(e) : isStacked(kindOf(e)) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
+      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (dying ? 0 : isCreature(e) || e.type === 'boss' ? creatureDrop(e) : isStacked(kindOf(e)) || isHeavy(e) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
     }
     const p = state.player;
     if (p) drawBlobShadow(ctx, p.x, p.y + (isStacked('player') ? feetDrop() : 0), 10, 1.5);
@@ -411,6 +416,11 @@ export function createRenderer(container, state) {
   const inView = (o, b, pad = 0) => o.x > b.x0 - pad && o.x < b.x1 + pad && o.y > b.y0 - pad && o.y < b.y1 + pad;
 
   function drawCrates(b) {
+    if (STACK_CONFIG.props) {
+      drawCrateStacks(ctx, state.crates, b, vis.time, (crate, stage) => bar(crate.x, crate.y - 33, 24, 3.4, crate.hp / crate.maxHp, stage === 2 ? '#ff5266' : stage === 1 ? '#f2a45f' : '#83ddae'));
+      drawDebris(ctx, b);
+      return;
+    }
     for (const crate of state.crates) {
       if (!inView(crate, b, 30)) continue;
       const stage = crate.damageStage || 0, variant = Math.floor(hashPos(crate.x, crate.y) * 3), img = crateSprite(stage, variant);
@@ -461,6 +471,14 @@ export function createRenderer(container, state) {
       ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
       ctx.globalAlpha = 1 - open * open;
       const half = span / 2, slide = open * half * 0.95, rattle = open > 0 && open < 1 ? Math.sin(vis.time * 70) * 0.7 * Math.sin(open * Math.PI) : 0;
+      if (STACK_CONFIG.props) {
+        ctx.restore(); ctx.save(); ctx.globalAlpha = 1 - open * open;
+        for (const side of [-1, 1]) {
+          const along = side * (slide + half / 2), perp = rattle * side, wx = cx + (vertical ? perp : along), wy = cy + (vertical ? along : perp);
+          drawPanel(ctx, wx, wy, vertical, half, 'gate', gate.opened ? '#4aa878' : '#e9b23c', 1);
+        }
+        ctx.restore(); ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2); ctx.globalAlpha = 1 - open * open;
+      } else
       for (const side of [-1, 1]) {
         ctx.save(); ctx.translate(side * slide, rattle * side);
         const x0 = side < 0 ? -half : 0, w = half;
@@ -496,6 +514,7 @@ export function createRenderer(container, state) {
   }
 
   function drawPickupShape(pk, t, ph, color) {
+    if (STACK_CONFIG.props && drawPickupStack(ctx, pk, t, ph, color, drawIcon, MOD_ICON, GUNS)) return;
     const spin = Math.sin(t * 1.4 + ph) * 0.25;
       if (pk.kind === 'scrap') {
         ctx.rotate(spin + t * 0.6);
@@ -654,6 +673,7 @@ export function createRenderer(container, state) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col;
     ctx.restore(); ctx.save(); ctx.translate(pk.x, pk.y);
+    if (STACK_CONFIG.props) drawExitMast(ctx, 0, 6, t, ready, col);
     // vertical beacon pillar so the exit is visible from across the room
     const bw = 10 + Math.sin(t * 3) * 2, bg = lgrad(ctx, 0, -120, 0, -20, rgba(col, 0), rgba(col, ready ? 0.45 : 0.25));
     ctx.fillStyle = bg; ctx.fillRect(-bw, -120, bw * 2, 100);
@@ -723,7 +743,7 @@ export function createRenderer(container, state) {
     if (windP > 0) { const rb = outCubic(windP) * 4.5; ctx.translate(-Math.cos(ang) * rb, -Math.sin(ang) * rb); }
     if (lunge > 0) { const l = outQuad(lunge) * 7; ctx.translate(Math.cos(ang) * l, Math.sin(ang) * l); }
     if (aimP > 0 && !e.elite) { ctx.translate(-Math.cos(ang) * aimP * 1.2, -Math.sin(ang) * aimP * 1.2); }
-    const cre = isCreature(e), stk = cre || isStacked(kind);
+    const cre = isCreature(e), hv = isHeavy(e), stk = cre || isStacked(kind) || hv;
     walkPose(v.phase || 0, _wp);
     if (!stk) drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
     // squash and stretch: along travel while running, bigger on the wind-up, a punch when hit, a hop when alerted
@@ -740,7 +760,9 @@ export function createRenderer(container, state) {
       actorRim(look.r, tint(look.color, 0.2), 0.42);
     }
     ctx.save(); ctx.rotate(ang);
-    if (cre) { /* stacked body drawn above */ } else if (e.type === 'chaser' && !e.elite) {
+    if (cre) { /* stacked body drawn above */ } else if (hv) {
+      ctx.rotate(-ang); drawHeavy(ctx, e, v, vis.time, floorStackVariant(state.floor)); ctx.rotate(ang);
+    } else if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
     } else if (e.type === 'riot') {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -767,9 +789,10 @@ export function createRenderer(container, state) {
         if (!stk) ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
         else {
           // stacked body: drawn un-rotated (the pose carries every yaw itself)
+          const erf = e.reloadTimer > 0 ? clamp(1 - e.reloadTimer / (e.def?.brain === 'guard' ? 2.05 : e.type === 'sniper' ? 2.8 : 1.55), 0.001, 1) : 0, erp = erf > 0 ? reloadPose(erf, _rpE) : null;
           ctx.save(); ctx.rotate(-ang);
-          humanoidPose(kitFor(kind), {id: e.id || 0, t: vis.time, bodyYaw: ang, aimYaw: ang, moveYaw: mvAng, amp, phase: v.phase || 0, kick, hurt: Math.max(punch, (v.flash || 0) * 0.7), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: v.idleT || 0,
-            gunModel: gunStack(gun, {enemy: true, noMag: rel > 0.3 && rel < 0.95}), gunGeo: gunGeometry(gun), gunRot, gunDx: 0.1 - (1 - raise) * 1.4, handDx: -rel * 5, handDy: rel * 3.5, mag: rel > 0.5 && e.reloadTimer > 0.2 ? 1 : 0, magModel: kitFor(kind).mag, lunge, antennaX: v.antX || 0, antennaY: v.antY || 0}, _rig);
+          humanoidPose(kitFor(kind), {id: e.id || 0, t: vis.time, bodyYaw: ang, aimYaw: ang, moveYaw: mvAng, amp, phase: v.phase || 0, kick, hurt: Math.max(punch, (v.flash || 0) * 0.7, clamp(((v.alertT || 0) - 0.55) / 0.35)), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: e.aware ? 0 : v.idleT || 0,
+            gunModel: gunStack(gun, {enemy: true, noMag: !!erp && erp.mag > 0.02}), gunGeo: gunGeometry(gun), gunRot: gunRot - rel * 1.15 + (erp ? erp.tilt * (e.side || 1) : 0), gunDx: 0.1 - (1 - raise) * 1.4, reloadFrac: erf, mag: erp ? erp.mag : 0, magModel: kitFor(kind).mag, lunge, antennaX: v.antX || 0, antennaY: v.antY || 0}, _rig);
           drawRig(ctx, _rig, 0, 0, {variant: floorStackVariant(state.floor)});
           ctx.restore();
         }
@@ -809,7 +832,7 @@ export function createRenderer(container, state) {
       }
     }
     ctx.restore();
-    if (e.type === 'riot') drawRiotShield(e, v, e.shieldAng || 0, false, 1);
+    if (e.type === 'riot' && !hv) drawRiotShield(e, v, e.shieldAng || 0, false, 1);
     if (v.flash > 0 && !stk) {
       ctx.globalAlpha = Math.min(1, v.flash * 1.6);
       ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -852,6 +875,7 @@ export function createRenderer(container, state) {
   // Death animation per type, then the body settles into the same pose the baked corpse decal uses (angle + spin*0.3, 0.94 x 0.9).
   function drawCorpse(e, v, kind, spr, look) {
     if (isCreature(e)) { drawCreatureCorpse(ctx, e, v, (v.ang || 0) + (v.spin || 0) * 0.3, v.spin || 0, corpseSprite, kind); return; }
+    if (isHeavy(e)) { drawHeavyCorpse(ctx, e, v, floorStackVariant(state.floor)); return; }
     const D = DEATH[kind] || DEATH.gunner, dt = v.deathT ?? 1, t = clamp(dt / D.dur), spin = v.spin || 0, ang0 = v.ang || 0, sgn = spin < 0 ? -1 : 1;
     const settle = outCubic(t), base = e.elite ? 0.9 : 1;
     const ang = ang0 + spin * 0.3 * settle + sgn * D.whirl * hump(Math.min(1, t * 1.15)) * 0.9;
@@ -920,7 +944,7 @@ export function createRenderer(container, state) {
 
   function drawSniperLaser(e) {
     const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
-    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = 3 + gun.visual.length * 0.82 + 2;
+    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : 3 + gun.visual.length * 0.82 + 2;
     const sx = e.x + dx * m, sy = e.y + dy * m, len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
     const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
     ctx.lineCap = 'round';
@@ -953,8 +977,8 @@ export function createRenderer(container, state) {
         ctx.restore();
       } else if (e.aimTimer > 0) {
         const p = clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), range = e.type === 'brute' ? 130 : Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
-        const gun = ENEMY_GUNS[e.type], m = gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
-        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
+        const gun = ENEMY_GUNS[e.type], hvg = isHeavy(e) && gun, m = hvg ? heavyMuzzle(e) : gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
+        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' && !hvg ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
         const len = rayWall(e.x, e.y, dx, dy, range);
         const ex = e.x + dx * len, ey = e.y + dy * len;
         const hot = mix('#ff8a5a', '#ff2a48', p);
@@ -988,9 +1012,10 @@ export function createRenderer(container, state) {
       const sw = vis.swapT < 1 ? swapPose(vis.swapT, _sw) : null, rpz = reloading ? _rp : null;
       const g0 = (sw && sw.which === 0) ? GUNS[vis.prevGun] || gun : gun;
       actorGlow(10.5, '#d8fff0', 0.1);
-      humanoidPose(kitFor('player'), {id: 1, t: vis.time, bodyYaw: bAng, aimYaw: ang, moveYaw: vis.mvAng, amp, phase: vis.pPhase, sprint, kick: Math.min(1, kick), hurt: vis.flashHit, flash: vis.flashHit > 0 ? Math.min(1, vis.flashHit * 1.4) : 0, idleT: vis.idleT || 0,
-        gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: (sprint * 0.55 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0)) * flip, gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
-        gunScale: sw ? sw.k : 1, handDx: rpz ? rpz.hx : 0, handDy: rpz ? -rpz.hy * 0.9 : 0, mag: rpz ? rpz.mag : 0, magModel: kitFor('player').mag, antennaX: vis.antX || 0, antennaY: vis.antY || 0}, _rig);
+      // gunRot below is actor-relative: reload tilts toward the actor's right and low-ready cants toward the support (left) side at every aim (no screen flip)
+      humanoidPose(kitFor('player'), {id: 1, t: vis.time, bodyYaw: bAng, aimYaw: ang, moveYaw: vis.mvAng, amp, phase: vis.pPhase, sprint, kick: Math.min(1, kick), hurt: vis.flashHit, flash: vis.flashHit > 0 ? Math.min(1, vis.flashHit * 1.4) : 0, idleT: vis.idleReal || 0,
+        gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: -sprint * 0.45 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0), gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
+        gunScale: sw ? sw.k : 1, reloadFrac: rpz ? Math.max(0.001, frac) : 0, mag: rpz ? rpz.mag : 0, magModel: kitFor('player').mag, antennaX: vis.antX || 0, antennaY: vis.antY || 0}, _rig);
       drawRig(ctx, _rig, 0, 0, {});
     } else {
     drawFeet(vis.mvAng, 10.5, vis.pPhase, amp, '#1d3a36');
@@ -1221,6 +1246,8 @@ export function createRenderer(container, state) {
 
     vis.slow = timeFx.step(frame, dt);
     vis.deadT = state.mode === 'dead' ? vis.deadT + dt : 0;
+    vis.idleReal = state.mode === 'play' && !state.paused && !state.peek && (vis.pSpeed || 0) < 8 && (state.shotsFired || 0) === vis.lastShots && !(vis.flashHit > 0) && !state.enemies.some((e) => e.alive && e.aware) ? (vis.idleReal || 0) + dt : 0;
+    vis.lastShots = state.shotsFired || 0;   // fidgets run on the real clock (the world clock is ~0.08x while you stand still)
     vis.flicker = Math.sin(now * 17) * 0.5 + Math.sin(now * 29) * 0.5;
     for (const e of state.enemies) if (e.vis) { e.vis.flash = Math.max(0, (e.vis.flash || 0) - dt * 18); e.vis.barT = Math.max(0, (e.vis.barT || 0) - dt); }
     for (const c of state.crates) if (c.flash > 0) c.flash = Math.max(0, c.flash - dt * 7);
@@ -1244,6 +1271,7 @@ export function createRenderer(container, state) {
     fx.decals.length = 0;
     trail.record(p.x, p.y, now);
     lighting.update(dt, state);
+    details.update(state, dt, now);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     world.draw(ctx, viewCam, b, dpr);
@@ -1257,6 +1285,8 @@ export function createRenderer(container, state) {
     drawGates(bp);
     doorLayer.draw(ctx, state, bp, vis.time);
     drawProps(bp);
+    world.drawPropLive(ctx, bp, vis.time);
+    details.drawWorld(ctx, state, bp, vis.time || now);
     drawPillars(bp);
     drawCrates(bp);
     { // selective colour: lift + drain the environment now; actors, pickups and bullets are drawn after at full colour
@@ -1288,6 +1318,7 @@ export function createRenderer(container, state) {
     drawMetaWorld(ctx, state, performance.now() / 1000, TILE);
     drawTelegraphs(bp);
     stealth.draw(ctx, state, bp, vis.time, dt);
+    details.drawOver(ctx, state, bp, vis.time || now, dt, vis);
     drawBullets(bp);
     fx.drawAdditive(ctx, bp);
     // coloured light flashes (muzzle, blasts) on top of the dark
@@ -1321,6 +1352,7 @@ export function createRenderer(container, state) {
       ctx.restore();
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    details.drawScreen(ctx, canvas.width, canvas.height, dpr, state, now);
     drawCrosshair(dpr);
     const ms = performance.now() - t0;
     stats.drawMs = stats.drawMs * 0.9 + ms * 0.1; stats.frames++; stats.bakeMs = world.bakeMs;

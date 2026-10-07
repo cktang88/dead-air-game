@@ -146,3 +146,59 @@ test('gun models: muzzle length follows visual.length and mag can be left out', 
   assert.ok(full.grid.count() >= noMag.grid.count());
   assert.ok(Math.abs(gunGeometry(gun).L - gun.visual.length * 0.7) < 1e-9);
 });
+
+test('both hands sit on the gun for every weapon class at every aim angle, muzzle stays on the aim line', () => {
+  const kit = kitFor('player'), out = newRigOut();
+  for (const gun of GUNS) {
+    const geo = gunGeometry(gun), model = gunStack(gun, {});
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      humanoidPose(kit, {bodyYaw: a, aimYaw: a, gunModel: model, gunGeo: geo}, out);
+      assert.ok(Math.abs(out.muzzleX - Math.cos(a) * gunMuzzle(gun)) < 1e-6 && Math.abs(out.muzzleY - Math.sin(a) * gunMuzzle(gun)) < 1e-6, gun.id);
+      // distance of each hand from the barrel line (origin -> muzzle) stays small
+      const ox = out.muzzleX - Math.cos(a) * geo.L, oy = out.muzzleY - Math.sin(a) * geo.L;
+      for (const h of [out.handR, out.handL]) {
+        const t = (h.x - ox) * Math.cos(a) + (h.y - oy) * Math.sin(a), d = Math.abs(-(h.x - ox) * Math.sin(a) + (h.y - oy) * Math.cos(a));
+        assert.ok(t > -1 && t < geo.L && d < 3.5, `${gun.id} hand off the gun (t ${t.toFixed(1)}, d ${d.toFixed(1)})`);
+      }
+    }
+  }
+});
+
+test('weapon layer: arms, gloves and the gun draw over the torso and the head at every aim', () => {
+  const kit = kitFor('player'), out = newRigOut();
+  for (const gun of [GUNS.find((g) => g.id === 'pistol_9'), GUNS.find((g) => g.id === 'ar_ash')]) {
+    const geo = gunGeometry(gun), model = gunStack(gun, {});
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      humanoidPose(kit, {bodyYaw: a, aimYaw: a, gunModel: model, gunGeo: geo}, out);
+      const items = out.items.slice(0, out.n), at = (m) => items.findIndex((it) => it.model === m);
+      const head = at(kit.head), torso = at(kit.torso);
+      assert.ok(at(model) > head && at(model) > torso, `${gun.id}@${i} gun under the body`);
+      items.forEach((it, k) => { if (it.model === kit.arm || it.model === kit.gloveR || it.model === kit.gloveL) assert.ok(k > head, `${gun.id}@${i} limb under the head`); });
+    }
+  }
+});
+
+test('arm model is as long as the IK bone, so the drawn arm meets the glove', () => {
+  const kit = kitFor('player');
+  assert.ok(Math.abs(kit.arm.grid.w * kit.arm.unit - RIG.armBone) < 1e-9);
+});
+
+test('pump and bolt parts are separate stacks that slide with the hand that works them', () => {
+  const kit = kitFor('player'), out = newRigOut(), sg = GUNS.find((g) => g.id === 'shotgun'), geo = gunGeometry(sg), model = gunStack(sg, {});
+  assert.ok(model.parts && model.parts.pump && !model.parts.bolt);
+  const find = (m) => out.items.slice(0, out.n).find((it) => it.model === m);
+  humanoidPose(kit, {bodyYaw: 0, aimYaw: 0, gunModel: model, gunGeo: geo, kick: 0}, out);
+  const rest = find(model.parts.pump).x - find(model).x, handRest = out.handL.x - find(model).x;
+  humanoidPose(kit, {bodyYaw: 0, aimYaw: 0, gunModel: model, gunGeo: geo, kick: 0.5}, out);
+  const moved = find(model.parts.pump).x - find(model).x, handMoved = out.handL.x - find(model).x;
+  assert.ok(moved < rest - 1, 'pump slides back after the shot');
+  assert.ok(Math.abs((moved - rest) - (handMoved - handRest)) < 1e-6, 'the support hand goes with it');
+  const sn = GUNS.find((g) => g.id === 'sniper_lynx'), sgeo = gunGeometry(sn), smodel = gunStack(sn, {});
+  assert.ok(smodel.parts.bolt && !smodel.parts.pump);
+  humanoidPose(kit, {bodyYaw: 0, aimYaw: 0, gunModel: smodel, gunGeo: sgeo, reloadFrac: 0.5}, out);
+  const b0 = find(smodel.parts.bolt).x - find(smodel).x;
+  humanoidPose(kit, {bodyYaw: 0, aimYaw: 0, gunModel: smodel, gunGeo: sgeo, reloadFrac: 0.92}, out);
+  assert.ok(find(smodel.parts.bolt).x - find(smodel).x < b0 - 0.5, 'bolt is worked back at the end of the reload');
+});
