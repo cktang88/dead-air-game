@@ -53,3 +53,9 @@ Options: `--seeds N|a,b,c|a-b`, `--seed N`, `--seed-base N`, `--skill 0..1`, `--
 - Stuck events that the bot cannot recover from are reported as `trapped` (a possible game softlock) rather than hidden.
 
 Art credits and icon licences (game-icons.net, CC BY 3.0) are in [CREDITS.md](./CREDITS.md).
+
+## Hosting
+
+The game is a static site. `sh scripts/build-site.sh` copies the files the browser loads into `dist/`.
+
+`.github/workflows/deploy.yml` publishes `dist/` to Cloudflare Pages (project `dead-air`) on every push to `main` (production, `dead-air.pages.dev`) and to the working branch (a preview URL). It needs two repository secrets: `CLOUDFLARE_API_TOKEN` (a token with the *Cloudflare Pages: Edit* permission) and `CLOUDFLARE_ACCOUNT_ID`.
