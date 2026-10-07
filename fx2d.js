@@ -147,6 +147,15 @@ export class Fx {
   floater(x, y, text, color = '#fff', size = 13, life = 1.1) {
     this.floaters.push({x, y, text, sum: 0, age: 0, life, size: Math.max(size, 16), color, vy: -30});
   }
+  // Scrap pickups merge into one "+N SCRAP" pop (anything picked up within MERGE_S of the last one joins it),
+  // which then flies to the HUD counter (`scrapTarget`, CSS px, set by the game) instead of stacking up mid-fight.
+  scrapPop(x, y, amount, color = '#ffd27a') {
+    const open = this.floaters.find((f) => f.scrap && f.age - f.t0 < SCRAP_MERGE_S);
+    if (open) { open.sum += amount; open.text = `+${open.sum} SCRAP`; open.t0 = open.age; open.life = open.age + SCRAP_MERGE_S + SCRAP_FLY_S; open.size = Math.min(26, 16 + Math.sqrt(open.sum) * 0.9); return open; }
+    const f = {x, y, text: `+${amount} SCRAP`, sum: amount, age: 0, t0: 0, life: SCRAP_MERGE_S + SCRAP_FLY_S, size: 16, color, vy: -22, scrap: true};
+    this.floaters.push(f);
+    return f;
+  }
   kill(e, vx, vy) {
     const a = Math.atan2(vy, vx);
     this.blood(e.x, e.y, a, 16, 0.9, [90, 340]);
@@ -369,10 +378,15 @@ export class Fx {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (const f of this.floaters) {
       const k = f.age / f.life;
-      const sx = ((f.x - cam.x) * cam.scale + cam.w / 2) * dpr, sy = ((f.y - cam.y) * cam.scale + cam.h / 2) * dpr;
-      const pop = 1 + Math.max(0, 1 - f.age * 8) * 0.6;
+      let sx = ((f.x - cam.x) * cam.scale + cam.w / 2) * dpr, sy = ((f.y - cam.y) * cam.scale + cam.h / 2) * dpr;
+      let pop = 1 + Math.max(0, 1 - f.age * 8) * 0.6, fade = Math.min(1, (1 - k) * 2.4);
+      if (f.scrap) {   // hold, then fly into the HUD scrap counter
+        const q = Math.max(0, Math.min(1, (f.age - f.t0 - SCRAP_MERGE_S) / SCRAP_FLY_S)), tg = this.scrapTarget;
+        pop = 1 + Math.max(0, 1 - (f.age - f.t0) * 9) * 0.35; fade = 1 - Math.max(0, q - 0.75) * 4;
+        if (q > 0 && tg) { const e = q * q; sx += (tg.x * dpr - sx) * e; sy += (tg.y * dpr - sy) * e; pop *= 1 - 0.5 * e; }
+      }
       ctx.font = `800 ${Math.round(f.size * dpr * pop)}px 'Barlow Condensed','DM Mono',system-ui,sans-serif`;
-      ctx.globalAlpha = Math.min(1, (1 - k) * 2.4);
+      ctx.globalAlpha = Math.max(0, fade);
       ctx.lineWidth = Math.max(3.6, f.size * 0.2) * dpr; ctx.strokeStyle = 'rgba(14,10,20,0.92)'; ctx.strokeText(f.text, sx, sy);
       ctx.fillStyle = f.color; ctx.fillText(f.text, sx, sy);
     }
@@ -387,3 +401,4 @@ export class Fx {
 }
 
 export {rgba};
+export const SCRAP_MERGE_S = 0.6, SCRAP_FLY_S = 0.42;

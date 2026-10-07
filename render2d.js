@@ -8,6 +8,7 @@ import {createTimeFx} from './timefx.js';
 import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inOutCubic, lerp, moveAmount, newSpring, outBack, outBounce, outCubic, outQuad, reloadPose, springDamping, stepSpring, swapPose, walkPhase, walkPose} from './anim.js';
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
+import {floorLook} from './floor-palette.js';
 import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
@@ -118,8 +119,9 @@ export function createRenderer(container, state) {
   }
 
   function setLevel() {
-    world.setLevel({tileMap: state.tileMap, rooms: state.rooms, doors: state.doors, seed: state.seed});
-    lighting.setLevel({tileMap: state.tileMap, rooms: state.rooms});
+    const look = state.signal?.active ? null : floorLook(state.floor);
+    world.setLevel({tileMap: state.tileMap, rooms: state.rooms, doors: state.doors, seed: state.seed, look});
+    lighting.setLevel({tileMap: state.tileMap, rooms: state.rooms, look});
     lighting.settle(state);
     fx.clear();
     trail.pts.length = 0;

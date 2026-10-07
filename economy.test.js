@@ -60,3 +60,8 @@ test('objectiveText walks from clearing to extraction', () => {
   assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 2, here: 2, exitReady: false}).text, 'CLEAR THIS ROOM · 2 HOSTILES · 1 ROOM LEFT');
   assert.deepEqual(objectiveText({routeRoomsLeft: 0, routeHostiles: 0, exitReady: true, exitMeters: 41.6}), {tone: 'go', text: 'REACH EXTRACTION · 42 M'});
 });
+test('objectiveText explains the stealth-friendly exit rule', () => {
+  assert.equal(objectiveText({routeRoomsLeft: 2, routeHostiles: 2, here: 0, exitReady: true, exitMeters: 10, unawareLeft: 2}).text, 'REACH EXTRACTION · 10 M · 2 UNAWARE LEFT BEHIND');
+  assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 3, here: 0, exitReady: false, awareLeft: 2}).text, '2 HOSTILES HUNTING YOU · KILL OR LOSE THEM');
+  assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 1, here: 0, exitReady: false, exitRoomHostiles: 1}).text, 'CLEAR THE EXTRACTION ROOM · 1 HOSTILE');
+});

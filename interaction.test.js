@@ -64,9 +64,15 @@ test('gun pickups swap the gun in hand when full and show which', () => {
   t = collectInteractables(base({pickups, hand: {weapons: [0, 1], maxSlots: 2, activeSlot: 0}})).find(x => x.kind === 'gun');
   assert.equal(t.enabled, false);
 });
-test('exit reports hostiles on the route', () => {
-  const t = collectInteractables(base({pickups: [{kind: 'exit', x: 120, y: 100, available: true}], enemies: [{alive: true, roomIndex: 2}]})).find(x => x.kind === 'exit');
-  assert.equal(t.enabled, false); assert.match(t.reason, /1 HOSTILE LEFT/); assert.equal(t.keyed, false);
+test('exit reports what keeps it locked, and lets you leave sleepers behind', () => {
+  const exit = [{kind: 'exit', x: 120, y: 100, available: true}], get = enemies => collectInteractables(base({pickups: exit, enemies})).find(x => x.kind === 'exit');
+  let t = get([{alive: true, roomIndex: 2, aware: false}]);
+  assert.equal(t.enabled, false); assert.match(t.reason, /CLEAR THE EXIT ROOM · 1 HOSTILE/); assert.equal(t.keyed, false);
+  t = get([{alive: true, roomIndex: 1, aware: true}]);
+  assert.equal(t.enabled, false); assert.match(t.reason, /1 AWARE HOSTILE/);
+  t = get([{alive: true, roomIndex: 1, aware: false}]);
+  assert.equal(t.enabled, true); assert.match(t.reason, /1 UNAWARE LEFT BEHIND/);
+  assert.equal(nearestHostileRoom({player: {x: 0, y: 0}, rooms, enemies: [{alive: true, roomIndex: 1, aware: false}]}), null, 'sleepers are not a clear-this-room target');
 });
 test('popup text and hostile room finder', () => {
   assert.equal(collectPopup('scrap', 12), '+12 SCRAP'); assert.equal(collectPopup('heal', 1), '+1 ♥'); assert.equal(collectPopup('ammo', 30), '+30 AMMO');
