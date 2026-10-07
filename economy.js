@@ -45,7 +45,15 @@ export function clearHealAmount({health, maxHealth}) {
 /** There is no passive regeneration: healing is the room-clear medkit above plus rare drops (`supplyDrop`) and SUPPLY DROPs. */
 
 /** A cleared room pays a guaranteed ammo pickup when any carried gun is running dry (the old locker, minus the shop). */
-export function clearAmmoDrop({ammoLow}) { return Boolean(ammoLow); }
+export function clearAmmoDrop({ammoLow, reserveFrac = 1}) { return Boolean(ammoLow) || reserveFrac < RESERVE_REFILL_BELOW; }
+/** A room clear also drops ammo whenever the carried guns' combined reserve is under this fraction of their maximum. */
+export const RESERVE_REFILL_BELOW = 0.5;
+/** Combined reserve / combined max reserve over the carried guns (1 when there is nothing to measure). */
+export function reserveFraction(guns) {
+  let have = 0, max = 0;
+  for (const g of guns) { have += Math.max(0, g.reserve || 0); max += Math.max(0, g.max || 0); }
+  return max > 0 ? Math.min(1, have / max) : 1;
+}
 
 /** Dedupe helper: returns true (and records the time) when `key` has not fired within `gap` seconds. */
 export function cooldownReady(map, key, now, gap) {
@@ -69,7 +77,7 @@ export function objectiveText({routeRoomsLeft, routeHostiles, here = 0, exitRead
   if (awareLeft > 0) return {tone: 'fight', text: `${awareLeft} HOSTILE${awareLeft === 1 ? '' : 'S'} HUNTING YOU · KILL OR LOSE THEM`};
   if (here > 0 && exitRoomHostiles === 0) return {tone: 'fight', text: `CLEAR THIS ROOM · ${plural(here, 'HOSTILE')} · ${rooms}`};
   if (exitRoomHostiles > 0) return {tone: 'seek', text: `CLEAR THE EXTRACTION ROOM · ${plural(exitRoomHostiles, 'HOSTILE')}`};
-  if (routeHostiles > 0) return {tone: 'seek', text: `CLEAR THE ROUTE · ${rooms}`};
+  if (routeHostiles > 0) return {tone: 'seek', text: `CLEAR THE ROUTE · ${rooms} · SIDE ROOMS OPTIONAL`};
   return {tone: 'go', text: 'REACH EXTRACTION'};
 }
 

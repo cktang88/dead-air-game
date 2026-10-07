@@ -179,17 +179,19 @@ export const ENCOUNTER_RECIPES = [
   {id:'riot-marksman', minDepth:.6, squad:['riot','sniper','chaser','gunner','riot']},
 ];
 export const SPECIALIST_TYPES = ['sniper','riot'];
+// The RIOT (frontal shield, eats a starter pistol's ammo) is a floor 2+ lesson: floor 1 never rolls it.
+export const RIOT_MIN_FLOOR = 2;
 
-export function eligibleRecipes(depth) {
+export function eligibleRecipes(depth, floor=RIOT_MIN_FLOOR) {
   const d=Number.isFinite(depth)?depth:0;
-  return ENCOUNTER_RECIPES.filter(recipe=>d>=recipe.minDepth);
+  return ENCOUNTER_RECIPES.filter(recipe=>d>=recipe.minDepth&&(floor>=RIOT_MIN_FLOOR||!recipe.squad.includes('riot')));
 }
 
-export function chooseEncounterTypes(count, seed, depth=0) {
+export function chooseEncounterTypes(count, seed, depth=0, floor=RIOT_MIN_FLOOR) {
   // Scramble first: consecutive seeds would otherwise draw near-identical first values from the LCG.
   let value=Math.imul((seed>>>0)^0x9e3779b9,2654435761)>>>0;value^=value>>>15;value=Math.imul(value,2246822519)>>>0;value^=value>>>13;
   const random=()=>{value=(Math.imul(value,1664525)+1013904223)>>>0;return value/0x100000000;};
-  const recipes=eligibleRecipes(depth);
+  const recipes=eligibleRecipes(depth,floor);
   // Specialists are the headline of later rooms: weight them x2 once unlocked.
   const weighted=recipes.flatMap(recipe=>recipe.squad.some(type=>SPECIALIST_TYPES.includes(type))?[recipe,recipe]:[recipe]);
   const recipe=weighted[Math.floor(random()*weighted.length)];

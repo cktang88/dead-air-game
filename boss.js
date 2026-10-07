@@ -24,7 +24,7 @@ export const BOSS = {
   repositionSpeed: 120,
   exposedTime: 1.5,
   exposedDamageMult: 2,
-  maxAdds: 4,
+  maxAdds: 2,
 };
 
 // LINE OF SIGHT: cover is for short breaks. After SIGHT_LOST_REPOSITION s (real time) without a clear line to you he walks
@@ -201,7 +201,7 @@ export function stepBoss(boss, dt, ctx) {
       if (boss.t <= 0) { boss.invuln = false; boss.mode = 'idle'; boss.t = .6; }
       break;
     case 'shift':
-      if (boss.t <= 0) { boss.invuln = false; boss.mode = 'idle'; boss.t = .5; out.actions.push({type: 'summon', count: boss.phase === 3 ? 3 : 2, free: true}); }
+      if (boss.t <= 0) { boss.invuln = false; boss.mode = 'idle'; boss.t = .5; out.actions.push({type: 'summon', count: boss.phase === 3 ? 2 : 1, free: true}); }
       break;
     case 'idle': {
       // Drift to keep a readable mid distance and strafe around the player.
@@ -290,7 +290,7 @@ function fire(boss, spec, ctx, out) {
   if (kind === 'fan') { out.actions.push({type: 'bullets', shots: fanShots(boss)}); boss.mode = 'recover'; boss.t = spec.recover; }
   else if (kind === 'ring') { out.actions.push({type: 'bullets', shots: ringShots(boss)}); boss.mode = 'recover'; boss.t = spec.recover; }
   else if (kind === 'summon') {
-    const room = Math.max(0, BOSS.maxAdds - (ctx.adds || 0)), count = Math.min(room, boss.phase === 3 ? 3 : 2);
+    const room = Math.max(0, BOSS.maxAdds - (ctx.adds || 0)), count = Math.min(room, boss.phase === 3 ? 2 : 1);
     if (count > 0) out.actions.push({type: 'summon', count});
     boss.mode = 'recover'; boss.t = spec.recover;
   } else if (kind === 'lob') {

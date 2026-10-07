@@ -178,7 +178,7 @@ export function setPauseScreen(visible, info = {}) {
   el.hidden = !visible;
 }
 
-export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '' }) {
+export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '', floor = 0, finalFloor = 4 }) {
   const icon = id => iconSvg(id, { size: 0 });
   const cell = (label, value, i, ico, count = null) => `<div class="end-stat" style="--i:${i}"><small>${icon(ico)}${label}</small><b${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</b></div>`;
   const bestLine = best
@@ -189,7 +189,7 @@ export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, second
     : {cls: 'dead', ico: 'status-skull', eyebrow: 'SIGNAL LOST', title: 'RUN OVER'};
   return `<div class="end-banner ${head.cls}"><span class="end-ico">${icon(head.ico)}</span><div><small>${head.eyebrow}</small><strong>${esc(head.title)}</strong>${cause && !won ? `<span class="end-cause">${esc(cause)}</span>` : ''}${boss ? '<span class="end-cause">THE BROADCAST IS YOURS</span>' : ''}</div>${isNewBest ? '<span class="badge">NEW BEST</span>' : ''}</div>
 <div class="end-grid">${cell('Rooms cleared', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, 0, 'door', rooms)}${cell('Kills', kills, 1, 'status-kills', kills)}${cell('Run time', formatClock(seconds), 2, 'status-clock')}</div>
-<div class="end-coins">${icon('pickup-coin')}<div><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span><small>Coins earned · <span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></small></div><div class="bal"><small>Safehouse balance</small><b data-count="${balance}">${balance}</b></div></div>
+<div class="end-coins">${icon('pickup-coin')}<div><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span><small>Coins earned · <span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></small></div>${floor ? `<div class="mid"><small>Reached</small><b>FLOOR ${floor}/${finalFloor}</b></div>` : ''}<div class="bal"><small>Safehouse balance</small><b data-count="${balance}">${balance}</b></div></div>
 ${bestLine}`;
 }
 

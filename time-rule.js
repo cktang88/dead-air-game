@@ -20,6 +20,40 @@ export const TIME_RULE = {
   sprintNoise: {radius: 150, every: 0.34, minRatio: 1.15},
 };
 
+// PRESSURE (the stand-still-duel fix). Stillness is for READING, not a free win: while an aware, armed enemy has line of
+// sight to you inside its reach, the world never runs slower than `floor` x real time. A 0.3 s windup then takes ~1.4 s
+// to play out (readable, but you must act); a squad that sees you keeps shooting. Breaking line of sight (cover, doors,
+// smoke), stunning or killing the watchers lets time freeze again. The floor feeds the same rate the edge meter shows.
+// attackFloor: an enemy that pins the world also THINKS (windup, aim lock, fire gap, duck) at no less than this x real time,
+// and every hostile bullet flies at no less than bulletFloor x real time, so a frozen-looking world still has a clock you can hear tick.
+export const PRESSURE = {floor: 0.22, attackFloor: 0.4, bulletFloor: 0.35, minReach: 300, meleeReach: 240, maxReach: 560};
+
+// True when this enemy pins the world rate. `dist` is its distance to the player.
+export function pressuring(e, dist, rule = PRESSURE) {
+  if (!e || !e.alive || e.type === 'boss' || e.fixed) return false;
+  if (!e.aware || !e.los || (e.stun || 0) > 0) return false;
+  const reach = e.def?.melee ? rule.meleeReach : Math.min(rule.maxReach, Math.max(rule.minReach, (e.def?.range || 0) * 1.1));
+  return dist <= reach;
+}
+export function pressureThreat(enemies, player, rule = PRESSURE) {
+  if (!player || !enemies) return false;
+  for (const e of enemies) if (e.alive && pressuring(e, Math.hypot(e.x - player.x, e.y - player.y), rule)) return true;
+  return false;
+}
+// The clock an enemy's brain runs on this frame. k scales the floor (1 normal, 0 during freeze frames, creditMult under BORROWED TIME).
+export function attackClock(worldDt, realDt, pressured, k = 1, rule = PRESSURE) {
+  if (!(worldDt > 0) || !pressured || !(realDt > 0)) return worldDt;
+  return Math.max(worldDt, realDt * rule.attackFloor * k);
+}
+export function enemyBulletDt(worldDt, realDt, k = 1, rule = PRESSURE) {
+  if (!(worldDt > 0) || !(realDt > 0)) return worldDt;
+  return Math.max(worldDt, realDt * rule.bulletFloor * k);
+}
+// Raise a world rate to the pressure floor (only when threatened and the world is actually running).
+export function pressureScale(scale, threat, rule = PRESSURE) {
+  return threat && scale > 0 ? Math.max(scale, rule.floor) : scale;
+}
+
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // Speed ratio: 0 = still, 1 = full walk speed, sprintRatio = full sprint. Returns the world time scale 0..1.

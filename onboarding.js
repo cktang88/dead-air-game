@@ -42,7 +42,7 @@ export const NAME_CARDS = Object.freeze({
   'enemy.guard': {title: 'WARDEN', line: 'shotgun: leave the red line'},
   'enemy.sniper': {title: 'MARKSMAN', line: 'long rifle: leave its lane'},
   'enemy.brute': {title: 'BRUTE', line: 'hammer: circle the heavy swing'},
-  'enemy.riot': {title: 'RIOT', line: 'shield: hit sides or back'},
+  'enemy.riot': {title: 'RIOT', line: 'FLANK IT · SHOVE OR FLASH BREAKS ITS GUARD'},
   'mech.door': {title: 'DOOR', line: 'hold E to peek'},
   'mech.sleeper': {title: 'SLEEPER', line: 'no cone · hears noise'},
   'mech.silent': {title: 'SILENT', line: 'unseen hits count double'},
@@ -70,6 +70,7 @@ export const MANUAL = Object.freeze([
   {id: 'walk', section: 'TIME', title: 'WALK', line: 'Walking lets time crawl at about a third. Sprinting runs it at full speed, and it is loud.'},
   {id: 'shot', section: 'TIME', title: 'EVERY SHOT', line: 'Each shot lets a beat of time through, so one careful shot is cheap and spraying is not.'},
   {id: 'hands', section: 'TIME', title: 'YOUR HANDS', line: 'Your aim, movement, reload and bullets never slow down. Only the world does.'},
+  {id: 'pressure', section: 'TIME', title: 'TIME PUSHES BACK', line: 'An armed enemy that sees you keeps time from freezing: the bar turns amber. Read it, then move or break line of sight.'},
   // COMBAT
   {id: 'hp', section: 'COMBAT', title: 'THREE HITS', line: 'You go down in three hits. After a hit you are briefly untouchable (the ring around you).'},
   {id: 'armor', section: 'COMBAT', title: 'ARMOR', line: 'A plate soaks damage before your health does, then it is spent.'},
@@ -91,7 +92,7 @@ export const MANUAL = Object.freeze([
   {id: 'guard', section: 'ENEMIES', title: 'WARDEN', line: 'Armored, carries a shotgun: slow and tough, longer wind-up. Keeps its distance.'},
   {id: 'sniper', section: 'ENEMIES', title: 'MARKSMAN', line: 'Long scoped rifle, hits from across the room. A lane that turns white-hot has locked on. Break the line of sight.'},
   {id: 'brute', section: 'ENEMIES', title: 'BRUTE', line: 'Huge, swings a sledgehammer, no gun. Circle it; it is open right after it swings.'},
-  {id: 'riot', section: 'ENEMIES', title: 'RIOT', line: 'Big shield and a baton: melee only. The shield covers its front. Hit the sides or back, or flash it.'},
+  {id: 'riot', section: 'ENEMIES', title: 'RIOT', line: 'Shield and baton, melee only. The shield blocks bullets: flank it, or shove or flash it.'},
   {id: 'stun', section: 'ENEMIES', title: 'STUNNED', line: 'Stars over a head mean it cannot act.'},
   {id: 'offscreen', section: 'ENEMIES', title: 'ON SCREEN ONLY', line: 'Enemies only fire at you while on screen. Chevrons point at threats off screen.'},
   // ITEMS
@@ -128,6 +129,7 @@ export function manualTriggers(ctx) {
   add('walk', ctx.speedRatio >= 0.2);
   add('shot', ctx.shots >= 1);
   add('hands', ctx.runSeconds >= 10);
+  add('pressure', !!ctx.pressure);
   add('hp', ctx.hits >= 1);
   add('armor', ctx.armor > 0);
   add('bloom', ctx.shots >= 1 && ctx.bloom > 0.08);

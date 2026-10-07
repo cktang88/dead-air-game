@@ -28,7 +28,7 @@ test('first runs get the Signal Check; returning players, finished players and d
 });
 test('name cards: every enemy type has one, order is priority, each shows once', () => {
   for (const type of Object.keys(ENEMY_TYPES)) if (type !== 'boss') assert.ok(NAME_CARDS[enemyCardId(type)], `card for ${type}`);
-  for (const [id, c] of Object.entries(NAME_CARDS)) assert.ok(c.title.length <= 10 && c.line.split(' ').length <= 6, id);
+  for (const [id, c] of Object.entries(NAME_CARDS)) assert.ok(c.title.length <= 10 && c.line.split(' ').length <= 9, id);
   const seen = new Set();
   assert.equal(nextCard(['mech.door', 'enemy.sniper'], seen).id, 'mech.door');
   seen.add('mech.door');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ammoStatus, nextLoadedSlot, ammoPickupRounds, supplyDrop, clearHealAmount, clearAmmoDrop, cooldownReady, objectiveText} from './economy.js';
+import {ammoStatus, nextLoadedSlot, ammoPickupRounds, supplyDrop, clearHealAmount, clearAmmoDrop, cooldownReady, objectiveText, reserveFraction} from './economy.js';
 
 test('ammoStatus flags dry, last mag and ok', () => {
   assert.equal(ammoStatus({mag: 0, reserve: 0, magSize: 6}), 'dry');
@@ -56,9 +56,16 @@ test('cooldownReady dedupes by key', () => {
   assert.equal(cooldownReady(m, 'a', 2.5, 2), true);
 });
 test('objectiveText walks from clearing to extraction', () => {
-  assert.equal(objectiveText({routeRoomsLeft: 3, routeHostiles: 7, here: 0, exitReady: false}).text, 'CLEAR THE ROUTE · 3 ROOMS LEFT');
+  assert.equal(objectiveText({routeRoomsLeft: 3, routeHostiles: 7, here: 0, exitReady: false}).text, 'CLEAR THE ROUTE · 3 ROOMS LEFT · SIDE ROOMS OPTIONAL');
   assert.equal(objectiveText({routeRoomsLeft: 1, routeHostiles: 2, here: 2, exitReady: false}).text, 'CLEAR THIS ROOM · 2 HOSTILES · 1 ROOM LEFT');
   assert.deepEqual(objectiveText({routeRoomsLeft: 0, routeHostiles: 0, exitReady: true, exitMeters: 41.6}), {tone: 'go', text: 'REACH EXTRACTION · 42 M'});
+});
+test('a room clear drops ammo when any gun is dry OR the combined reserve is under half', () => {
+  assert.equal(clearAmmoDrop({ammoLow: false, reserveFrac: 0.49}), true);
+  assert.equal(clearAmmoDrop({ammoLow: false, reserveFrac: 0.5}), false);
+  assert.equal(clearAmmoDrop({ammoLow: true, reserveFrac: 1}), true);
+  assert.equal(reserveFraction([{reserve: 36, max: 72}, {reserve: 0, max: 36}]), 1 / 3);
+  assert.equal(reserveFraction([]), 1);
 });
 test('objectiveText explains the stealth-friendly exit rule', () => {
   assert.equal(objectiveText({routeRoomsLeft: 2, routeHostiles: 2, here: 0, exitReady: true, exitMeters: 10, unawareLeft: 2}).text, 'REACH EXTRACTION · 10 M · 2 UNAWARE LEFT BEHIND');

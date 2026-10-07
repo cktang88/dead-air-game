@@ -197,6 +197,15 @@ test('marksman and riot are introduced later in the floor and respect their caps
   assert.ok(sawSniper&&sawRiot,'late rooms should actually roll the new types');
 });
 
+test('floor 1 never rolls a RIOT; floor 2+ can', () => {
+  let late=false;
+  for(let seed=1;seed<=400;seed++)for(let count=2;count<=5;count++){
+    for(const depth of [0,.4,.7,1])assert.ok(!chooseEncounterTypes(count,seed,depth,1).includes('riot'),`floor 1 seed ${seed}`);
+    late||=chooseEncounterTypes(count,seed,.9,2).includes('riot');
+  }
+  assert.ok(late,'floor 2 still rolls riots');
+});
+
 test('crate durability loses health per hit and never drops below zero',()=>{
   let hp=60;
   hp=damageDurability(hp,18);

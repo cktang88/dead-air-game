@@ -194,3 +194,12 @@ test('mix: music sits under the SFX, ducks when paused, follows the slider and m
   const xf = crossfadeSeconds(TRACKS.combat.bpm, 1); assert.ok(xf >= .5 && xf <= 2.4);
   assert.ok(crossfadeSeconds(85, .46) > crossfadeSeconds(85, 1));
 });
+
+test('scene machine: hunting you without line of sight does not hold combat; it relaxes to tension', () => {
+  const m = createSceneMachine();
+  assert.equal(m.update(.016, {engaged: true, sight: true}), 'combat');
+  let scene = 'combat';
+  for (let t = 0; t < 12; t += .25) scene = m.update(.25, {engaged: true, aware: true, sight: false});
+  assert.equal(scene, 'tension', 'aware but out of sight for 12 s');
+  assert.equal(m.update(.016, {engaged: true, sight: true}), 'combat', 'sight again escalates instantly');
+});

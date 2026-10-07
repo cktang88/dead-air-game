@@ -62,6 +62,7 @@ test('room roles control safe rewards and combat pressure',()=>{
   assert.equal(roomEnemyCount('elite'),2);
   assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner']),['brute','guard']);
   assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner'],.8),['brute','riot']);
+  assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner'],.8,1),['brute','guard'],'no riot elite on floor 1');
   assert.deepEqual(roomEncounterTypes('combat',['chaser','gunner']),['chaser','gunner']);
   assert.deepEqual(roomPickupKinds('elite'),['scrap','mod']);
   assert.deepEqual(roomPickupKinds('armory'),['gun']);

@@ -496,6 +496,8 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 .end-coins .big { font: 800 40px/1 var(--font-display); letter-spacing: .03em; color: var(--coin); font-variant-numeric: tabular-nums; }
 .end-coins small { display: block; font: 600 var(--fs-micro) var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--text-mid); }
 .end-coins .bal { margin-left: auto; text-align: right; }
+.end-coins .mid { margin: 0 auto; text-align: center; padding: 0 var(--s-3); } .end-coins .mid b { display: block; white-space: nowrap; margin-top: 3px; font: 800 20px/1 var(--font-display); letter-spacing: .05em; color: var(--text-hi); }
+.end-coins .mid + .bal { margin-left: 0; }
 .end-coins .bal b { display: block; font: 800 20px/1 var(--font-display); letter-spacing: .05em; color: var(--text-hi); font-variant-numeric: tabular-nums; }
 .end-best { position: relative; display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5); font: 600 var(--fs-label) var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--text-mid); background: rgba(10, 8, 16, .5); animation: stat-in .5s var(--ease-out) 1s backwards; }
 .end-best svg { width: 16px; height: 16px; fill: var(--coin); }

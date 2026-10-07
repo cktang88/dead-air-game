@@ -324,12 +324,12 @@ const ENGAGE_RANGE=520,SUSPICION_RANGE=700,SUSPICION_MIN=.2;
 export function musicSyncGame(state,dt=1/60){
   if(!state)return;
   const mode=state.mode;
-  let engaged=false,aware=false,suspicious=false,boss=false;
+  let engaged=false,aware=false,suspicious=false,boss=false,sight=false;
   if(mode==='play'&&state.player){
     for(const e of state.enemies||[]){
       if(!e.alive)continue;
       const d=Math.hypot(e.x-state.player.x,e.y-state.player.y),inRoom=e.roomIndex===state.currentRoom;
-      if(e.aware&&(inRoom||d<ENGAGE_RANGE)){engaged=true;if(e.type==='boss'&&inRoom)boss=true;}
+      if(e.aware&&(inRoom||d<ENGAGE_RANGE)){engaged=true;if(e.los||e.type==='boss')sight=true;if(e.type==='boss'&&inRoom)boss=true;}
       else if(e.aware&&d<1100)aware=true;
       else if((e.suspicion||0)>=SUSPICION_MIN&&d<SUSPICION_RANGE)suspicious=true;
     }
@@ -343,7 +343,7 @@ export function musicSyncGame(state,dt=1/60){
     if(state.extractionOpen&&!watch.extraction)musicSting('extract');
     watch.extraction=!!state.extractionOpen;
   }else{watch.extraction=false;watch.cleared=state.roomsCleared||0;scenes.reset();}
-  const scene=mode==='play'?scenes.update(paused?0:dt,{engaged,aware,suspicious,shot,boss}):scenes.scene;
+  const scene=mode==='play'?scenes.update(paused?0:dt,{engaged,aware,suspicious,shot,boss,sight}):scenes.scene;
   watch.wasFight=scene==='combat'||scene==='boss';
   watch.mode=mode;
   if(mode!=='play')setMusicTimeScale(1);          // menus, death and win screens: the tape runs at normal speed

@@ -97,12 +97,12 @@ export const COMBAT_HOLD=6,TENSION_HOLD=4,BOSS_HOLD=8,MIN_DWELL=2.5;
 export function createSceneMachine({combatHold=COMBAT_HOLD,tensionHold=TENSION_HOLD,bossHold=BOSS_HOLD,minDwell=MIN_DWELL}={}){
   let scene='explore',dwell=0,combatT=0,tensionT=0,bossT=0;
   const api={
-    /** facts: {engaged (aware enemy close), aware (any aware enemy about), suspicious, shot (player fired this frame), boss} */
-    update(dt,{engaged=false,aware=false,suspicious=false,shot=false,boss=false}={}){
+    /** facts: {engaged (aware enemy close), sight (an aware enemy has line of sight to you; hunting you blind does NOT hold combat), aware (any aware enemy about), suspicious, shot (player fired this frame), boss} */
+    update(dt,{engaged=false,aware=false,suspicious=false,shot=false,boss=false,sight=true}={}){
       const d=Math.max(0,Number.isFinite(dt)?dt:0);dwell+=d;
       const threat=engaged||aware||suspicious;
       if(boss)bossT=bossHold;else bossT=Math.max(0,bossT-d);
-      if(engaged||(shot&&threat))combatT=combatHold;else combatT=Math.max(0,combatT-d);
+      if((engaged&&sight)||(shot&&threat))combatT=combatHold;else combatT=Math.max(0,combatT-d);
       if(threat||combatT>0||bossT>0)tensionT=tensionHold;else tensionT=Math.max(0,tensionT-d);
       const want=bossT>0?'boss':combatT>0?'combat':tensionT>0?'tension':'explore';
       if(SCENE_RANK[want]>SCENE_RANK[scene]){scene=want;dwell=0;}

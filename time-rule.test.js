@@ -95,3 +95,33 @@ test('creditScale halves the world rate (walk and sprint), never raises or zeroe
   assert.ok(creditScale(0.08) <= 0.08 && creditScale(0.08) >= TIME_RULE.stillFloor);
   assert.equal(creditScale(0), 0);
 });
+
+import {PRESSURE, attackClock, enemyBulletDt, pressureScale, pressureThreat, pressuring} from './time-rule.js';
+
+const armed = (o = {}) => ({alive: true, aware: true, los: true, stun: 0, type: 'gunner', def: {range: 300}, x: 200, y: 0, ...o});
+
+test('pressure: an aware armed enemy in sight raises the world floor; nothing else does', () => {
+  near(pressureScale(0.08, true), PRESSURE.floor);
+  near(pressureScale(0.08, false), 0.08);
+  near(pressureScale(0.35, true), 0.35, 1e-9);       // walking is already above the floor
+  near(pressureScale(0, true), 0, 1e-9);             // paused stays paused
+  assert.ok(pressureThreat([armed()], {x: 0, y: 0}));
+  assert.ok(!pressureThreat([armed({los: false})], {x: 0, y: 0}), 'cover breaks the pressure');
+  assert.ok(!pressureThreat([armed({aware: false})], {x: 0, y: 0}), 'unaware sleepers never pin time');
+  assert.ok(!pressureThreat([armed({stun: 1})], {x: 0, y: 0}), 'a flashed enemy does not');
+  assert.ok(!pressureThreat([armed({x: 900})], {x: 0, y: 0}), 'out of reach');
+  assert.ok(!pressureThreat([armed({alive: false})], {x: 0, y: 0}));
+  assert.ok(!pressuring(armed({type: 'boss'}), 10), 'the boss has its own clocks');
+  assert.ok(pressuring(armed({def: {range: 26, melee: {windup: .3}}, x: 150}), 150), 'a rusher in sight pressures');
+  assert.ok(!pressuring(armed({def: {range: 26, melee: {windup: .3}}}), PRESSURE.meleeReach + 5));
+});
+
+test('pressure: attack clocks and enemy bullets never run below their floors while pressured', () => {
+  near(attackClock(0.004, 1 / 60, true), PRESSURE.attackFloor / 60);
+  near(attackClock(0.004, 1 / 60, false), 0.004, 1e-12);
+  near(attackClock(0.5, 1 / 60, true), 0.5, 1e-12);                   // already faster
+  near(attackClock(0.004, 1 / 60, true, 0), 0.004, 1e-12);             // freeze frames switch the floor off
+  assert.equal(attackClock(0, 1 / 60, true), 0, 'paused stays paused');
+  near(enemyBulletDt(0.004, 1 / 60), PRESSURE.bulletFloor / 60);
+  assert.equal(enemyBulletDt(0, 1 / 60), 0);
+});
