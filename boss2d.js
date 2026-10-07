@@ -2,6 +2,7 @@
 // type 'boss', drawBossTelegraph() runs in the telegraph pass (after lighting, so warnings stay bright).
 // Everything is drawn in world units, facing the player; no sprite sheets.
 import {ACTOR_LOOK} from './sprites2d.js';
+import {BOSS} from './boss.js';
 
 const TAU = Math.PI * 2;
 const INK = '#120d1a';
@@ -116,12 +117,31 @@ export function drawBossTelegraph(ctx, e, now) {
     }
     ctx.globalAlpha = 0.18 + 0.3 * p; ctx.strokeStyle = base; ctx.beginPath(); ctx.arc(e.x, e.y, R, 0, TAU); ctx.stroke();
   } else if (tg.kind === 'charge') {
-    const len = 430, w = 18;
+    // CHARGE: the lane is exactly the hit width. Dim and pulsing while he still tracks you, then LOCKED: solid red, bright edges,
+    // chevrons racing down the lane and an X marking where he ends up. Step sideways out of the lane.
+    const len = BOSS.chargeSpeed * BOSS.chargeTime, w = BOSS.chargeHitRadius, pulse = 0.5 + 0.5 * Math.sin(t * (locked ? 26 : 12));
     ctx.translate(e.x, e.y); ctx.rotate(ang);
-    ctx.globalAlpha = a; ctx.fillRect(0, -w, len, w * 2);
-    ctx.globalAlpha = 0.7; ctx.strokeRect(0, -w, len, w * 2);
-    ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 14);
-    for (let x = 30; x < len; x += 46) { ctx.beginPath(); ctx.moveTo(x, -8); ctx.lineTo(x + 12, 0); ctx.lineTo(x, 8); ctx.stroke(); }
+    ctx.globalAlpha = locked ? 0.22 + 0.2 * pulse : 0.08 + 0.1 * p; ctx.fillStyle = '#ff3050'; ctx.fillRect(0, -w, len, w * 2);
+    ctx.globalAlpha = locked ? 1 : 0.55; ctx.strokeStyle = locked ? '#ffffff' : '#ff8a9a'; ctx.lineWidth = locked ? 3 : 1.5; ctx.strokeRect(0, -w, len, w * 2);
+    ctx.globalAlpha = locked ? 0.95 : 0.5; ctx.strokeStyle = '#ff3050'; ctx.fillStyle = '#ff3050'; ctx.lineWidth = 2.5;
+    const slide = (t * (locked ? 180 : 60)) % 46;
+    for (let x = 20 + slide; x < len - 14; x += 46) { ctx.beginPath(); ctx.moveTo(x, -10); ctx.lineTo(x + 14, 0); ctx.lineTo(x, 10); ctx.stroke(); }
+    ctx.translate(len, 0); ctx.rotate(t * (locked ? 3 : 1)); // end-of-lane target marker
+    ctx.globalAlpha = locked ? 1 : 0.6; ctx.strokeStyle = locked ? '#ffffff' : '#ff8a9a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, w * .75, 0, TAU); ctx.moveTo(-w, 0); ctx.lineTo(w, 0); ctx.moveTo(0, -w); ctx.lineTo(0, w); ctx.stroke();
+  } else if (tg.kind === 'lob') {
+    // LOB: a marked spot that tracks you, then locks; the burst rises from THAT spot, so cover does not save you from it.
+    const at = tg.target; if (at) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * (locked ? 24 : 10)), R = 46;
+      ctx.globalAlpha = 0.18 + 0.2 * pulse * (locked ? 1 : .5); ctx.fillStyle = '#ff3050'; ctx.beginPath(); ctx.arc(at.x, at.y, R, 0, TAU); ctx.fill();
+      ctx.globalAlpha = locked ? 1 : 0.6; ctx.strokeStyle = locked ? '#ffffff' : '#ff8a9a'; ctx.lineWidth = locked ? 3 : 1.6; ctx.beginPath(); ctx.arc(at.x, at.y, R * (locked ? 1 : 1 - .25 * Math.sin(t * 8) ** 2), 0, TAU); ctx.stroke();
+      for (let i = 0; i < at.count; i++) {
+        const a2 = i * at.step, off = ((i - at.gapStart) % at.count + at.count) % at.count, safe = off < at.gap;
+        ctx.strokeStyle = safe ? '#7dffb0' : locked ? '#ffffff' : '#ff8a9a'; ctx.globalAlpha = safe ? 0.8 : locked ? 1 : 0.6; ctx.lineWidth = safe ? 1.4 : 2.4;
+        ctx.beginPath(); ctx.moveTo(at.x + Math.cos(a2) * 8, at.y + Math.sin(a2) * 8); ctx.lineTo(at.x + Math.cos(a2) * (R + (safe ? 30 : 60)), at.y + Math.sin(a2) * (R + (safe ? 30 : 60))); ctx.stroke();
+      }
+      ctx.strokeStyle = '#ff8a9a';
+      ctx.globalAlpha = 0.35; ctx.setLineDash([4, 8]); ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.quadraticCurveTo((e.x + at.x) / 2, Math.min(e.y, at.y) - 60, at.x, at.y); ctx.stroke(); ctx.setLineDash([]);
+    }
   } else if (tg.kind === 'spiral') {
     const arms = b.phase === 3 ? 3 : 2;
     ctx.globalAlpha = 0.3 + 0.5 * p;

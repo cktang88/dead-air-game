@@ -1,7 +1,7 @@
 // Glue between the pure boss brain (boss.js) and the game world. game.js builds one `g` context object:
 //   {state, spawnEnemy, findEnemySpawn, fireBullet, hitPlayer, dropPickup, freeRoomPoint, emit, toast, banner, feed, onBossBar}
 // and calls spawnBoss() when the final floor is built and updateBossEnemy() from the enemy loop.
-import {BOSS, SHOT_FEED_TIME, activateBoss, bossAmmoDropsDue, bossClockDt, bossDamageMult, bossVulnerable, createBoss, dryAmmoDropDue, stepBoss} from './boss.js';
+import {BOSS, SHOT_FEED_TIME, SIGHT_LOST_REPOSITION, activateBoss, bossAmmoDropsDue, bossClockDt, bossDamageMult, bossVulnerable, createBoss, dryAmmoDropDue, stepBoss} from './boss.js';
 import {TILE} from './catalog.js';
 
 const HEAL_AT = [.75, .38]; // medkits that ride along with two of the ammo drops (the fight is long and health does not regen)
@@ -60,14 +60,25 @@ export function updateBossEnemy(g, e, dt) {
     for (const f of bossAmmoDropsDue(e.hp / e.maxHp, given)) { given.push(f); g.dropPickup('ammo', ...g.freeRoomPoint(room), .6); if (HEAL_AT.includes(f)) g.dropPickup('heal', ...g.freeRoomPoint(room), 1); g.feed(HEAL_AT.includes(f) ? 'AMMO + MEDKIT DROPPED' : 'AMMO DROPPED', 'good'); }
     if (dryAmmoDropDue(g.playerDry?.(), now, boss.dryDropAt ?? -1e9)) { boss.dryDropAt = now; g.dropPickup('ammo', ...g.freeRoomPoint(room), .6); g.feed('OUT OF AMMO · AMMO DROPPED', 'good'); }
   }
+  // Line of sight: when cover has hidden you for a while he walks a nav path round it (boss.js sightAction), recomputed ~3x/s.
+  const los = g.los ? g.los(e.x, e.y, player.x, player.y) : true;
+  if (boss.active && !los && boss.sightLost >= SIGHT_LOST_REPOSITION - .5 && g.path && boss.mode === 'idle') {
+    boss.pathAt = (boss.pathAt ?? -1e9);
+    if (now - boss.pathAt > .3) { boss.pathAt = now; boss.route = g.path({x: e.x, y: e.y}, {x: player.x, y: player.y}); }
+  } else if (los) boss.route = null;
+  let seek;
+  if (boss.route?.length) { while (boss.route.length > 1 && Math.hypot(boss.route[0].x - e.x, boss.route[0].y - e.y) < 14) boss.route.shift(); seek = boss.route[0]; }
+  const prevMode = boss.mode;
   const beat = boss.phase === 3 ? g.musicBeat?.() : null;
-  const out = stepBoss(boss, bossDt, {boss: e, player, hpFraction: e.hp / e.maxHp, adds, rng: g.random, beat: beat || undefined});
+  const out = stepBoss(boss, bossDt, {boss: e, player, hpFraction: e.hp / e.maxHp, adds, rng: g.random, beat: beat || undefined, los, realDt: dt > 0 ? (state.frameDt || dt) : 0, seek});
+  if (boss.mode === 'telegraph' && prevMode !== 'telegraph' && (boss.pattern === 'charge' || boss.pattern === 'lob')) g.sound?.(boss.pattern === 'charge' ? 'bossCharge' : 'bossLob', e);
   e.aware = boss.active; e.face = {x: Math.cos(boss.angle), y: Math.sin(boss.angle)}; e.aim = e.face;
   e.aimTimer = boss.telegraph ? Math.max(0, boss.t) : 0; e.vis && (e.vis.aimMax = boss.total || 0);
   for (const action of out.actions) {
     if (action.type === 'bullets') {
-      for (const shot of action.shots) g.fireBullet('enemy', e.x, e.y, Math.cos(shot.angle), Math.sin(shot.angle), {speed: shot.speed, range: BOSS_BULLET.range, damage: shot.damage, color: BOSS_BULLET.color}, 1, {enemyId: e.id, damage: shot.damage, boss: true});
-      g.sound?.('enemyShot', e);
+      const from = action.from || e;
+      for (const shot of action.shots) g.fireBullet('enemy', from.x, from.y, Math.cos(shot.angle), Math.sin(shot.angle), {speed: shot.speed, range: BOSS_BULLET.range, damage: shot.damage, color: BOSS_BULLET.color}, 1, {enemyId: e.id, damage: shot.damage, boss: true});
+      g.sound?.(action.from ? 'bossLobHit' : 'enemyShot', action.from ? {...action.from} : e);
       state.shake = Math.max(state.shake, 1.4);
     } else if (action.type === 'phase') {
       state.bullets = state.bullets.filter(b => { if (b.owner === 'enemy') { if (b.body) g.removeBody(b.body); return false; } return true; });
@@ -83,7 +94,7 @@ export function updateBossEnemy(g, e, dt) {
         if (spot) { g.spawnEnemy(type, spot.x, spot.y, e.roomIndex); g.fx?.pickup(spot.x, spot.y, '#d58cff'); }
       }
     } else if (action.type === 'charge') {
-      state.shake = Math.max(state.shake, 3);
+      state.shake = Math.max(state.shake, 3); g.sound?.('bossCharge', e, true);
     } else if (action.type === 'exposed') {
       g.toast('EXPOSED · HIT HIM NOW', 900);
     }
@@ -92,7 +103,9 @@ export function updateBossEnemy(g, e, dt) {
   // converted the same way every other enemy's is).
   const wanted = Math.hypot(out.move.x, out.move.y);
   e.knock.x = e.knock.y = 0; // the Conductor is not shoved by hits (the knock never decayed on the boss branch and made him drift)
-  e.body.setLinvel({x: out.move.x, y: out.move.y}, true);
+  // Repositioning must not crawl when the world is slowed: scale the velocity up so it moves at >= 80% of real speed.
+  const reposK = boss.seek && boss.mode === 'idle' && dt > 0 ? Math.max(1, .8 * (state.frameDt || dt) / dt) : 1;
+  e.body.setLinvel({x: out.move.x * reposK, y: out.move.y * reposK}, true);
   let pos = e.body.translation();
   const room = state.rooms[e.roomIndex]; // stay inside the arena, never drift into a corridor
   if (room) {
@@ -103,7 +116,7 @@ export function updateBossEnemy(g, e, dt) {
   if (boss.mode === 'charge' && boss.t < BOSS.chargeTime - .12) {
     const vel = e.body.linvel();
     if (Math.hypot(vel.x, vel.y) < wanted * .35) boss.hitWall = true;
-    if (Math.hypot(player.x - e.x, player.y - e.y) < BOSS.radius + 10 && !e.chargeHit) { e.chargeHit = true; g.hitPlayer(BOSS.contactDamage, e.x, e.y); }
+    if (Math.hypot(player.x - e.x, player.y - e.y) < BOSS.chargeHitRadius && !e.chargeHit) { e.chargeHit = true; g.hitPlayer(BOSS.contactDamage, e.x, e.y); }
   } else if (boss.mode !== 'charge') e.chargeHit = false;
   e.shownHp += (e.hp - e.shownHp) * Math.min(1, dt * 6 + .02);
   g.onBossBar(false, e);
