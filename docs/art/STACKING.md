@@ -9,7 +9,10 @@ Files
 
 | file | what |
 | --- | --- |
-| `stack2d.js` | the engine: `VoxelGrid`, `drawStack`, baking, cache, variants, contact shadow |
+| `stack2d.js` | the engine: `VoxelGrid`, `drawStack`, cache, variants, contact shadow, worker hand-off |
+| `stack-bake.js` | the pixel work (slice bake, yaw-bucket composite, outline), DOM-free so the main thread and the worker share it |
+| `stack-worker.js` | module Worker: bakes buckets off-thread (OffscreenCanvas) and hands back ImageBitmaps |
+| `stack-warm.js` | `warmEnemy(type, elite, variant, gun)`: queues a kit's buckets for the worker when a level starts |
 | `rig2d.js` | part rig + pose functions (`humanoidPose`, `drawRig`, `solveElbow`, idle fidget hooks) |
 | `models2d.js` | the humanoid kit from a colour/style spec (`PLAYER_SPEC`, `GUNNER_SPEC`) and `gunStack(gun)` |
 | `actor-stack2d.js` | renderer glue: `isStacked(kind)`, baked flat corpses, `floorStackVariant` |
@@ -24,8 +27,12 @@ Files
    `k * layerH * STACK_TILT * px`, **edge-lit** on its upper-left rim and **edge-shaded** on its lower-right rim (light = `LIGHT` in
    `sprites2d.js`, from the upper left), then an ink outline is stamped around the composite. Lower slices are
    darker (`layerShade`: 0.72 at the floor to 1.0 at the top) and cells with nothing above them get a lighter top.
-3. Per frame a part costs **one `drawImage`** (two while flashing). Lazy bakes are budgeted (`STACK_CONFIG.bakeBudgetMs`, 2.5 ms/frame): over budget
-   the nearest already-baked angle is reused instead of hitching. The cache is capped (`STACK_CONFIG.cacheBytes`, 56 MB, LRU by model/variant).
+3. Per frame a part costs **one `drawImage`** (two while flashing). Bakes happen in a **Worker** (`stack-worker.js`, OffscreenCanvas): a missing bucket is requested (plus its +-1 neighbours)
+   and the nearest already-baked angle is drawn until it arrives, so a fight never bakes on the main thread. Only a model with nothing baked at all bakes one angle synchronously
+   (capped by `STACK_CONFIG.coldBudgetMs`). Buckets are cropped to the slices' union box (a sword arm is a sliver, not a 2R square), which halves cache memory. The cache is capped (`STACK_CONFIG.cacheBytes`, 56 MB, LRU by model/variant).
+   Without Worker/OffscreenCanvas (or `?worker=0`) the old budgeted main-thread baker runs (`STACK_CONFIG.bakeBudgetMs`, 2.5 ms/frame; over budget the nearest baked angle is reused).
+   `warmStack(model, variant)` / `warmEnemy(...)` queue every 2nd bucket of a kit at low priority so the first fight finds them baked (render2d calls it for each enemy the first time it sees it, i.e. at level start);
+   prefetch stops at `prefetchFrac` (62%) of the cache cap.
 4. Call `beginStackFrame()` once per frame before drawing (render2d does).
 
 Switch: `STACK_CONFIG.enabled` (or `?stack=0` in the URL) turns all stacked actors back into the legacy sprites;

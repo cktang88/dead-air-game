@@ -12,6 +12,7 @@ import {floorLook} from './floor-palette.js';
 import {beginStackFrame, STACK_CONFIG} from './stack2d.js';
 import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
+import {warmEnemy} from './stack-warm.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
 import {isHeavy, drawHeavy, drawHeavyCorpse, heavyMuzzle} from './heavies2d.js';
@@ -108,7 +109,7 @@ export function createRenderer(container, state) {
   const _wp = {}, _rp = {}, _rpE = {}, _sw = {}, BOSS_LOOK = {r: 24}, _rig = newRigOut(), _rigCorpse = newRigOut();
   const GHOST_TIME = 0.24;
   const vis = {ghosts: Array.from({length: 24}, () => ({on: false, pk: null, t: 0, x0: 0, y0: 0, side: 1})), fl: {x: 0, y: 0, vx: 0, vy: 0}, camX: newSpring(0), camY: newSpring(0), zoom: newSpring(0), zbase: 1, bodyAng: 0, mvAng: 0, pPhase: 0, pMv: 0, swapT: 1, lastGun: -1, prevGun: 0, fresh: true, motion: 1, flashK: 1, tick: 0, wbT: 2, hurtSat: 0, killFlash: 0, seated: false, seatFx: false, angInit: false, slow: 0, hurt: 0, dpr: 1, time: 0, flicker: 0, mouseX: 0, mouseY: 0, mouseActive: false, wasMoving: false, deadT: 0, px: null, py: null, kick: 0, attract: null, camShake: {x: 0, y: 0}};
-  const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0, actorMs: 0};
+  const stats = {frameMs: 0, drawMs: 0, frames: 0, bakeMs: 0, actorMs: 0, actorLast: 0};
   let levelReady = false;
   let vignette = null, vignetteKey = '';
 
@@ -729,6 +730,11 @@ export function createRenderer(container, state) {
   function actorGlow(r, color, base) {
     const a = base + 0.3 * vis.slow, R = r * 2.5; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.drawImage(glowSprite(color), -R, -R, R * 2, R * 2); ctx.restore();
   }
+  // queue the background bakes for an enemy's kit the first time the renderer sees it (level start / reinforcements), so the fight does not bake
+  function warmFor(e) {
+    const v = e.vis ??= {}; v.warm = 1;
+    warmEnemy(e.type, !!e.elite, e.type === 'boss' ? null : floorStackVariant(state.floor, e.type === 'chaser' || e.type === 'brute' ? 0.06 : 0.1), ENEMY_GUNS[e.type]);
+  }
   function drawEnemy(e, now) {
     if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
     const v = e.vis ??= {}, kind = kindOf(e), spr = actorSprite(kind), look = ACTOR_LOOK[kind];
@@ -1300,11 +1306,12 @@ export function createRenderer(container, state) {
     drawPickups(bp);
     // corpses first, then the living
     beginStackFrame(); const actorT0 = performance.now();
+    for (const e of state.enemies) if (e.alive && !(e.vis && e.vis.warm)) warmFor(e);
     for (const e of state.enemies) if (!e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     for (const e of state.enemies) if (e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     drawThrown();
     drawPlayer(now);
-    stats.actorMs += (performance.now() - actorT0 - stats.actorMs) * 0.1;
+    { const am = performance.now() - actorT0; stats.actorLast = am; stats.actorMs += (am - stats.actorMs) * 0.1; }
     drawEffects(bp);
     fx.drawSmoke(ctx, bp);
 

@@ -26,23 +26,22 @@
 //
 // Drawing: drawStack(ctx, model, x, y, {yaw, z, variant, flash, sx, sy, alpha}). (x, y) is the ground point under the
 // pivot, z lifts it (world units of height). Cost per call: one drawImage (two while flashing).
-import {makeCanvas, shade, tint, getSpriteScale, onSpriteScale, LIGHT, TAU} from './sprites2d.js';
+import {makeCanvas, shade, getSpriteScale, onSpriteScale, TAU} from './sprites2d.js';
+import {bakeComposite, bakeVoxSlices, spreadOrder, layerShade, voxelColor, INK_OUTLINE, bucketYaw} from './stack-bake.js';
+export {layerShade, voxelColor, INK_OUTLINE, bucketYaw};
 
 /** Screen pixels (world units) a point rises per world unit of height. The ONE camera tilt shared by every stack. */
 export const STACK_TILT = 0.72;
-export const INK_OUTLINE = '#120f18';
 
 // ---------------------------------------------------------------- pure helpers (unit tested)
 export const bucketIndex = (yaw, n) => ((Math.round(yaw / TAU * n) % n) + n) % n;
-export const bucketYaw = (i, n) => i * TAU / n;
-/** Lower slices are darker: 0.72 at the floor, 1.0 at the top. */
-export const layerShade = (zFrac) => 0.72 + 0.28 * Math.min(1, Math.max(0, zFrac));
-/** Colour of one voxel: base hex, height fraction 0..1, whether nothing sits on top of it. */
-export function voxelColor(hex, zFrac, exposed) {
-  const c = shade(hex, layerShade(zFrac));
-  return exposed ? tint(rgbToHex(c), 0.13) : c;
+/** Circular distance between two bucket indices. */
+export const bucketDist = (a, b, n) => { const d = Math.abs(a - b) % n; return Math.min(d, n - d); };
+/** The nearest baked bucket to bi (ties: the higher index) within maxD, or -1. Pure; `have(i)` says whether bucket i is baked. */
+export function nearestBucket(bi, n, have, maxD = n >> 1) {
+  for (let d = 1; d <= maxD; d++) { const a = (bi + d) % n, b = (bi - d + n) % n; if (have(a)) return a; if (have(b)) return b; }
+  return -1;
 }
-function rgbToHex(rgb) { const m = /(\d+),(\d+),(\d+)/.exec(rgb); return '#' + [m[1], m[2], m[3]].map((v) => (+v).toString(16).padStart(2, '0')).join(''); }
 
 /** Mutable voxel grid. x = front, y = right, z = up. Cells hold a palette char code (0 = empty). */
 export class VoxelGrid {
@@ -101,7 +100,6 @@ export function normalizeModel(m) {
   const rad = Math.hypot(Math.max(pivotU.x, size.w - pivotU.x), Math.max(pivotU.y, size.h - pivotU.y));
   return {id: m.id, kind: 'draw', unit, layerH, palette, size, pivot: pivotU, slices, count: slices.length ? slices[slices.length - 1].z + 1 : 0, radius: rad, height: (slices.length ? slices[slices.length - 1].z + 1 : 0) * layerH, buckets: m.buckets || 48};
 }
-
 // ---------------------------------------------------------------- scale (shared with sprites2d) and the cache
 let PX = 2;                  // device px per world unit the stacks are baked at (quantised, with hysteresis)
 const cache = new Map();     // key -> entry
@@ -111,12 +109,17 @@ export const STACK_CONFIG = {
   props: true,                            // stacked world props (cover, crates, pickups, doors); ?props=0 reverts to the painted art
   kinds: new Set(['player', 'gunner', 'guard', 'sniper', 'riot']),   // actor kinds drawn as stacks; everything else keeps the legacy sprites
   cacheBytes: 56 * 1024 * 1024,           // hard cap on baked composites
-  bakeBudgetMs: 2.5,                      // per-frame lazy bake allowance; over budget we reuse the nearest baked angle
+  bakeBudgetMs: 2.5,                      // per-frame lazy bake allowance (main-thread path); over budget we reuse the nearest baked angle
+  coldBudgetMs: 6,                        // a part with NOTHING baked yet may bake one angle here until the frame has spent this long
+  worker: true,                           // bake yaw buckets in a Worker (OffscreenCanvas); ?worker=0 bakes on the main thread
+  prefetchFrac: 0.62,                     // warmStack stops queueing buckets once the cache is this full
+  prefetchStep: 2,                        // warmStack bakes every Nth bucket up front; the rest are baked on demand (nearest baked is drawn meanwhile)
+  neighbours: 1,                          // on a demand miss also queue the +-N neighbouring buckets
 };
 try {
-  if (typeof location !== 'undefined') { const q = new URLSearchParams(location.search); if (q.get('stack') === '0') STACK_CONFIG.enabled = false; if (q.get('props') === '0') STACK_CONFIG.props = false; }
+  if (typeof location !== 'undefined') { const q = new URLSearchParams(location.search); if (q.get('stack') === '0') STACK_CONFIG.enabled = false; if (q.get('props') === '0') STACK_CONFIG.props = false; if (q.get('worker') === '0') STACK_CONFIG.worker = false; }
 } catch { /* no location */ }
-export const stackStats = {bakes: 0, bakeMs: 0, draws: 0, entries: 0, mb: 0};
+export const stackStats = {bakes: 0, bakeMs: 0, draws: 0, entries: 0, mb: 0, syncBakes: 0, workerBakes: 0, workerMs: 0, pending: 0, builds: 0, buildMs: 0, fallbacks: 0};
 const LEVELS = [1, 1.5, 2, 2.75, 3.75, 5];
 function pickLevel(px) { let best = LEVELS[0]; for (const l of LEVELS) if (Math.abs(Math.log(l / px)) < Math.abs(Math.log(best / px))) best = l; return best; }
 export function setStackScale(pxPerUnit) {
@@ -125,7 +128,10 @@ export function setStackScale(pxPerUnit) {
   const lv = pickLevel(pxPerUnit);
   if (lv !== PX) { PX = lv; clearStackCache(); }
 }
-export function clearStackCache() { cache.clear(); bytes = 0; }
+export function clearStackCache() {
+  for (const e of cache.values()) for (const b of e.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } }
+  cache.clear(); byId.clear(); bytes = 0; stackStats.pending = 0; if (worker) worker.postMessage({t: 'clear'});
+}
 onSpriteScale(setStackScale);
 { const px0 = getSpriteScale(); if (px0) PX = pickLevel(px0); }
 export const stackScale = () => PX;
@@ -144,11 +150,49 @@ const h2 = (a) => '#' + a.map((v) => Math.round(Math.max(0, Math.min(255, v))).t
 export function hexMix(a, b, t) { const p = rgb(a), q = rgb(b); return h2(p.map((v, i) => v + (q[i] - v) * t)); }
 export function hexMul(a, f) { return h2(rgb(a).map((v) => v * f)); }
 
+// ---------------------------------------------------------------- the worker (off-thread bucket baking)
+const byId = new Map();      // entry id -> entry (results come back by id)
+let worker = null, workerFailed = false, nextId = 1;
+const workerOk = () => STACK_CONFIG.worker && !workerFailed && typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined' && typeof document !== 'undefined';
+function getWorker() {
+  if (worker || !workerOk()) return worker;
+  try {
+    worker = new Worker(new URL('./stack-worker.js', import.meta.url), {type: 'module'});
+    worker.onmessage = (ev) => {
+      const m = ev.data;
+      if (m.t === 'img') {
+        const e = byId.get(m.id);
+        if (!e) { try { m.bm.close(); } catch { /* ok */ } return; }
+        e.pend[m.bi] = 0; stackStats.pending--;
+        if (e.buckets[m.bi]) { try { m.bm.close(); } catch { /* ok */ } return; }
+        e.buckets[m.bi] = m.bm; e.have++; e.cx[m.bi] = m.cx; e.cy[m.bi] = m.cy;
+        const sz = m.bm.width * m.bm.height * 4; e.size += sz; bytes += sz;
+        stackStats.bakes++; stackStats.workerBakes++; stackStats.workerMs += m.ms; stackStats.mb = bytes / 1048576;
+        if (bytes > STACK_CONFIG.cacheBytes) evict(e);
+      } else if (m.t === 'err') fail(m.message);
+    };
+    worker.onerror = (ev) => fail(ev && ev.message);
+  } catch (err) { fail(err && err.message); }
+  return worker;
+}
+function fail(msg) {
+  // never break the game over a baking worker: fall back to the main-thread baker
+  workerFailed = true; if (typeof console !== 'undefined') console.warn('[stack2d] worker disabled:', msg);
+  try { if (worker) worker.terminate(); } catch { /* ok */ }
+  worker = null;
+  for (const e of cache.values()) { e.pend.fill(0); e.wreg = false; }
+  stackStats.pending = 0;
+}
+
 function entryFor(model, variant) {
+  // fast path: the last entry this (model, variant, scale) resolved to (no string building / map lookup per part per frame)
+  let e = model._ee;
+  if (e && model._ev === variant && e.PX === PX && cache.get(e.key) === e) { e.tick = ++tickCounter; return e; }
   const key = model.id + '|' + variantKey(variant) + '|' + PX;
-  let e = cache.get(key);
-  if (!e) { e = buildEntry(model, variant, key); cache.set(key, e); stackStats.entries = cache.size; }
-  e.used = frameStart + 1; e.tick = ++tickCounter;
+  e = cache.get(key);
+  if (!e) { const t0 = now(); e = buildEntry(model, variant, key); cache.set(key, e); stackStats.entries = cache.size; stackStats.builds++; stackStats.buildMs += now() - t0; }
+  e.tick = ++tickCounter;
+  model._ee = e; model._ev = variant;
   return e;
 }
 let tickCounter = 0;
@@ -159,91 +203,61 @@ function buildEntry(model, variant, key) {
   const dzPx = n.layerH * STACK_TILT * PX;
   const R = Math.ceil(n.radius * PX) + o + 2, up = Math.ceil((n.count * dzPx)) + 1, pad = o + 1;
   const W = 2 * R + 2 * pad, H = 2 * R + up + 2 * pad;
-  const slices = [];
   const col = (hex) => (variant ? variant.fn(hex) : hex);
+  const e = {id: nextId++, key, n, model, variant, PX, W, H, R, up, pad, o, dzPx, ax: W / 2, ay: pad + up + R, cell, slices: null, vox: null, buckets: new Array(n.buckets).fill(null), pend: new Uint8Array(n.buckets), cx: new Int16Array(n.buckets), cy: new Int16Array(n.buckets), have: 0, whites: new Array(n.buckets).fill(null), tmpA: null, tmpB: null, nBuckets: n.buckets, tick: 0, size: 0, wreg: false, warm: false};
+  if (n.kind === 'vox') {
+    // the variant-mapped palette is all a baker needs besides the grid; the worker builds the slices itself
+    const palette = {};
+    for (const [k, v] of Object.entries(n.palette)) palette[k] = {c: col(v.c), emit: v.emit};
+    e.vox = {n: {grid: {w: n.grid.w, d: n.grid.d, h: n.grid.h, v: n.grid.v}, palette, count: n.count, pivot: n.pivot}, cell};
+  }
+  byId.set(e.id, e);
+  return e;
+}
+
+/** Main-thread slices (the sync baker, and procedural models, which can only be drawn here). Built lazily. */
+function slicesOf(e) {
+  if (e.slices) return e.slices;
+  const n = e.n, col = (hex) => (e.variant ? e.variant.fn(hex) : hex);
+  if (e.vox) { e.slices = bakeVoxSlices(e.vox.n, e.cell, makeCanvas); return e.slices; }
+  const slices = [];
   for (let k = 0; k < n.count; k++) {
     const zFrac = n.count > 1 ? k / (n.count - 1) : 1;
-    if (n.kind === 'vox') {
-      const s = bakeVoxSlice(n, k, zFrac, cell, col);
-      if (s) slices.push({k, cv: s, ox: n.pivot.x * cell, oy: n.pivot.y * cell});
-    } else {
-      const sl = n.slices.filter((q) => q.z === k);
-      if (!sl.length) continue;
-      const cv = makeCanvas(n.size.w * PX, n.size.h * PX), g = cv.getContext('2d');
-      g.scale(PX, PX); g.translate(n.pivot.x, n.pivot.y); g.lineJoin = 'round'; g.lineCap = 'round';
-      const c = {col: (hex) => shade(col(hex), layerShade(zFrac)), raw: col, z: k, zFrac, unit};
-      for (const q of sl) q.draw(g, c);
-      slices.push({k, cv, ox: n.pivot.x * PX, oy: n.pivot.y * PX});
-    }
+    const sl = n.slices.filter((q) => q.z === k);
+    if (!sl.length) continue;
+    const cv = makeCanvas(n.size.w * e.PX, n.size.h * e.PX), g = cv.getContext('2d');
+    g.scale(e.PX, e.PX); g.translate(n.pivot.x, n.pivot.y); g.lineJoin = 'round'; g.lineCap = 'round';
+    const c = {col: (hex) => shade(col(hex), layerShade(zFrac)), raw: col, z: k, zFrac, unit: n.unit};
+    for (const q of sl) q.draw(g, c);
+    slices.push({k, cv, ox: n.pivot.x * e.PX, oy: n.pivot.y * e.PX});
   }
-  return {key, n, model, variant, PX, W, H, R, up, pad, o, dzPx, ax: W / 2, ay: pad + up + R, slices, buckets: new Array(n.buckets).fill(null), whites: new Array(n.buckets).fill(null), tmpA: null, tmpB: null, nBuckets: n.buckets, used: 0, tick: 0, size: 0};
+  e.slices = slices;
+  return slices;
 }
 
-function bakeVoxSlice(n, k, zFrac, cell, col) {
-  const {grid} = n;
-  if (!grid.w) return null;
-  const cv = makeCanvas(grid.w * cell + 1, grid.d * cell + 1), g = cv.getContext('2d');
-  let any = false;
-  const colorOf = new Map();
-  for (let y = 0; y < grid.d; y++) {
-    let x = 0;
-    while (x < grid.w) {
-      const ch = grid.get(x, y, k);
-      if (!ch) { x++; continue; }
-      const exposed = !grid.has(x, y, k + 1);
-      const key = ch * 2 + (exposed ? 1 : 0);
-      let c = colorOf.get(key);
-      if (c === undefined) {
-        const pal = n.palette[String.fromCharCode(ch)];
-        const base = pal ? col(pal.c) : '#ff00ff';
-        c = pal && pal.emit ? base : voxelColor(base, zFrac, exposed);
-        colorOf.set(key, c);
-      }
-      let x2 = x + 1;
-      while (x2 < grid.w && grid.get(x2, y, k) === ch && (!grid.has(x2, y, k + 1)) === exposed) x2++;
-      const px0 = Math.round(x * cell), px1 = Math.round(x2 * cell), py0 = Math.round(y * cell), py1 = Math.round((y + 1) * cell);
-      g.fillStyle = c; g.fillRect(px0, py0, px1 - px0 + 0.6, py1 - py0 + 0.6);
-      any = true; x = x2;
-    }
-  }
-  return any ? cv : null;
-}
-
-const L_X = LIGHT.x > 0.3 ? 1 : 0, L_Y = LIGHT.y > 0.3 ? 1 : 0;
 function bakeBucket(e, bi) {
   const t0 = now();
-  const {W, H, ax, ay} = e;
-  const comp = makeCanvas(W, H), g = comp.getContext('2d');
-  const tmpA = e.tmpA || (e.tmpA = makeCanvas(W, H)), tmpB = e.tmpB || (e.tmpB = makeCanvas(W, H));
-  const ta = tmpA.getContext('2d'), tb = tmpB.getContext('2d');
-  const yaw = bucketYaw(bi, e.nBuckets);
-  g.imageSmoothingEnabled = true; ta.imageSmoothingEnabled = true;
-  for (const s of e.slices) {
-    const dy = Math.round(s.k * e.dzPx);
-    ta.clearRect(0, 0, W, H);
-    ta.save(); ta.translate(ax, ay - dy); ta.rotate(yaw); ta.drawImage(s.cv, -s.ox, -s.oy); ta.restore();
-    g.drawImage(tmpA, 0, 0);
-    // light-facing edge of the slice (upper-left) and its far edge (lower-right)
-    tb.globalCompositeOperation = 'source-over'; tb.clearRect(0, 0, W, H); tb.drawImage(tmpA, 0, 0);
-    tb.globalCompositeOperation = 'destination-out'; tb.drawImage(tmpA, L_X, L_Y);
-    tb.globalCompositeOperation = 'source-atop'; tb.fillStyle = 'rgba(255,248,235,0.2)'; tb.fillRect(0, 0, W, H);
-    g.drawImage(tmpB, 0, 0);
-    tb.globalCompositeOperation = 'source-over'; tb.clearRect(0, 0, W, H); tb.drawImage(tmpA, 0, 0);
-    tb.globalCompositeOperation = 'destination-out'; tb.drawImage(tmpA, -L_X, -L_Y);
-    tb.globalCompositeOperation = 'source-atop'; tb.fillStyle = 'rgba(8,5,16,0.24)'; tb.fillRect(0, 0, W, H);
-    g.drawImage(tmpB, 0, 0);
-  }
-  // outline: the silhouette stamped in 8 directions behind the composite
-  tb.globalCompositeOperation = 'source-over'; tb.clearRect(0, 0, W, H); tb.drawImage(comp, 0, 0);
-  tb.globalCompositeOperation = 'source-in'; tb.fillStyle = INK_OUTLINE; tb.fillRect(0, 0, W, H); tb.globalCompositeOperation = 'source-over';
-  const out = makeCanvas(W, H), og = out.getContext('2d'), o = e.o;
-  for (let i = 0; i < 8; i++) { const a = i * TAU / 8; og.drawImage(tmpB, Math.round(Math.cos(a) * o), Math.round(Math.sin(a) * o)); }
-  og.drawImage(comp, 0, 0);
-  e.buckets[bi] = out;
-  const sz = W * H * 4; e.size += sz; bytes += sz;
-  stackStats.bakes++; stackStats.bakeMs += now() - t0; stackStats.mb = bytes / 1048576;
+  e.slices = slicesOf(e);
+  const r = bakeComposite(makeCanvas, e, bi), out = r.cv;
+  e.buckets[bi] = out; e.have++; e.cx[bi] = r.cx; e.cy[bi] = r.cy;
+  const sz = out.width * out.height * 4; e.size += sz; bytes += sz;
+  stackStats.bakes++; stackStats.syncBakes++; stackStats.bakeMs += now() - t0; stackStats.mb = bytes / 1048576;
   if (bytes > STACK_CONFIG.cacheBytes) evict(e);
   return out;
+}
+/** Ask the worker for buckets (demand = jump the queue, lo = prefetch). Registers the entry with it first. */
+function request(e, list, lo) {
+  const w = getWorker();
+  if (!w || !e.vox) return false;
+  if (!e.wreg) {
+    const {n, cell} = e.vox;
+    w.postMessage({t: 'reg', id: e.id, W: e.W, H: e.H, ax: e.ax, ay: e.ay, o: e.o, dzPx: e.dzPx, nBuckets: e.nBuckets, vox: {n, cell}});
+    e.wreg = true;
+  }
+  const out = [];
+  for (const bi of list) if (!e.buckets[bi] && !e.pend[bi]) { e.pend[bi] = 1; stackStats.pending++; out.push(bi); }
+  if (out.length) w.postMessage({t: 'bake', id: e.id, list: out, lo});
+  return true;
 }
 function whiteOf(e, bi, img, color) {
   const key = bi;
@@ -257,19 +271,38 @@ function whiteOf(e, bi, img, color) {
 }
 function evict(keep) {
   const list = [...cache.values()].filter((v) => v !== keep).sort((a, b) => a.tick - b.tick);
-  for (const v of list) { if (bytes <= STACK_CONFIG.cacheBytes * 0.7) break; bytes -= v.size; cache.delete(v.key); }
+  const dropped = [];
+  for (const v of list) {
+    if (bytes <= STACK_CONFIG.cacheBytes * 0.7) break;
+    bytes -= v.size; cache.delete(v.key); byId.delete(v.id); dropped.push(v.id);
+    for (const p of v.pend) if (p) stackStats.pending--;
+    if (v.model._ee === v) v.model._ee = null;
+    for (const b of v.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } }
+  }
+  if (dropped.length && worker) worker.postMessage({t: 'drop', ids: dropped});
   stackStats.entries = cache.size;
 }
 
+/**
+ * The image to draw for bucket bi, or null (nothing baked at all and nothing can be baked this frame). A missing bucket is requested
+ * from the worker (plus its neighbours) and the nearest baked angle is drawn meanwhile; without a worker the old budgeted sync bake runs.
+ */
 function bucketImage(e, bi) {
-  let img = e.buckets[bi];
-  if (img) return {img, bi};
-  // over the per-frame bake budget: reuse the nearest baked angle instead of hitching
-  if (now() - frameStart > STACK_CONFIG.bakeBudgetMs) {
-    const n = e.nBuckets;
-    for (let d = 1; d <= n >> 1; d++) { const a = e.buckets[(bi + d) % n], b = e.buckets[(bi - d + n) % n]; if (a) return {img: a, bi: (bi + d) % n}; if (b) return {img: b, bi: (bi - d + n) % n}; }
+  const img = e.buckets[bi];
+  if (img) { _r.bi = bi; return img; }
+  const n = e.nBuckets;
+  if (e.vox && request(e, [bi], false)) {
+    const nb = STACK_CONFIG.neighbours;
+    if (nb > 0) { const l = []; for (let d = 1; d <= nb; d++) l.push((bi + d) % n, (bi - d + n) % n); request(e, l, true); }
+    if (e.have) { const j = nearestBucket(bi, n, (i) => !!e.buckets[i]); if (j >= 0) { stackStats.fallbacks++; _r.bi = j; return e.buckets[j]; } }
+    // cold entry: nothing to show yet. Bake this one angle here so a part never vanishes (only the hard cap stops it: a whole squad
+    // appearing on one frame must not take the frame down; the rest pop in as the worker's buckets arrive)
+    if (now() - frameStart > STACK_CONFIG.coldBudgetMs) return null;
+    _r.bi = bi; return bakeBucket(e, bi);
   }
-  return {img: bakeBucket(e, bi), bi};
+  // main-thread baking: over the per-frame budget reuse the nearest baked angle instead of hitching
+  if (now() - frameStart > STACK_CONFIG.bakeBudgetMs && e.have) { const j = nearestBucket(bi, n, (i) => !!e.buckets[i]); if (j >= 0) { _r.bi = j; return e.buckets[j]; } }
+  _r.bi = bi; return bakeBucket(e, bi);
 }
 
 /** Bakes every yaw bucket of a model now (loading screens / idle). Returns the number of buckets baked. */
@@ -278,8 +311,20 @@ export function prebake(model, variant, count) {
   for (let i = 0; i < e.nBuckets && (count === undefined || c < count); i++) if (!e.buckets[i]) { bakeBucket(e, i); c++; }
   return c;
 }
+/**
+ * Queues a model's yaw buckets for the background baker (every STACK_CONFIG.prefetchStep-th one, spread round the circle) so the
+ * first fight does not bake. A no-op without a worker or when the cache is already prefetchFrac full. Safe to call every frame.
+ */
+export function warmStack(model, variant, step = STACK_CONFIG.prefetchStep) {
+  if (!STACK_CONFIG.enabled || !model || !workerOk()) return false;
+  const e = entryFor(model, variant);
+  if (e.warm || !e.vox) return false;
+  if (bytes > STACK_CONFIG.cacheBytes * STACK_CONFIG.prefetchFrac) return false;
+  e.warm = true;
+  return request(e, spreadOrder(e.nBuckets, step), true);
+}
 
-const _r = {img: null, bi: 0};
+const _r = {bi: 0};
 /**
  * Draws a stack. (x, y) = ground point under the pivot, opts.z = extra height in world units, opts.yaw = facing.
  * opts: {yaw, z, variant, flash (0..1 white overlay), flashColor, sx, sy (squash about the pivot), alpha}
@@ -287,20 +332,21 @@ const _r = {img: null, bi: 0};
 export function drawStack(ctx, model, x, y, opts = {}) {
   const e = entryFor(model, opts.variant);
   const yaw = opts.yaw || 0, bi = bucketIndex(yaw, e.nBuckets);
-  const r = bucketImage(e, bi), img = r.img;
+  const img = bucketImage(e, bi);
+  if (!img) return;
   const inv = 1 / e.PX, z = opts.z || 0, sx = opts.sx ?? 1, sy = opts.sy ?? 1, alpha = opts.alpha ?? 1;
-  const gy = y - z * STACK_TILT;
+  const gy = y - z * STACK_TILT, bj = _r.bi, ox = (e.ax - e.cx[bj]) * inv, oy = (e.ay - e.cy[bj]) * inv;
   stackStats.draws++;
   const a0 = ctx.globalAlpha;
   if (alpha !== 1) ctx.globalAlpha = a0 * alpha;
   if (sx !== 1 || sy !== 1) {
     ctx.save(); ctx.translate(x, gy); ctx.scale(sx, sy);
-    ctx.drawImage(img, -e.ax * inv, -e.ay * inv, img.width * inv, img.height * inv);
-    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, r.bi, img, opts.flashColor), -e.ax * inv, -e.ay * inv, img.width * inv, img.height * inv); }
+    ctx.drawImage(img, -ox, -oy, img.width * inv, img.height * inv);
+    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, bj, img, opts.flashColor), -ox, -oy, img.width * inv, img.height * inv); }
     ctx.restore();
   } else {
-    ctx.drawImage(img, x - e.ax * inv, gy - e.ay * inv, img.width * inv, img.height * inv);
-    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, r.bi, img, opts.flashColor), x - e.ax * inv, gy - e.ay * inv, img.width * inv, img.height * inv); }
+    ctx.drawImage(img, x - ox, gy - oy, img.width * inv, img.height * inv);
+    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, bj, img, opts.flashColor), x - ox, gy - oy, img.width * inv, img.height * inv); }
   }
   ctx.globalAlpha = a0;
 }

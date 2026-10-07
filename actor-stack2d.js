@@ -28,7 +28,8 @@ const floorVariants = new Map();
 /** A subtle palette variant that leans every stacked part towards the floor's accent (null = untinted). Cached per floor. */
 export function floorStackVariant(floor, amount = 0.1) {
   const look = floorLook(floor);
-  let v = floorVariants.get(look.id);
-  if (!v) floorVariants.set(look.id, v = tintVariant('floor-' + look.id, look.accent, amount));
+  const vk = look.id + ':' + amount;
+  let v = floorVariants.get(vk);
+  if (!v) floorVariants.set(vk, v = tintVariant('floor-' + look.id, look.accent, amount));
   return v;
 }
