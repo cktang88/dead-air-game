@@ -74,3 +74,33 @@ export function operatorLines(ctx) {
 }
 
 export const causeName = type => CAUSE_NAMES[type] || 'unknown';
+
+// ---------------------------------------------------------------------------------------------------- field tapes
+// Hidden TAPES lying in odd corners (secrets.js planTape) and behind cracked walls. Pure flavour: playing one shows the
+// transmission as a subtitle while the screen flickers into test-card colours. They never touch balance.
+export const FIELD_TAPES = [
+  {id: 'f01', title: 'TAPE · SIDE A', text: 'Test, test. If the red light is on, I am still broadcasting. If it is off, I am talking to myself again.'},
+  {id: 'f02', title: 'TAPE · BREAK ROOM', text: 'Somebody keeps winding every clock to 3:12. I asked why. They said it is the only time that stayed true.'},
+  {id: 'f03', title: 'TAPE · FLOOR 2', text: 'Counting station on the next channel. A woman reads numbers. At nine she stops and breathes. Then it starts over.'},
+  {id: 'f04', title: 'TAPE · NIGHT SHIFT', text: 'Left my coffee on the desk when the doors sealed. It was still hot yesterday. I do not think that is the strange part.'},
+  {id: 'f05', title: 'TAPE · REQUEST LINE', text: 'A listener called in. Asked us to play something slow. Nobody had the heart to tell her what the building had become.'},
+  {id: 'f06', title: 'TAPE · LOCKER 9', text: 'If you found this, you looked in the corners. Good. The ones who only look at the doors never learn anything.'},
+  {id: 'f07', title: 'TAPE · STATION ID', text: 'This is the Meridian Relay. We are not currently on the air. Please do not adjust your set. Please do not adjust yourself.'},
+];
+export const fieldTapeFor = (seed = 0, floor = 1) => FIELD_TAPES[Math.abs(Math.floor(seed) + floor * 3) % FIELD_TAPES.length];
+
+// What the operator murmurs when the runner checks the radio after standing still a while: short, cryptic, in-world.
+export const RADIO_MUTTERS = [
+  'kshh... still there?',
+  '...hold the line...',
+  'copy. ...copy?',
+  '...it is 03:12...',
+  'nine... eight... kshh',
+  '...do not stop listening...',
+  'who is on this channel',
+  '...stand by... stand by...',
+  'kkk-chhh... runner?',
+  '...I can hear you breathing...',
+];
+export const RARE_MUTTER = 'You can stop now. Nobody is coming. ...Keep standing there if you like.';
+export const radioMutter = (seed = 0) => RADIO_MUTTERS[Math.abs(Math.floor(seed)) % RADIO_MUTTERS.length];

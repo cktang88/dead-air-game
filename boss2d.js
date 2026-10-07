@@ -33,6 +33,7 @@ export function drawBoss(ctx, e, now) {
   aura.addColorStop(0, col + (dead ? '22' : '66')); aura.addColorStop(1, col + '00');
   ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(0, 0, 52, 0, TAU); ctx.fill();
   ctx.rotate(ang);
+  if (v.bowT > 0) { const k = Math.sin(Math.PI * Math.max(0, Math.min(1, 1 - v.bowT / 2.4))); ctx.translate(5 * k, 0); ctx.scale(1 - 0.16 * k, 1 + 0.04 * k); }   // the easter-egg bow (easter-game.js): he dips his head
   // coat tails
   ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(-34 - Math.sin(t * 3) * 3 - (charging ? 8 : 0), -9); ctx.lineTo(-24, 0); ctx.lineTo(-34 - Math.cos(t * 3) * 3 - (charging ? 8 : 0), 9); ctx.lineTo(-6, 15); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#2a1230'; ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(-30, -8); ctx.lineTo(-22, 0); ctx.lineTo(-30, 8); ctx.lineTo(-6, 13); ctx.closePath(); ctx.fill();
