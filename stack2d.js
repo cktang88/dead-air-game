@@ -110,7 +110,7 @@ export const STACK_CONFIG = {
   kinds: new Set(['player', 'gunner', 'guard', 'sniper', 'riot']),   // actor kinds drawn as stacks; everything else keeps the legacy sprites
   cacheBytes: 56 * 1024 * 1024,           // hard cap on baked composites
   bakeBudgetMs: 2.5,                      // per-frame lazy bake allowance (main-thread path); over budget we reuse the nearest baked angle
-  coldBudgetMs: 6,                        // a part with NOTHING baked yet may bake one angle here until the frame has spent this long
+  coldBudgetMs: 8,                        // a part with NOTHING baked yet may bake one angle here until the frame has spent this long
   worker: true,                           // bake yaw buckets in a Worker (OffscreenCanvas); ?worker=0 bakes on the main thread
   prefetchFrac: 0.62,                     // warmStack stops queueing buckets once the cache is this full
   prefetchStep: 2,                        // warmStack bakes every Nth bucket up front; the rest are baked on demand (nearest baked is drawn meanwhile)
@@ -160,15 +160,18 @@ function getWorker() {
     worker = new Worker(new URL('./stack-worker.js', import.meta.url), {type: 'module'});
     worker.onmessage = (ev) => {
       const m = ev.data;
-      if (m.t === 'img') {
-        const e = byId.get(m.id);
-        if (!e) { try { m.bm.close(); } catch { /* ok */ } return; }
-        e.pend[m.bi] = 0; stackStats.pending--;
-        if (e.buckets[m.bi]) { try { m.bm.close(); } catch { /* ok */ } return; }
-        e.buckets[m.bi] = m.bm; e.have++; e.cx[m.bi] = m.cx; e.cy[m.bi] = m.cy;
-        const sz = m.bm.width * m.bm.height * 4; e.size += sz; bytes += sz;
-        stackStats.bakes++; stackStats.workerBakes++; stackStats.workerMs += m.ms; stackStats.mb = bytes / 1048576;
-        if (bytes > STACK_CONFIG.cacheBytes) evict(e);
+      if (m.t === 'imgs') {
+        for (const r of m.list) {
+          const e = byId.get(r.id);
+          if (!e) { try { r.bm.close(); } catch { /* ok */ } continue; }
+          e.pend[r.bi] = 0; stackStats.pending--;
+          if (e.buckets[r.bi]) { try { r.bm.close(); } catch { /* ok */ } continue; }
+          e.buckets[r.bi] = r.bm; e.have++; e.cx[r.bi] = r.cx; e.cy[r.bi] = r.cy;
+          const sz = r.bm.width * r.bm.height * 4; e.size += sz; bytes += sz;
+          stackStats.bakes++; stackStats.workerBakes++; stackStats.workerMs += r.ms;
+          if (bytes > STACK_CONFIG.cacheBytes) evict(e);
+        }
+        stackStats.mb = bytes / 1048576;
       } else if (m.t === 'err') fail(m.message);
     };
     worker.onerror = (ev) => fail(ev && ev.message);
@@ -204,7 +207,7 @@ function buildEntry(model, variant, key) {
   const R = Math.ceil(n.radius * PX) + o + 2, up = Math.ceil((n.count * dzPx)) + 1, pad = o + 1;
   const W = 2 * R + 2 * pad, H = 2 * R + up + 2 * pad;
   const col = (hex) => (variant ? variant.fn(hex) : hex);
-  const e = {id: nextId++, key, n, model, variant, PX, W, H, R, up, pad, o, dzPx, ax: W / 2, ay: pad + up + R, cell, slices: null, vox: null, buckets: new Array(n.buckets).fill(null), pend: new Uint8Array(n.buckets), cx: new Int16Array(n.buckets), cy: new Int16Array(n.buckets), have: 0, whites: new Array(n.buckets).fill(null), tmpA: null, tmpB: null, nBuckets: n.buckets, tick: 0, size: 0, wreg: false, warm: false};
+  const e = {id: nextId++, key, n, model, variant, PX, W, H, R, up, pad, o, dzPx, ax: W / 2, ay: pad + up + R, cell, slices: null, vox: null, buckets: new Array(n.buckets).fill(null), pend: new Uint8Array(n.buckets), cx: new Int16Array(n.buckets), cy: new Int16Array(n.buckets), have: 0, dem: 0, whites: new Array(n.buckets).fill(null), tmpA: null, tmpB: null, nBuckets: n.buckets, tick: 0, size: 0, wreg: false, warm: false};
   if (n.kind === 'vox') {
     // the variant-mapped palette is all a baker needs besides the grid; the worker builds the slices itself
     const palette = {};
@@ -291,9 +294,11 @@ function bucketImage(e, bi) {
   const img = e.buckets[bi];
   if (img) { _r.bi = bi; return img; }
   const n = e.nBuckets;
+  const fresh = !e.pend[bi];
   if (e.vox && request(e, [bi], false)) {
     const nb = STACK_CONFIG.neighbours;
-    if (nb > 0) { const l = []; for (let d = 1; d <= nb; d++) l.push((bi + d) % n, (bi - d + n) % n); request(e, l, true); }
+    if (fresh) e.dem++;   // a model only ever seen at one angle (props) does not get its neighbours baked
+    if (nb > 0 && e.dem > 1) { const l = []; for (let d = 1; d <= nb; d++) l.push((bi + d) % n, (bi - d + n) % n); request(e, l, true); }
     if (e.have) { const j = nearestBucket(bi, n, (i) => !!e.buckets[i]); if (j >= 0) { stackStats.fallbacks++; _r.bi = j; return e.buckets[j]; } }
     // cold entry: nothing to show yet. Bake this one angle here so a part never vanishes (only the hard cap stops it: a whole squad
     // appearing on one frame must not take the frame down; the rest pop in as the worker's buckets arrive)
@@ -337,17 +342,13 @@ export function drawStack(ctx, model, x, y, opts = {}) {
   const inv = 1 / e.PX, z = opts.z || 0, sx = opts.sx ?? 1, sy = opts.sy ?? 1, alpha = opts.alpha ?? 1;
   const gy = y - z * STACK_TILT, bj = _r.bi, ox = (e.ax - e.cx[bj]) * inv, oy = (e.ay - e.cy[bj]) * inv;
   stackStats.draws++;
+  // squash is applied to the destination rectangle (same result as save/translate/scale/restore, minus the state churn)
+  const dx = x - ox * sx, dy = gy - oy * sy, dw = img.width * inv * sx, dh = img.height * inv * sy;
+  if (alpha === 1 && !(opts.flash > 0)) { ctx.drawImage(img, dx, dy, dw, dh); return; }
   const a0 = ctx.globalAlpha;
   if (alpha !== 1) ctx.globalAlpha = a0 * alpha;
-  if (sx !== 1 || sy !== 1) {
-    ctx.save(); ctx.translate(x, gy); ctx.scale(sx, sy);
-    ctx.drawImage(img, -ox, -oy, img.width * inv, img.height * inv);
-    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, bj, img, opts.flashColor), -ox, -oy, img.width * inv, img.height * inv); }
-    ctx.restore();
-  } else {
-    ctx.drawImage(img, x - ox, gy - oy, img.width * inv, img.height * inv);
-    if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, bj, img, opts.flashColor), x - ox, gy - oy, img.width * inv, img.height * inv); }
-  }
+  ctx.drawImage(img, dx, dy, dw, dh);
+  if (opts.flash > 0) { ctx.globalAlpha = ctx.globalAlpha * Math.min(1, opts.flash); ctx.drawImage(whiteOf(e, bj, img, opts.flashColor), dx, dy, dw, dh); }
   ctx.globalAlpha = a0;
 }
 

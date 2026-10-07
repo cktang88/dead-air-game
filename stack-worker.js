@@ -5,7 +5,7 @@
 //   {t:'reg', id, W, H, ax, ay, o, dzPx, nBuckets, slices: [{k, bm, ox, oy}]}   procedural model: slices are ImageBitmaps
 //   {t:'bake', id, list: [bucket...], lo: true|false}                            demand (lo = false) or prefetch (lo = true)
 //   {t:'drop', ids: [id...]}   {t:'clear'}
-// worker -> main: {t:'img', id, bi, bm, cx, cy, ms}
+// worker -> main: {t:'imgs', list: [{id, bi, bm, cx, cy, ms}]} (bm is an ImageBitmap, transferred)
 import {bakeComposite, bakeVoxSlices} from './stack-bake.js';
 
 const mk = (w, h) => new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
@@ -26,6 +26,8 @@ function ensure(e) {
 async function pump() {
   if (running) return;
   running = true;
+  let batch = [];
+  const flush = () => { if (batch.length) { postMessage({t: 'imgs', list: batch}, batch.map((r) => r.bm)); batch = []; } };
   while (hi.length || lo.length) {
     const q = hi.length ? hi : lo;
     const job = q.shift(), e = entries.get(job.id);
@@ -36,10 +38,13 @@ async function pump() {
       const r = bakeComposite(mk, e, job.bi);
       e.done[job.bi] = 1;
       const bm = r.cv.transferToImageBitmap ? r.cv.transferToImageBitmap() : null;
-      if (bm) postMessage({t: 'img', id: job.id, bi: job.bi, bm, cx: r.cx, cy: r.cy, ms: performance.now() - t0}, [bm]);
+      if (bm) batch.push({id: job.id, bi: job.bi, bm, cx: r.cx, cy: r.cy, ms: performance.now() - t0});
     } catch (err) { postMessage({t: 'err', message: String(err && err.message || err)}); }
+    // demand results go back at once; prefetch results are batched (fewer messages for the main thread to unpack)
+    if (q === hi || batch.length >= 8 || !(hi.length || lo.length)) flush();
     await yieldNow();   // let new demand requests (and drops) in between bakes
   }
+  flush();
   running = false;
 }
 

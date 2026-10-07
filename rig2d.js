@@ -332,18 +332,23 @@ function limbPal(kit, variant) {
   return p;
 }
 const R_UP = 1.3, R_EL = 1.1, R_WR = 0.85;
+/** Adds a tapered capsule (circle r0 at A, circle r1 at B, tangent hull) to the current path. */
+export function capsule(ctx, ax, ay, r0, bx, by, r1) {
+  const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+  if (L < 1e-4 || L <= Math.abs(r0 - r1)) { const big = r0 >= r1; ctx.moveTo((big ? ax + r0 : bx + r1), (big ? ay : by)); ctx.arc(big ? ax : bx, big ? ay : by, big ? r0 : r1, 0, TAU); ctx.closePath(); return; }
+  const th = Math.atan2(dy, dx), al = Math.acos((r0 - r1) / L);
+  ctx.moveTo(ax + Math.cos(th + al) * r0, ay + Math.sin(th + al) * r0);
+  ctx.arc(ax, ay, r0, th + al, th + TAU - al);
+  ctx.arc(bx, by, r1, th - al, th + al);
+  ctx.closePath();
+}
 function drawLimb(ctx, x, y, it, anchorZ, variant, flash) {
   const q = it.p, pal = limbPal(it.kit, variant), T = STACK_TILT;
   const sx = x + q[0], sy = y + q[1] - (q[2] - anchorZ) * T, ex = x + q[3], ey = y + q[4] - (q[5] - anchorZ) * T, hx = x + q[6], hy = y + q[7] - (q[8] - anchorZ) * T;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const seg = (ax, ay, bx, by, r0, r1, col, grow) => {
-    const N = 5;
-    for (let i = 0; i < N; i++) {
-      const u0 = i / N, u1 = (i + 1) / N, r = (r0 + (r1 - r0) * (u0 + u1) / 2) + grow;
-      ctx.lineWidth = r * 2; ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(ax + (bx - ax) * u0, ay + (by - ay) * u0); ctx.lineTo(ax + (bx - ax) * u1, ay + (by - ay) * u1); ctx.stroke();
-    }
-  };
-  seg(sx, sy, ex, ey, R_UP, R_EL, pal.ink, 0.38); seg(ex, ey, hx, hy, R_EL, R_WR, pal.ink, 0.38);
+  // one filled capsule per bone (radius tapering r0 -> r1) instead of five stroked sub-segments: same silhouette, ~1/6 of the path ops
+  const seg = (ax, ay, bx, by, r0, r1, col, grow) => { ctx.fillStyle = col; ctx.beginPath(); capsule(ctx, ax, ay, r0 + grow, bx, by, r1 + grow); ctx.fill(); };
+  ctx.fillStyle = pal.ink; ctx.beginPath(); capsule(ctx, sx, sy, R_UP + 0.38, ex, ey, R_EL + 0.38); capsule(ctx, ex, ey, R_EL + 0.38, hx, hy, R_WR + 0.38); ctx.fill();
   seg(sx, sy, ex, ey, R_UP, R_EL, pal.sleeve, 0); seg(ex, ey, hx, hy, R_EL, R_WR, pal.fore, 0);
   // elbow pad and a soft top highlight so the limb reads round
   ctx.fillStyle = pal.pad; ctx.beginPath(); ctx.arc(ex, ey, R_EL * 0.8, 0, TAU); ctx.fill();
