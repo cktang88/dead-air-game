@@ -34,12 +34,12 @@ const bodyRadius = e => Math.min(e.radius ?? 8, 13) + 1;
 
 // Per-type tuning. Times are scaled seconds.
 export const PROFILES = {
-  chaser: {dodge: 0.55, react: [0.1, 0.2], alertRadius: 240},
-  gunner: {dodge: 0.5, react: [0.12, 0.25], windup: 0.28, fireGap: [0.6, 1.2], duck: [0.8, 1.7], burst: [1, 2], aimMul: 1, alertRadius: 280},
-  guard: {dodge: 0.3, react: [0.15, 0.3], windup: 0.36, fireGap: [0.9, 1.6], duck: [1.2, 2.4], burst: [1, 1], aimMul: 0.85, alertRadius: 280},
-  sniper: {dodge: 0.35, react: [0.2, 0.4], windup: 0.9, lockTime: 0.3, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
-  riot: {dodge: 0.02, react: [0.15, 0.3], alertRadius: 240},
-  brute: {dodge: 0.08, react: [0.15, 0.3], alertRadius: 220, chargeWindup: 0.36, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.6, 2.6], recover: 0.9},
+  chaser: {dodge: 0.55, react: [0.05, 0.1], alertRadius: 240},
+  gunner: {dodge: 0.5, react: [0.05, 0.1], windup: 0.28, fireGap: [0.5, 1.0], duck: [0.8, 1.7], burst: [1, 2], aimMul: 1, alertRadius: 280},
+  guard: {dodge: 0.3, react: [0.08, 0.15], windup: 0.36, fireGap: [0.9, 1.6], duck: [1.2, 2.4], burst: [1, 1], aimMul: 0.85, alertRadius: 280},
+  sniper: {dodge: 0.35, react: [0.12, 0.2], windup: 0.9, lockTime: 0.3, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
+  riot: {dodge: 0.02, react: [0.08, 0.15], alertRadius: 240},
+  brute: {dodge: 0.08, react: [0.08, 0.15], alertRadius: 220, chargeWindup: 0.36, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.6, 2.6], recover: 0.9},
 };
 const SIGHT_RANGE = 440;   // aware enemies see 360 degrees out to this range; UNAWARE ones only see their cone (stealth.js)
 const FORGET_AFTER = 14;
@@ -362,7 +362,7 @@ function fireReady(c) {
   if (world.fireAllowed && !world.fireAllowed(e)) return false;
   // Token limit: only a few enemies may be winding up or have just fired; starts are staggered.
   const squad = living(world, e).filter(o => o.ai?.aware);
-  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 4 : 3);
+  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 5 : 3);
   const active = squad.filter(o => o.ai.windup > 0 || o.ai.sinceFire < 0.3).length;
   if (active >= maxFiring) return false;
   if (squad.some(o => o.ai.sinceStart < 0.3)) return false;
