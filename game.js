@@ -20,7 +20,7 @@ import {collectTape, operatorLines, causeName} from './story.js';
 import {interferenceStats, toggleInterference} from './interference.js';
 import {spawnBoss, updateBossEnemy, bossDamageFor, bossLights, bossCamShift} from './boss-fight.js';
 import {BOSS_ROOM_NAME} from './boss.js';
-import {BOSS} from './boss.js';
+import {BOSS,BOSS_BULLET_FLOOR} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -411,7 +411,7 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   // shooter's centre (ox,oy) so a muzzle poking through a wall cannot let a round slip past it.
   const start=owner==='player'?muzzlePoint(x,y,dx,dy,gun):{x:x+dx*13,y:y+dy*13};
   const color=owner==='player'?gun.color:0xff6a64;
-  const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'&&!projectile.lob?weaponPenetration(gun,mod):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.lob?'lob':projectile.style||null,lob:projectile.lob?gun.lob:null,missed:false};
+  const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'&&!projectile.lob?weaponPenetration(gun,mod):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.lob?'lob':projectile.style||null,lob:projectile.lob?gun.lob:null,missed:false,boss:!!projectile.boss};
   if(owner==='player'){const f=freqStats(state.freq),sx=state.shotExtra||{};bullet.burn=stats.burn;bullet.stun=stats.stun;bullet.maxBounces=f.ricochet+stats.bounces;bullet.bounces=0;bullet.bounceSeek=f.bounceSeek;bullet.penetration={...bullet.penetration,enemies:bullet.penetration.enemies+f.pierce+(sx.pierce||0),crates:bullet.penetration.crates+(f.crateThru?9:0)};bullet.homing=f.homing;bullet.homingRange=f.homingRange||280;bullet.damage*=state.shotDamageMult;
     if(!projectile.noShot){bullet.power=sx.power||1;bullet.rageBlast=sx.rageBlast||0;if(state.shotGroup){bullet.shot=state.shotGroup;state.shotGroup.n++;}}}
   if(owner==='player')bullet.sneak=new Map(state.enemies.filter(e=>e.alive&&!e.aware&&e.type!=='boss').map(e=>[e,{x:e.face?.x??1,y:e.face?.y??0,asleep:e.posture==='sleep'}]));// stealth: who was unaware (and facing where) when the trigger was pulled; the shot's own noise must not cancel a sneak hit
@@ -475,6 +475,7 @@ function playerShove(){
   for(const {enemy,dir} of hits){
     const out=shoveOutcome({type:enemy.type,hp:enemy.hp,aware:!!enemy.aware,asleep:enemy.posture==='sleep'&&!enemy.aware,elite:!!enemy.elite,facing:enemy.face,dir,shieldFacing:enemy.def.shield?enemy.shieldFacing:null});
     if(out.kind==='ignored'){view.fx.spark(enemy.x,enemy.y,Math.atan2(-dir.y,-dir.x),5,1);continue;}
+    if(enemy.type==='boss'){const d=bossDamageFor(enemy,out.damage);loud=true;enemy.stun=0;if(d>0){enemy.hp-=d;view.fx.hitEnemy(enemy,d,dir.x,dir.y,enemy.hp<=0);view.fx.floater(enemy.x,enemy.y-34,out.label,'#ffd27a',14,1.1);state.shake=Math.max(state.shake,3);state.hitstop=Math.max(state.hitstop,.05);if(enemy.hp<=0)killEnemy(enemy,{vx:dir.x*300,vy:dir.y*300,damage:30,owner:'shove'});else playHit();}else view.fx.spark(enemy.x,enemy.y,Math.atan2(-dir.y,-dir.x),5,1);continue;}
     if(out.kind!=='takedown')loud=true;
     enemy.stun=Math.max(enemy.stun||0,out.stagger);enemy.knock.x=dir.x*out.knock;enemy.knock.y=dir.y*out.knock;
     if(out.kind==='blocked'){enemy.shieldFlash=.28;playShieldBlock({distance:distance(enemy,p),pan:(enemy.x-p.x)/480});view.fx.spark(enemy.x-dir.x*8,enemy.y-dir.y*8,Math.atan2(-dir.y,-dir.x),6,1);view.fx.floater(enemy.x,enemy.y-26,out.label,'#bfd4e4',14,1.1);state.shake=Math.max(state.shake,3);continue;}
@@ -555,7 +556,7 @@ function dropAmmoNear(enemy){
   for(const t of [0,.35,.7,1]){const x=enemy.x+(p.x-enemy.x)*t,y=enemy.y+(p.y-enemy.y)*t;if(dropPickup('ammo',x,y,DRY_DROP_VALUE))return;}
 }
 function killEnemy(enemy,bullet){
-  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.meleeWindup=0;for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);{const bl=Math.hypot(bullet.vx,bullet.vy)||1,kv=enemyKnockback((bullet.damage||0)*1.6,enemy.type)*1.4;enemy.body.setLinvel({x:bullet.vx/bl*kv,y:bullet.vy/bl*kv},true);}enemy.hp=0;
+  if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=enemy.type==='boss'?1.3:3.5;enemy.aimTimer=0;enemy.meleeWindup=0;for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);{const bl=Math.hypot(bullet.vx,bullet.vy)||1,kv=enemyKnockback((bullet.damage||0)*1.6,enemy.type)*1.4;enemy.body.setLinvel({x:bullet.vx/bl*kv,y:bullet.vy/bl*kv},true);}enemy.hp=0;
   view.fx.kill(enemy,bullet.vx,bullet.vy);
   state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(6+Math.floor(random()*8));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
   if(!signalOn()){if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
@@ -667,7 +668,7 @@ function takeSupply(index){
 function finishRun(result,cause){if(state.paidOut)return;finishRunImpl(result,cause);}
 function winRun(){finishRun('won');}
 /* ============================================================ macro loop: floors, decisions, frequencies, run end */
-const bossApi={speedRatio:()=>playerSpeedRatio(),musicBeat:()=>getMusicBeat(),get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
+const bossApi={speedRatio:()=>playerSpeedRatio(),playerDry:()=>isAllDry(state.weaponSlots,state.weaponAmmo,state.reserveAmmo)||state.weaponSlots.reduce((n,i)=>n+state.weaponAmmo[i]+state.reserveAmmo[i],0)<=14,musicBeat:()=>getMusicBeat(),get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
 const scrapGain=amount=>Math.max(1,Math.round(amount*interferenceStats(state.progress).scrapMult));
 function setBossBar(init,e){
   const bar=$('boss-bar');if(!bar)return;
@@ -1012,7 +1013,7 @@ function updatePlayer(dt){
   if(state.reloadTimer>0){state.reloadTimer-=rd0;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;playReloadEnd();hud();emit('reloadEnd',p.x,p.y,{gun:gun.id,cancelled:false});}}
   if(input.firing&&!state.wasFiring)state.pressUntil=state.realElapsed+PRESS_BUFFER;state.wasFiring=input.firing;if(input.firing||state.realElapsed<state.pressUntil)playerShoot();updateWeaponBurst();if(input.interact){input.interact=false;interact();}
   for(const pickup of state.pickups){if(state.supplyOpen||state.runModal)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
-  {const blocked=state.loadoutOpen||state.supplyOpen||!!state.runModal,targets=blocked?[]:interactTargets();state.interact={targets,active:activeInteraction(targets),ambient:ambientPrompt(targets),key:keyLabel(binding('interact'))};}
+  {const blocked=state.loadoutOpen||state.supplyOpen||!!state.runModal,bossLive=!!(state.boss?.alive&&state.boss.boss?.active),targets=blocked?[]:interactTargets().filter(t=>!(bossLive&&t.kind==='exit'&&!t.enabled));state.interact={targets,active:activeInteraction(targets),ambient:state.boss?.alive&&state.boss.boss?.active?null:ambientPrompt(targets),key:keyLabel(binding('interact'))};}
   updateTutorHint(p);
   updateRoom();
 }
@@ -1101,7 +1102,7 @@ function stepFrequencyFx(dt){stageDirect();
   if(p&&f.heldBreath>0&&state.stillFor>=.6&&!state.heldPing){state.heldPing=true;view.fx.ring(p.x,p.y,24,6,'#ffd27a',.3,2);}else if(state.stillFor<.6)state.heldPing=false;
 }
 function updateBullets(worldDt,realDt){
-  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],dt=b.owner==='player'?playerBulletDt(worldDt,realDt,PLAYER_BULLET_CLOCK):worldDt,previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};
+  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],dt=b.owner==='player'?playerBulletDt(worldDt,realDt,PLAYER_BULLET_CLOCK):b.boss?Math.max(worldDt,realDt*BOSS_BULLET_FLOOR):worldDt,previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};
     if(b.hang){if(state.realElapsed>=b.hang.until||(b.hang.untilMove&&playerSpeedRatio()>.3))b.hang=null;else continue;}// HANG FIRE: frozen mid-air, harmless
     if(b.owner==='enemy'&&bubbleZapped(b)){view.fx.spark(b.x,b.y,0,5,Math.PI,[60,200],'#9ad8ff');view.fx.ring(b.x,b.y,2,12,'#9ad8ff',.25,2);removeBullet(i);continue;}
     b.ox=undefined;b.life-=dt;if(b.life<=0){if(b.lob)detonateShell(b);removeBullet(i);continue;}if(!state.stepHitstop){if(b.homing)steerBullet(b,dt);const k=b.owner==='enemy'?bubbleFactor(b):1;b.x+=b.vx*dt*k;b.y+=b.vy*dt*k;}
@@ -1137,7 +1138,7 @@ function updateBullets(worldDt,realDt){
   }
 }
 function removeBullet(i){const b=state.bullets[i];if(b.body)physics.removeRigidBody(b.body);if(b.shot&&--b.shot.n<=0)flushShotNoise(b.shot);state.bullets.splice(i,1);}
-function updateCorpses(dt){for(let i=state.enemies.length-1;i>=0;i--){const e=state.enemies[i];if(e.alive||!e.corpseTimer)continue;e.corpseTimer-=dt;const p=e.body.translation();e.x=p.x;e.y=p.y;if(e.corpseTimer<=0){if(e.type!=='boss')view.fx.decals.push({kind:'corpse',type:e.elite?'elite':e.type,x:e.x,y:e.y,a:(e.vis?.ang||0)+(e.vis?.spin||0)*.3,seed:Math.floor(e.id*1e6)});physics.removeRigidBody(e.body);state.enemies.splice(i,1);}}}
+function updateCorpses(dt,realDt=dt){for(let i=state.enemies.length-1;i>=0;i--){const e=state.enemies[i];if(e.alive||!e.corpseTimer)continue;e.corpseTimer-=e.type==='boss'?realDt:dt;const p=e.body.translation();e.x=p.x;e.y=p.y;if(e.corpseTimer<=0){if(e.type!=='boss')view.fx.decals.push({kind:'corpse',type:e.elite?'elite':e.type,x:e.x,y:e.y,a:(e.vis?.ang||0)+(e.vis?.spin||0)*.3,seed:Math.floor(e.id*1e6)});physics.removeRigidBody(e.body);state.enemies.splice(i,1);}}}
 function syncPauseScreen(){const show=state.mode==='play'&&state.paused;syncPauseKnowledge(show);setPauseScreen(show,show?{'pause-room':state.rooms[state.currentRoom]?.name||'ENTRY','pause-time':formatClock(state.realElapsed),'pause-kills':String(state.kills),'pause-seed':String(state.seed)}:{});}
 function update(dt){
   syncPauseScreen();state.flashTimer=Math.max(0,state.flashTimer-dt);$('flash-overlay').style.opacity=String(flashOverlayOpacity(state.flashTimer,visualSettings.flash));
@@ -1154,7 +1155,7 @@ function update(dt){
     if(state.player&&state.cmdVel){const k=Math.min(60,dt/ts);state.player.body.setLinvel({x:state.cmdVel.x*k,y:state.cmdVel.y*k},true);}
     physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
   if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
-  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;stepFrequencyFx(dt);updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateDoors(dt);updateSignal(dt,step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
+  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;stepFrequencyFx(dt);updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateDoors(dt);updateSignal(dt,step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step,dt);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
   pollKnowledge(dt);
   drawMinimap();syncHudFrame();
 }

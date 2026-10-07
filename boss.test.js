@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BOSS, BOSS_PATTERNS, BOSS_ROOM_NAME, TEMPO_FLOOR, activateBoss, beatStage, createBoss, stepBoss, tempoRate} from './boss.js';
+import {BOSS, BOSS_PATTERNS, BOSS_ROOM_NAME, TEMPO_FLOOR, SHOT_FEED, BOSS_BULLET_FLOOR, DRY_AMMO_COOLDOWN, AMMO_DROP_FRACTIONS, activateBoss, beatStage, bossAmmoDropsDue, bossClockDt, createBoss, dryAmmoDropDue, stepBoss, tempoRate} from './boss.js';
 
 const ctxAt = (player, extra = {}) => ({boss: {x: 0, y: 0}, player, hpFraction: .2, adds: 0, rng: () => .3, ...extra});
 
@@ -14,7 +14,9 @@ test('TEMPO: the pattern clock follows how much you move, never fully stopping',
   assert.equal(tempoRate(1.4), 1);
   assert.ok(tempoRate(.5) > TEMPO_FLOOR && tempoRate(.5) < 1);
   assert.equal(tempoRate(NaN), TEMPO_FLOOR);
-  assert.ok(tempoRate(0) * 5 <= tempoRate(1) / 2, 'standing still is far slower than walking');
+  assert.ok(tempoRate(0) * 3 <= tempoRate(1), 'standing still is far slower than walking');
+  assert.equal(tempoRate(0, true), SHOT_FEED, 'firing feeds him even when you stand still');
+  assert.equal(tempoRate(1, true), 1);
 });
 
 test('phase II patterns lean on tempo (spiral, sweep, fan, ring, summon) and phase III adds the beat pattern', () => {
@@ -69,8 +71,40 @@ test('the beat pattern ends after eight beats and recovers; without a music cloc
   assert.ok(steps < 600);
 });
 
-test('boss stats are unchanged by the redesign (this is a pacing change, not a health change)', () => {
-  assert.equal(BOSS.maxHp, 700);
+test('the camper cannot freeze him: a held trigger while standing still runs the clock near full speed', () => {
+  const still = {phase: 2, mode: 'idle', dt: 1 / 60 * .18, frameDt: 1 / 60, speedRatio: 0};
+  assert.ok(bossClockDt(still) < bossClockDt({...still, speedRatio: 1}) / 3, 'still and silent is slow');
+  assert.ok(Math.abs(bossClockDt({...still, fed: true}) - SHOT_FEED / 60) < 1e-9, 'still but shooting is not');
+  for (const phase of [1, 3]) assert.ok(bossClockDt({...still, phase}) >= .5 / 60 - 1e-9, 'phases I and III keep a real-time floor');
+  assert.equal(bossClockDt({...still, dt: 0}), 0, 'hit-stop still freezes him');
+});
+
+test('intro and phase shift run on real time, not stretched world time', () => {
+  for (const mode of ['intro', 'shift']) assert.equal(bossClockDt({phase: 2, mode, dt: .18 / 60, frameDt: 1 / 60}), 1 / 60);
+  const boss = createBoss(); activateBoss(boss);
+  let real = 0;
+  while (boss.mode === 'intro' && real < 5) { stepBoss(boss, bossClockDt({phase: 1, mode: boss.mode, dt: .18 / 60, frameDt: 1 / 60}), ctxAt({x: 200, y: 0}, {hpFraction: 1})); real += 1 / 60; }
+  assert.ok(real < 1.2, 'intro ends in about a second of real time even while standing still');
+});
+
+test('boss bullets keep a world-rate floor so the off-beat dodge always matters', () => {
+  assert.ok(BOSS_BULLET_FLOOR >= .3 && BOSS_BULLET_FLOOR <= .5);
+});
+
+test('ammo drops: roughly every eighth of his health (75% and 50% among them), once each, and when dry with a cooldown', () => {
+  assert.deepEqual(bossAmmoDropsDue(1), []);
+  assert.deepEqual(bossAmmoDropsDue(.87), [.88]);
+  assert.deepEqual(bossAmmoDropsDue(.74, [.88]), [.75]);
+  assert.deepEqual(bossAmmoDropsDue(.74, [.88, .75]), []);
+  assert.ok(AMMO_DROP_FRACTIONS.includes(.75) && AMMO_DROP_FRACTIONS.includes(.5));
+  assert.equal(bossAmmoDropsDue(.01).length, AMMO_DROP_FRACTIONS.length, 'a big hit that skips thresholds still pays every one');
+  assert.equal(dryAmmoDropDue(false, 100, 0), false);
+  assert.equal(dryAmmoDropDue(true, 5, 0), false, 'cooldown');
+  assert.equal(dryAmmoDropDue(true, DRY_AMMO_COOLDOWN, 0), true);
+});
+
+test('boss health is sized for a 60 to 120 second fight', () => {
+  assert.ok(BOSS.maxHp >= 1800 && BOSS.maxHp <= 3000);
 });
 
 import {bossLights, bossCamShift} from './boss-fight.js';

@@ -643,8 +643,9 @@ export function createRenderer(container, state) {
     ctx.fillStyle = bg; ctx.fillRect(-bw, -120, bw * 2, 100);
     ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `900 13px ${FONT}`; ctx.lineWidth = 3.4; const label = ready ? 'EXTRACT' : 'EXIT · LOCKED';
+    if (!(state.boss?.alive && state.boss.boss?.active)) { // no EXIT label over the boss bar while the fight is on
     drawIcon(ctx, ready ? 'exit-extraction' : 'lock-locked', -ctx.measureText(label).width / 2 - 8, -36, 13, col);
-    ctx.strokeText(label, 4, -36); ctx.fillText(label, 4, -36);
+    ctx.strokeText(label, 4, -36); ctx.fillText(label, 4, -36); }
     ctx.restore();
   }
 
