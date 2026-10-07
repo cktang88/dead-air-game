@@ -12,9 +12,13 @@
 //   {nav, player: {x, y, vx, vy, radius}, los(ax, ay, bx, by) -> true when the line is clear of
 //    walls/crates/cover (smoke is separate), enemies: [...all enemies incl. this one],
 //    covers?: [{x, y, radius}], smoke?: [{x, y, radius}], projectiles?: [{x, y, vx, vy, radius}] (player shots),
+//    playerAim?: {x, y} unit vector the player is aiming along (the fire lane enemies sidestep out of),
+//    playerReloading?: bool, playerHpFrac?: 0..1 (openings the squad pushes into),
+//    hazards?: [{x, y, radius, fuse?}] lit grenades / burning patches enemies leave,
 //    noises?: [{x, y, radius}] (gunfire this frame), fireAllowed?(enemy) -> bool, aimMul?: number}
 // Output:
-//   {moveX, moveY, speed, aimX, aimY, fire, intent, windup, windupTotal, aiming, aware, sees, role, goal}
+//   {moveX, moveY, speed, aimX, aimY, fire, intent, stance, windup, windupTotal, aiming, aware, sees, role, goal}
+//   `stance` is the readable verb the renderer may show: suppress | flank | fallback | push | flee | sidestep | hold | enrage | wary.
 //   Velocity = (moveX, moveY) * def.speed, where the vector length already includes `speed` (sprint/dash > 1).
 //   `fire` is true on the single step where the telegraph ends; the caller spawns the bullet and handles
 //   ammo/reload. `windup` is seconds of telegraph left (0 when not aiming) so the caller can draw the aim line.
@@ -22,6 +26,7 @@
 import {createNav} from './enemy-nav.js';
 import {incomingThreats} from './enemy-tactics.js';
 import {DODGERS, SUSPICION, hearingReach, inCone, shouldDodge, stepSuspicion, turnFacing, visionFor} from './stealth.js';
+import {INSTINCT, hazardEscape, inAimLine, laneAvoidCircles, lineSidestep, moraleReaction, pincerAngle, playerOpening, rallyPoint, shouldWaitForPack, wantsRetreat, wrapAngle} from './enemy-instinct.js';
 
 export {createNav};
 
@@ -85,6 +90,7 @@ export function brainState(e, rng = Math.random) {
     zigT: 0, zigDir: rng() < 0.5 ? -1 : 1, zigPhase: rng() * TAU, circleDir: rng() < 0.5 ? -1 : 1, circleT: 0,
     ambush: 0, ambushUsed: false, brute: {phase: 'advance', t: 0, cd: between(rng, 0.5, 1.5), dir: null},
     suspicion: 0, inView: false, spotted: false, pat: null, dodging: false,
+    lineT: 0, lineCd: 0, sideT: 0, retreating: false, pushT: 0, pushKick: false, shaken: 0, enrage: 0, mates: null, packT: 0, packSpent: 0, stance: null, peekHold: 0, openT: 0, recheckT: 0, breakGoal: null, breakT: 0, coverRetry: 0, retreatT: 0,
     prof,
   };
   return e.ai;
@@ -219,7 +225,8 @@ export function findCover(e, target, world, o = {}) {
   const nav = world.nav;
   if (!nav) return null;
   const tile = nav.tile, R = o.tiles ?? 6;
-  const minR = o.minRange ?? 0, maxR = o.maxRange ?? 300, mid = (minR + maxR) / 2;
+  const relaxed = !!o.relaxed;   // second pass: accept a wider firing band rather than no cover at all
+  const minR = (o.minRange ?? 0) * (relaxed ? 0.85 : 1), maxR = (o.maxRange ?? 300) * (relaxed ? 1.25 : 1), mid = (minR + maxR) / 2;
   const radius = bodyRadius(e);
   const others = living(world, e);
   const claimed = pt => others.some(x => x.ai?.cover && dist(x.ai.cover.hide, pt) < tile * 0.9);
@@ -259,7 +266,9 @@ export function findCover(e, target, world, o = {}) {
   const scored = [];
   for (const hide of spots) {
     const d0 = dist(e, hide);
-    if (d0 > R * tile || dist(hide, target) < minR * 0.7 || !hidden(hide)) continue;
+    if (d0 > R * tile || dist(hide, target) < minR * 0.7) continue;
+    if (o.exclude?.some(x => dist(x, hide) < (o.excludeRadius ?? tile * 1.5))) continue;   // a marksman never re-uses the nest it just fired from
+    if (!hidden(hide)) continue;
     const ht = nav.tileOf(hide.x, hide.y);
     let peek = null, peekD = Infinity;
     for (let ty = ht.y - 2; ty <= ht.y + 2; ty++) for (let tx = ht.x - 2; tx <= ht.x + 2; tx++) {
@@ -270,7 +279,9 @@ export function findCover(e, target, world, o = {}) {
       if (dh < peekD) { peekD = dh; peek = q; }
     }
     if (!peek) continue;
-    scored.push({hide, peek, score: d0 + peekD * 0.5 + Math.abs(dist(peek, target) - mid) * 0.25 + (claimed(hide) ? 140 : 0) + (crowded(hide) ? 60 : 0)});
+    // Hurt enemies prefer cover that sits nearer a healthy ally (fall back toward the group, not into a corner alone).
+    const rally = o.rally ? Math.max(0, 160 - dist(hide, o.rally)) * 0.45 : 0;
+    scored.push({hide, peek, score: d0 + peekD * 0.5 + Math.abs(dist(peek, target) - mid) * 0.25 + (claimed(hide) ? 140 : 0) + (crowded(hide) ? 60 : 0) - rally});
   }
   scored.sort((a, b) => a.score - b.score);
   for (const cand of scored.slice(0, 3)) {
@@ -314,10 +325,117 @@ function chooseFlank(c, radius, needSight) {
     const path = nav.findPath(e, pt, {radius: bodyRadius(e), maxExpand: 2500, avoid: sup ? [{x: sup.x, y: sup.y, r: 70, cost: 4}] : undefined});
     if (!path) continue;
     const len = nav.pathLength(e, path);
-    const score = len + (sup ? Math.max(0, 1.6 - delta) * 120 : 0) + others.reduce((s, o) => s + (dist(o.ai.flank, pt) < 60 ? 150 : 0), 0);
+    // PINCER: a second flanker takes the opposite side of the target from the first, so the player is squeezed from two angles.
+    const mySide = Math.sign(wrapAngle(ang - supAngle)) || 1;
+    const sameSide = others.reduce((s, o) => {
+      const oa = Math.atan2(o.ai.flank.y - target.y, o.ai.flank.x - target.x);
+      return s + (Math.sign(wrapAngle(oa - supAngle)) === mySide ? 220 : 0);
+    }, 0);
+    const score = len + (sup ? Math.max(0, 1.6 - delta) * 120 : 0) + others.reduce((s, o) => s + (dist(o.ai.flank, pt) < 60 ? 150 : 0), 0) + sameSide + Math.abs(wrapAngle(ang - pincerAngle(supAngle, others.length, others.length + 1))) * 35;
     if (!best || score < best.score) best = {x: pt.x, y: pt.y, score};
   }
   return best;
+}
+
+// ---- instincts (self-preservation) -----------------------------------------------------------
+// enemy-instinct.js holds the math. These wrappers read the world and write the brain state.
+
+// Nav-cost circles along the player's fire lane, built once per enemy per frame.
+function lane(c) {
+  if (c.lane !== undefined) return c.lane;
+  const w = c.world;
+  c.lane = w.playerAim && c.ai.sees ? laneAvoidCircles(c.p, w.playerAim) : null;
+  if (c.lane && !c.lane.length) c.lane = null;
+  return c.lane ?? undefined;
+}
+
+// The player reloading or limping is the window the squad pushes into (peek sooner, shoot sooner, close the gap).
+function senseOpening(c) {
+  const {ai, world} = c;
+  const opening = playerOpening({reloading: world.playerReloading, hpFrac: world.playerHpFrac});
+  ai.opening = opening;
+  if (opening && ai.sees && c.d < 420) { if (ai.pushT <= 0) ai.pushKick = true; ai.pushT = INSTINCT.pushWindow; }
+}
+
+// Morale: remember who stood near us; when one is gone (dead), react per type and call it out over the radio.
+function senseAllies(c) {
+  const {e, ai, world} = c;
+  const map = ai.mates ??= new Map();
+  for (const [id, m] of [...map]) {
+    const o = world.enemies.find(x => x.id === id);
+    if (o && o.alive !== false) continue;
+    map.delete(id);
+    const r = moraleReaction(e.type);
+    if (r.kind === 'enrage') ai.enrage = r.for;
+    else if (r.kind === 'shaken') { ai.shaken = r.for; ai.coverT = 0; ai.cover = null; }
+    // only the nearest survivor shouts, so a death is one clear radio pulse, not a chorus
+    const mates = living(world, e).filter(x => x.ai?.aware);
+    if (mates.every(x => dist(x, m) >= dist(e, m))) for (const o2 of mates) if (dist(e, o2) < 300) world.alerts?.push({from: e, to: o2});
+  }
+  for (const o of living(world, e)) if (dist(e, o) <= 360) map.set(o.id, {x: o.x, y: o.y});
+}
+
+// A lit grenade or burning patch: leave. A telegraph in progress is abandoned (no shot is fired).
+function fleeHazards(c) {
+  const {e, ai, world, out} = c;
+  if (!world.hazards?.length) return false;
+  if (e.type === 'brute' && ai.brute.phase === 'dash') return false;
+  const esc = hazardEscape(e, world.hazards, {canStep: dir => !world.nav || world.nav.walkable(e, {x: e.x + dir.x * 26, y: e.y + dir.y * 26}, bodyRadius(e))});
+  if (!esc) return false;
+  if (ai.windup > 0) { ai.windup = 0; ai.cd = Math.max(ai.cd, 0.6); }
+  if (ai.brute.phase === 'windup') ai.brute.phase = 'advance';
+  out.intent = 'flee'; out.stance = 'flee';
+  out.moveX = esc.dir.x * 1.25; out.moveY = esc.dir.y * 1.25; out.speed = 1.25;
+  return true;
+}
+
+// Standing in the player's crosshair: counts how long (ai.lineT). The caller reacts once the beat has passed.
+function inFireLane(c) {
+  const {e, ai, world, p, dt} = c;
+  if (!world.playerAim || !ai.sees || ai.windup > 0) { ai.lineT = 0; return false; }
+  if (!inAimLine(p, world.playerAim, e, {radius: e.radius ?? 8})) { ai.lineT = 0; return false; }
+  ai.lineT += dt;
+  return true;
+}
+
+// Step perpendicular out of the lane (stand-and-trade is for players). Returns true when it moved.
+function sidestepLane(c, speed = 1.2) {
+  const {e, ai, world, out, p} = c;
+  const nav = world.nav;
+  let dir = lineSidestep(p, world.playerAim, e, ai.strafeDir);
+  const ok = d => !nav || nav.walkable(e, {x: e.x + d.x * 24, y: e.y + d.y * 24}, bodyRadius(e));
+  if (!ok(dir)) { dir = {x: -dir.x, y: -dir.y}; if (!ok(dir)) return false; }
+  const to = norm(p.x - e.x, p.y - e.y);
+  ai.strafeDir = Math.sign(dir.x * -to.y + dir.y * to.x) || ai.strafeDir;   // keep strafing the way we stepped
+  out.intent = 'sidestep'; out.stance = 'sidestep';
+  out.moveX = dir.x * speed; out.moveY = dir.y * speed; out.speed = speed;
+  return true;
+}
+
+// Hurt and nowhere to hide: run for a spot the player cannot see, preferring the direction of a healthy ally.
+function breakLineOfSight(c) {
+  const {e, ai, world, p, out} = c;
+  const nav = world.nav;
+  if (!nav) return false;
+  if (ai.breakT <= 0 || !ai.breakGoal) {
+    ai.breakT = 0.9;
+    const rally = rallyPoint(e, living(world, e), p);
+    let best = null;
+    for (let i = 0; i < 12; i++) {
+      const ang = (i / 12) * TAU;
+      for (const r of [90, 150]) {
+        const pt = {x: e.x + Math.cos(ang) * r, y: e.y + Math.sin(ang) * r};
+        if (!nav.isOpenAt(pt.x, pt.y) || world.los(p.x, p.y, pt.x, pt.y) || !nav.walkable(e, pt, bodyRadius(e))) continue;
+        const score = r + (dist(pt, p) < dist(e, p) ? 120 : 0) - (rally ? Math.max(0, 200 - dist(pt, rally)) * 0.5 : 0);
+        if (!best || score < best.score) best = {x: pt.x, y: pt.y, score};
+      }
+    }
+    ai.breakGoal = best;
+  }
+  if (!ai.breakGoal) return false;
+  out.intent = 'retreat'; out.stance = 'fallback';
+  go(c, ai.breakGoal, 1.1, 10);
+  return true;
 }
 
 // ---- shooting ---------------------------------------------------------------------------------
@@ -438,8 +556,8 @@ function flankOrAdvance(c, ranged) {
       ai.flankT = 2.2;
     }
     if (ai.flank) {
-      out.intent = 'flank';
-      if (go(c, ai.flank, 1, 12)) { ai.flank = null; ai.flankT = 0.5; }
+      out.intent = 'flank'; out.stance = 'flank';
+      if (go(c, ai.flank, 1, 12, lane(c))) { ai.flank = null; ai.flankT = 0.5; }
       return;
     }
   }
@@ -453,59 +571,123 @@ function flankOrAdvance(c, ranged) {
     goal.x += n.x * stop * 0.5; goal.y += n.y * stop * 0.5;
     if (world.nav && !world.nav.isOpenAt(goal.x, goal.y)) { goal.x = target.x; goal.y = target.y; }
   }
-  if (go(c, goal, 1, 14)) investigate(c);
+  if (go(c, goal, 1, 14, lane(c))) investigate(c);
 }
 
 function rangedStep(c) {
   const {e, ai, world, dt, rng, out, p, d, def} = c;
   const prof = ai.prof;
   const reloading = e.reloadTimer > 0 || (e.mag > 0 && e.ammo <= 0);
-  const hurt = e.hp / e.maxHp < 0.45;
+  ai.retreating = wantsRetreat(e.hp / e.maxHp, ai.retreating);
+  // SELF-PRESERVATION: at ~40% HP stop trading shots and break line of sight. It is a breather, not a hideout:
+  // after retreatMax scaled seconds the enemy has caught its breath and fights on (hiding must never stall a room).
+  ai.retreatT = ai.retreating ? ai.retreatT + dt : 0;
+  const hurt = ai.retreating && ai.retreatT < INSTINCT.retreatMax;
+  const shaken = ai.shaken > 0;                     // an ally just dropped next to us: get low
+  const pushing = ai.pushT > 0 && !hurt && !shaken; // the player is reloading or limping: this is the window
   const minRange = def.minRange ?? def.range * 0.42;
   const band = {min: minRange, max: def.range * 0.88};
   const engaged = ai.sees || ai.lost < ENGAGED_MEMORY;
   const target = ai.sees ? p : ai.last;
   if (!engaged || !target) { flankOrAdvance(c, true); return; }
 
-  const wantsHide = reloading || hurt;
   // Cover bookkeeping: re-pick when missing, stale, or the target moved far from where it was computed.
   ai.coverT -= dt;
   const drifted = ai.cover && Math.hypot(target.x - ai.cover.tx, target.y - ai.cover.ty) > 70;
   const exposedAtHide = ai.cover && ai.sees && ai.phase === 'duck' && dist(e, ai.cover.hide) < 16 && ai.sinceFire > 0.5;
-  if ((!ai.cover || ai.coverT <= 0 || drifted || exposedAtHide) && world.coverBudget !== undefined && world.coverBudget <= 0) {
+  // A flanker changes the angle: if the player can now see our hiding spot, it is no longer cover.
+  let compromised = false;
+  if (ai.cover && ai.sees && ai.recheckT <= 0 && ai.phase === 'duck') {
+    ai.recheckT = 0.25;
+    compromised = world.los(p.x, p.y, ai.cover.hide.x, ai.cover.hide.y);
+  }
+  // A failed search is not repeated every frame: wait a beat before looking again (cover searches are the expensive query).
+  const wantsCover = (!ai.cover ? ai.coverRetry <= 0 : (ai.coverT <= 0 || drifted || exposedAtHide || compromised));
+  if (wantsCover && world.coverBudget !== undefined && world.coverBudget <= 0) {
     ai.coverT = Math.min(ai.coverT, 0) + 0.05; // another enemy used this frame's cover searches: retry next frames
-  } else if (!ai.cover || ai.coverT <= 0 || drifted || exposedAtHide) {
+  } else if (wantsCover) {
+    const rally = hurt ? rallyPoint(e, living(world, e), target) : null;
+    const opts = {minRange: band.min, maxRange: band.max, tiles: 6, rally, exclude: ai.nest ? [ai.nest] : undefined, excludeRadius: world.nav ? world.nav.tile * 3 : undefined};
     if (world.coverBudget !== undefined) world.coverBudget--;
-    ai.cover = findCover(e, target, world, {minRange: band.min, maxRange: band.max, tiles: 6});
+    let found = findCover(e, target, world, opts);
+    // No cover with a perfect firing band: take any cover with a workable one before standing in the open.
+    if (!found && (world.coverBudget === undefined || world.coverBudget > 0)) {
+      if (world.coverBudget !== undefined) world.coverBudget--;
+      found = findCover(e, target, world, {...opts, relaxed: true});
+    }
+    // A marksman with nowhere new to go re-uses its old nest rather than standing in the open.
+    if (!found && opts.exclude && (world.coverBudget === undefined || world.coverBudget > 0)) {
+      if (world.coverBudget !== undefined) world.coverBudget--;
+      found = findCover(e, target, world, {...opts, exclude: undefined});
+    }
+    ai.cover = found;
+    ai.coverRetry = found ? 0 : 0.45;
+    ai.nest = null;
     ai.coverT = between(rng, 1.4, 2.4);
+    if (compromised && found) ai.phase = 'duck';
+  }
+
+  // Openings: the player reloading / hurt is when to peek and shoot NOW instead of waiting out the duck.
+  if (ai.pushKick) {
+    ai.pushKick = false;
+    if (ai.phase === 'duck') ai.phaseT = Math.min(ai.phaseT, 0.12);
+    ai.cd = Math.min(ai.cd, 0.3);
   }
 
   // Too close: back off first (cannot fire inside minRange anyway).
   if (ai.sees && d < band.min * 0.92) {
-    out.intent = 'retreat';
+    out.intent = 'retreat'; out.stance = 'fallback';
     const away = norm(e.x - p.x, e.y - p.y);
-    if (ai.cover && !wantsHide && dist(e, ai.cover.hide) > 16 && dist(ai.cover.hide, p) > d) go(c, ai.cover.hide, 1, 12);
+    if (ai.cover && !hurt && dist(e, ai.cover.hide) > 16 && dist(ai.cover.hide, p) > d) go(c, ai.cover.hide, 1, 12);
     else if (!slide(c, away, 1)) slide(c, {x: -away.y * ai.strafeDir, y: away.x * ai.strafeDir}, 1);
     return;
   }
 
+  // Hurt with no cover in reach: run for somewhere out of sight (toward an ally) rather than trade shots in the open.
+  if (hurt && !ai.cover && breakLineOfSight(c)) return;
+
+  // The crosshair is on us. Do not stand in it: duck back into cover if we are peeking, otherwise step out of the lane.
+  const lined = inFireLane(c);
+  const spooked = lined && ai.lineT >= INSTINCT.lineReact && ai.lineCd <= 0 && !pushing;
+  if (spooked) {
+    if (ai.cover && ai.phase === 'peek') { ai.phase = 'duck'; ai.phaseT = between(rng, 0.7, 1.3); ai.lineCd = INSTINCT.lineCooldown; ai.lineT = 0; }
+    else if (!ai.cover || dist(e, ai.cover.hide) > 20) {
+      ai.sideT = Math.max(ai.sideT, 0.45);
+    }
+  }
+  if (ai.sideT > 0 && lined) { if (sidestepLane(c)) return; }
+  else if (ai.sideT > 0) { ai.sideT = 0; ai.lineCd = INSTINCT.lineCooldown; }
+
   // Fire whenever allowed; the telegraph is mandatory. Enemies do not stop to shoot while running for cover.
   const atCover = ai.cover && dist(e, ai.cover.hide) <= 16;
   const canShootNow = !ai.cover || ai.phase === 'peek' || atCover;
-  if (canShootNow && (!hurt || ai.phase === 'peek' || !ai.cover) && fireReady(c) && startWindup(c)) return;
+  const holdFire = shaken || (lined && ai.lineCd <= 0 && !ai.cover && !pushing && ai.lineT < 0.9);   // sidestep first, shoot from the new spot
+  if (!holdFire && canShootNow && (!hurt || ai.phase === 'peek' || !ai.cover) && fireReady(c) && startWindup(c)) {
+    if (e.type === 'sniper') ai.nest = ai.cover ? {...ai.cover.hide} : {x: e.x, y: e.y};   // marksman: relocate after every shot
+    return;
+  }
+  // A marksman that just fired does not stay put: take the next nest.
+  if (e.type === 'sniper' && ai.nest && ai.sinceFire < 0.4) { ai.cover = null; ai.coverT = 0; ai.phase = 'duck'; ai.phaseT = between(rng, 0.2, 0.6); }
 
   if (ai.cover) {
     ai.phaseT -= dt;
     const atHide = dist(e, ai.cover.hide) <= 16;
     if (ai.phase === 'duck') {
       out.intent = reloading ? 'reload' : 'cover';
+      out.stance = shaken ? 'wary' : hurt ? 'fallback' : !ai.sees && ai.lost > 0.8 ? 'hold' : null;
       if (!atHide) go(c, ai.cover.hide, 1, 12);
       const suppress = ai.role === 'suppress' ? 0.5 : 1;
-      if (ai.phaseT <= 0 && !reloading && !(hurt && rng() < 0.6) && ai.cd < 0.6) {
-        ai.phase = 'peek'; ai.phaseT = 2.4; ai.shotsLeft = Math.round(between(rng, prof.burst[0], prof.burst[1] + 0.99)) + (ai.role === 'suppress' ? 1 : 0);
+      // Do not lean out into a crosshair that is already parked on the corner: hold the duck a moment.
+      const corner = !pushing && ai.phaseT <= 0 && ai.peekHold <= 0 && world.playerAim && ai.cover.peek && inAimLine(p, world.playerAim, ai.cover.peek, {radius: 8});
+      if (corner) ai.peekHold = 1.1;
+      const cornerHeld = ai.peekHold > 0 && world.playerAim && ai.cover.peek && inAimLine(p, world.playerAim, ai.cover.peek, {radius: 8});
+      if (shaken) ai.phaseT = Math.max(ai.phaseT, 0.3);
+      if (ai.phaseT <= 0 && !cornerHeld && !reloading && !(hurt && rng() < 0.75) && ai.cd < 0.6) {
+        ai.phase = 'peek'; ai.phaseT = 2.4; ai.peekHold = 0; ai.shotsLeft = Math.round(between(rng, prof.burst[0], prof.burst[1] + 0.99)) + (ai.role === 'suppress' ? 1 : 0);
       } else if (ai.phaseT <= 0 && (reloading || hurt)) ai.phaseT = between(rng, 0.5, 1.0) * suppress;
+      else if (ai.phaseT <= 0 && cornerHeld) ai.phaseT = 0.15;
     } else {
-      out.intent = 'peek';
+      out.intent = 'peek'; out.stance = ai.role === 'suppress' ? 'suppress' : null;
       const reached = go(c, ai.cover.peek, 1, 8);
       if (reached && !ai.sees) {
         if (++ai.peekMiss >= 2) ai.lost = Math.max(ai.lost, ENGAGED_MEMORY + 0.1);
@@ -513,21 +695,31 @@ function rangedStep(c) {
       }
       if (ai.phaseT <= 0 || ai.shotsLeft <= 0) {
         ai.phase = 'duck';
-        ai.phaseT = between(rng, ...prof.duck) * (ai.role === 'suppress' ? 0.5 : 1) * (hurt ? 1.6 : 1);
+        ai.phaseT = between(rng, ...prof.duck) * (ai.role === 'suppress' ? 0.5 : 1) * (hurt ? 1.6 : 1) * (pushing ? 0.45 : 1);
       }
     }
     return;
   }
 
-  // No cover available: fight in the open, strafing and holding the preferred range band.
+  // No cover available (and not hurt, or cornered): hold the band and keep moving.
   if (!ai.sees) { flankOrAdvance(c, true); return; }
-  if (d > band.max) { out.intent = 'approach'; go(c, {x: p.x - (p.x - e.x) / d * (band.max * 0.8), y: p.y - (p.y - e.y) / d * (band.max * 0.8)}, 1, 12); return; }
+  if (d > band.max) { out.intent = 'approach'; out.stance = pushing ? 'push' : null; go(c, {x: p.x - (p.x - e.x) / d * (band.max * 0.8), y: p.y - (p.y - e.y) / d * (band.max * 0.8)}, 1, 12, lane(c)); return; }
+  // In the open: strafe, but never down the crosshair. Standing here trading shots is the player's job, not ours.
   out.intent = 'strafe';
   ai.strafeT -= dt;
   if (ai.strafeT <= 0) { ai.strafeDir = -ai.strafeDir; ai.strafeT = between(rng, 0.7, 1.5); }
   const to = norm(p.x - e.x, p.y - e.y), radial = d < band.min * 1.25 ? -0.5 : 0;
   const side = {x: -to.y * ai.strafeDir + to.x * radial, y: to.x * ai.strafeDir + to.y * radial};
   if (!slide(c, side, 0.85)) { ai.strafeDir = -ai.strafeDir; ai.strafeT = between(rng, 0.7, 1.5); }
+}
+
+// A rusher in the player's crosshair weaves out of it: pick the weave direction that leaves the lane.
+function leaveLane(c, dirKey, timerKey, to) {
+  const {e, ai, world, p} = c;
+  if (!world.playerAim || !inAimLine(p, world.playerAim, e, {radius: e.radius ?? 8}) || ai[timerKey] > 0.35 || ai.lineCd > 0) return;
+  const s = lineSidestep(p, world.playerAim, e, ai[dirKey]);
+  ai[dirKey] = Math.sign(s.x * -to.y + s.y * to.x) || ai[dirKey];
+  ai[timerKey] = Math.max(ai[timerKey], 0.55);
 }
 
 function rusherStep(c) {
@@ -554,6 +746,7 @@ function rusherStep(c) {
     } else if (d <= 150) {
       // Circle in: tangential strafe plus inward drift, flipping direction now and then.
       out.intent = 'circle';
+      leaveLane(c, 'circleDir', 'circleT', to);
       ai.circleT -= dt;
       if (ai.circleT <= 0) { ai.circleDir = -ai.circleDir; ai.circleT = between(rng, 0.7, 1.4); }
       const v = {x: to.x * 0.75 - to.y * ai.circleDir * 0.85, y: to.y * 0.75 + to.x * ai.circleDir * 0.85};
@@ -561,18 +754,25 @@ function rusherStep(c) {
     } else {
       // Zig-zag so a single aimed shot is unlikely to land.
       out.intent = 'zigzag';
+      leaveLane(c, 'zigDir', 'zigT', to);
       ai.zigT -= dt;
       if (ai.zigT <= 0) { ai.zigDir = -ai.zigDir; ai.zigT = between(rng, 0.45, 0.9); }
       const amount = 0.55 * ai.zigDir * Math.min(1, (d - 150) / 120);
       if (!slide(c, {x: to.x - to.y * amount, y: to.y + to.x * amount}, 1)) ai.zigDir = -ai.zigDir;
     }
     ai.ambush = 0;
+    if (d < 130) ai.packSpent = 0;
     return;
   }
   // No clean line: follow the shared flow field around walls and crates. Hold at a corner
   // for a beat when the player is close, then burst around it.
   const field = nav?.flowField(target);
-  if (ai.ambush > 0) { ai.ambush -= dt; out.intent = 'ambush'; return; }
+  if (ai.ambush > 0) { ai.ambush -= dt; out.intent = 'ambush'; out.stance = 'hold'; return; }
+  // PACK: a rusher at a corner waits for the mate trailing behind it, so they cross the open together rather than one by one.
+  if (field && ai.enrage <= 0 && ai.packSpent < INSTINCT.packWait && field.distAt(e.x, e.y) < 280 &&
+      shouldWaitForPack(e, living(world, e).filter(o => o.ai?.aware && o.def?.brain === 'rush'), target)) {
+    ai.packSpent += dt; out.intent = 'ambush'; out.stance = 'hold'; return;
+  }
   if (!ai.ambushUsed && field && field.distAt(e.x, e.y) < 190 && ai.sees === false && ai.lost < 1.2 && rng() < dt * 3) {
     ai.ambushUsed = true; ai.ambush = between(rng, 0.35, 0.8); out.intent = 'ambush'; return;
   }
@@ -591,7 +791,8 @@ function bruteStep(c) {
   const target = ai.sees ? p : ai.last;
   if (!target) { idle(c); return; }
   if (e.meleeWindup > 0) { out.intent = 'attack'; b.phase = b.phase === 'dash' ? 'recover' : b.phase; b.t = prof.recover * 0.4; return; }
-  b.cd -= dt;
+  b.cd -= dt * (ai.enrage > 0 ? 2.5 : 1);   // an enraged brute (an ally just fell) comes back for the next charge sooner
+  if (ai.enrage > 0) out.stance = 'enrage';
   if (b.phase === 'windup') {
     b.t -= dt;
     out.intent = 'charge'; out.windup = Math.max(0, b.t); out.windupTotal = prof.chargeWindup; out.aiming = true;
@@ -704,10 +905,10 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
   const p = world.player;
   const out = {
     moveX: 0, moveY: 0, speed: 1, aimX: ai.face.x, aimY: ai.face.y, fire: false, intent: 'idle',
-    windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, suspicion: ai.suspicion, inView: ai.inView, dodging: false, spotted: ai.spotted, role: ai.role, goal: null, faceOverride: null,
+    windup: 0, windupTotal: 0, aiming: false, locked: false, aware: ai.aware, sees: false, suspicion: ai.suspicion, inView: ai.inView, dodging: false, spotted: ai.spotted, role: ai.role, goal: null, faceOverride: null, stance: null,
   };
   for (const key of ['clock']) ai[key] += dt;
-  for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT']) ai[key] = Math.max(0, ai[key] - dt);
+  for (const key of ['cd', 'dodgeT', 'dodgeCd', 'pathT', 'reaction', 'coverT', 'lineCd', 'sideT', 'pushT', 'shaken', 'enrage', 'packT', 'peekHold', 'recheckT', 'breakT', 'coverRetry']) ai[key] = Math.max(0, ai[key] - dt);
   ai.sinceFire += dt; ai.sinceStart += dt;
   const d = Math.hypot(p.x - e.x, p.y - e.y);
   const prof = ai.prof = PROFILES[e.type] ?? ai.prof;
@@ -723,6 +924,9 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
   if (!ai.aware) { unawareStep(c); out.suspicion = ai.suspicion; return finish(c); }
   updateRole(c);
   out.role = ai.role;
+  senseOpening(c);
+  senseAllies(c);
+  if (fleeHazards(c)) return finish(c);
 
   // A running telegraph owns the enemy: it stands still, then fires if the shot is still valid.
   if (ai.windup > 0) {
@@ -750,7 +954,7 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
         out.fire = true; ai.sinceFire = 0; ai.shotsLeft--;
         ai.cd = between(rng, ...prof.fireGap);
         if (ai.shotsLeft > 0) ai.cd = Math.min(ai.cd, 0.7);
-      } else ai.cd = 0.25;
+      } else ai.cd = 0.6;
       out.aiming = false; out.windup = 0;
       out.intent = ok ? 'aim' : 'hold';
     } else out.windup = ai.windup;
@@ -807,6 +1011,8 @@ function finish(c) {
   }
   ai.prevX = e.x; ai.prevY = e.y;
   out.aware = ai.aware; out.role = ai.role; out.suspicion = ai.suspicion; out.inView = ai.inView; out.dodging = ai.dodging; out.spotted = ai.spotted;
+  if (!out.stance && ai.role === 'suppress' && ai.sees && (out.aiming || out.intent === 'peek')) out.stance = 'suppress';
+  if (!out.stance && ai.pushT > 0 && (out.intent === 'approach' || out.intent === 'peek' || out.intent === 'aim')) out.stance = 'push';
   out.tactic = out.intent;
   return out;
 }

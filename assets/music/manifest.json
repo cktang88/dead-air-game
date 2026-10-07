@@ -1,0 +1,56 @@
+{
+ "explore": {
+  "file": "explore.mp3",
+  "bpm": 110.538,
+  "bars": 32,
+  "beats": 128,
+  "duration": 69.478,
+  "loop": true,
+  "source": "early/eric-skiff-06-searching.mp3"
+ },
+ "tension": {
+  "file": "tension.mp3",
+  "bpm": 130.004,
+  "bars": 24,
+  "beats": 96,
+  "duration": 44.306,
+  "loop": true,
+  "source": "mystery/kevin-macleod-in-a-heartbeat.mp3"
+ },
+ "combat": {
+  "file": "combat.mp3",
+  "bpm": 142.864,
+  "bars": 24,
+  "beats": 96,
+  "duration": 40.318,
+  "loop": true,
+  "source": "mid/eric-skiff-02-underclocked.mp3"
+ },
+ "boss": {
+  "file": "boss.mp3",
+  "bpm": 84.998,
+  "bars": 20,
+  "beats": 80,
+  "duration": 56.472,
+  "loop": true,
+  "source": "hard/kevin-macleod-exhilarate.mp3"
+ },
+ "title": {
+  "file": "title.mp3",
+  "bpm": 101.042,
+  "bars": 16,
+  "beats": 64,
+  "duration": 38.004,
+  "loop": true,
+  "source": "menu/eric-skiff-16-were-all-under-the-stars.mp3"
+ },
+ "win": {
+  "file": "win.mp3",
+  "bpm": 116.998,
+  "bars": 10,
+  "beats": 40,
+  "duration": 20.513,
+  "loop": false,
+  "source": "victory/eric-skiff-07-were-the-resistors.mp3"
+ }
+}
