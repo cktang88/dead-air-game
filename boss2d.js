@@ -58,6 +58,16 @@ export function drawBoss(ctx, e, now) {
   ctx.restore();
   ctx.fillStyle = '#e8c58c'; ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(8, 14, 3.4, 0, TAU); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(8, -14, 3.4, 0, TAU); ctx.fill(); ctx.stroke();
   ctx.rotate(-ang);
+  if (e.alive && phase === 2 && b.mode !== 'intro' && b.mode !== 'shift') {
+    // TEMPO: a clock ring around him whose hand sweeps only as fast as you move; bright = running, dim = frozen.
+    const k = b.tempo ?? 1; v.tempoAng = (v.tempoAng || 0) + k * 0.06;
+    ctx.strokeStyle = '#ffd27a'; ctx.globalAlpha = 0.25 + 0.5 * k; ctx.lineWidth = 1.6; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(0, 0, 40, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(Math.cos(v.tempoAng) * 34, Math.sin(v.tempoAng) * 34); ctx.lineTo(Math.cos(v.tempoAng) * 46, Math.sin(v.tempoAng) * 46); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  if (e.alive && phase === 3 && b.mode === 'beat') {
+    const st = b.stage, on = st === 'mark' || st === 'fire';
+    ctx.strokeStyle = on ? '#ffffff' : '#ff6a86'; ctx.globalAlpha = on ? 0.9 : 0.4; ctx.lineWidth = on ? 3 : 1.5; ctx.beginPath(); ctx.arc(0, 0, on ? 44 : 38, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+  }
   if (e.alive) {
     // orbiting note glyphs
     ctx.fillStyle = col;
@@ -86,6 +96,14 @@ export function drawBossTelegraph(ctx, e, now) {
     const center = ang;
     ctx.globalAlpha = a; wedge(ctx, e.x, e.y, center - half, center + half, 24, 270); ctx.fill();
     ctx.globalAlpha = 0.5 + 0.4 * p; for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(e.x + Math.cos(center + s * half) * 24, e.y + Math.sin(center + s * half) * 24); ctx.lineTo(e.x + Math.cos(center + s * half) * 270, e.y + Math.sin(center + s * half) * 270); ctx.stroke(); }
+  } else if (tg.kind === 'beat') {
+    // BEATDROP: a laser-straight line locked on the beat. MARK draws it; MOVE (the off-beat) pulses it green-to-red: step off now.
+    const len = 520, w = 16, move = tg.stage === 'move', pulse = 0.5 + 0.5 * Math.sin(t * 22);
+    ctx.translate(e.x, e.y); ctx.rotate(ang);
+    ctx.globalAlpha = move ? 0.16 + 0.16 * pulse : 0.1; ctx.fillStyle = '#ff3050'; ctx.fillRect(24, -w, len, w * 2);
+    ctx.globalAlpha = move ? 0.95 : 0.6; ctx.strokeStyle = move ? '#ffffff' : '#ff6a86'; ctx.lineWidth = move ? 2.2 : 1.4;
+    ctx.beginPath(); ctx.moveTo(24, -w); ctx.lineTo(len, -w); ctx.moveTo(24, w); ctx.lineTo(len, w); ctx.stroke();
+    if (move) { ctx.globalAlpha = 0.9; ctx.fillStyle = '#ffffff'; for (let x = 60; x < len; x += 64) { ctx.beginPath(); ctx.moveTo(x, -6); ctx.lineTo(x + 14, 0); ctx.lineTo(x, 6); ctx.closePath(); ctx.fill(); } }
   } else if (tg.kind === 'ring' && tg.ring) {
     const {count, step, width, index} = tg.ring;
     const R = 34 + p * 22;

@@ -9,7 +9,7 @@
 // so the score stays musical while the game state changes under it. Pure logic lives in music-core.js.
 
 import {getAudioRuntime,unlockAudio} from './audio.js';
-import {LAYER_NAMES,SCALES,chordForBar,createCombatTracker,createLayerMachine,generateTrack,isLowHealth,layersForScene,makeRng,midiToHz,musicCutoff,musicRate,rateToCents,sceneFromGame,seedFor,stepDuration} from './music-core.js';
+import {LAYER_NAMES,beatAt,SCALES,chordForBar,createCombatTracker,createLayerMachine,generateTrack,isLowHealth,layersForScene,makeRng,midiToHz,musicCutoff,musicRate,rateToCents,sceneFromGame,seedFor,stepDuration} from './music-core.js';
 
 export const MUSIC_SETTINGS_KEY='dead-air.music.v1';
 export const DEFAULT_MUSIC_VOLUME=.7;
@@ -334,6 +334,11 @@ export function setMusicTimeScale(scale){desired.timeScale=scale;engine?.setTime
 export function setMusicScene(scene,opts={}){desired.scene=scene;desired.opts=opts;engine?.setScene(scene,opts);}
 export function setMusicPaused(p){desired.paused=!!p;engine?.setPaused(p);}
 export function musicSting(kind){engine?.sting(kind);}
+/** The beat currently audible ({index, phase, bpm}) or null when music is not running. Boss phase III locks its pattern to this. */
+export function getMusicBeat(){
+  if(!engine||engine.dead||engine.paused)return null;
+  return beatAt({step:engine.step,nextTime:engine.nextTime,now:engine.now,bpm:engine.track.bpm,rate:engine.schedRate});
+}
 
 const combatTracker=createCombatTracker();
 const watch={seed:null,cleared:0,extraction:false,mode:'title',wasCombat:false};
@@ -352,7 +357,7 @@ export function musicSyncGame(state,dt=1/60){
       if(!e.alive||!e.aware)continue;
       const near=e.roomIndex===state.currentRoom||Math.hypot(e.x-state.player.x,e.y-state.player.y)<560;
       if(!near)continue;
-      aware++;if(e.elite&&e.roomIndex===state.currentRoom)boss=true;
+      aware++;if((e.elite||e.type==='boss')&&e.roomIndex===state.currentRoom)boss=true;
     }
   }
   const fight=combatTracker.update(dt,aware,boss);

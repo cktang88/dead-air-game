@@ -2,8 +2,13 @@
 // *simulation* seconds (so standing still, which slows the sim, stretches every telegraph and lets the player read
 // and weave through it) and returns the actions the game should apply: bullets, summons, phase changes.
 //
-// Phases by remaining health: 1 (100-66%) fans, rings, sweeps  ->  2 (66-33%) adds a spiral and summons
-// ->  3 (<33%) adds the charge and denser patterns. A charge leaves the boss exposed (vulnerability window).
+// Phases by remaining health, each tied to the time rule so the fight teaches it:
+//   I   (100-66%) fans, rings, sweeps: read the telegraph, step out of it (ordinary world time).
+//   II  (66-33%)  TEMPO: he conducts YOUR time. Spiral, summons, fans and rings only advance while you MOVE (see
+//                 tempoRate); stand still and the whole pattern nearly freezes. Moving is how you pay for his attacks.
+//   III (<33%)    BEATDROP: locked to the music. On every second beat he MARKS a line at you, two beats later he fires
+//                 along it. The off-beat between is the dodge window: step off the line on the beat. Charges and
+//                 summons are mixed in. A charge leaves the boss exposed (vulnerability window).
 
 export const BOSS = {
   name: 'THE CONDUCTOR',
@@ -19,10 +24,13 @@ export const BOSS = {
   maxAdds: 4,
 };
 
+export const BOSS_ROOM_NAME = 'THE BROADCAST ROOM';
+export const BEATS_PER_BEAT_PATTERN = 8;
+export const BEAT_FALLBACK_HZ = 2.3; // beats per world second when no music clock is supplied
 export const BOSS_PATTERNS = {
   1: ['fan', 'ring', 'sweep', 'fan', 'ring'],
   2: ['spiral', 'summon', 'fan', 'ring', 'sweep'],
-  3: ['charge', 'spiral', 'ring', 'charge', 'fan', 'summon'],
+  3: ['beat', 'ring', 'charge', 'beat', 'fan', 'summon'],
 };
 
 // telegraph: seconds of visible warning. active: seconds the attack keeps emitting. recover: pause after.
@@ -33,7 +41,13 @@ export const PATTERN_SPECS = {
   spiral: {telegraph: .9, active: 2.4, recover: .8},
   summon: {telegraph: 1.2, active: 0, recover: .9},
   charge: {telegraph: 1.15, active: 0, recover: .2},
+  beat: {telegraph: .5, active: 0, recover: 1},
 };
+
+// TEMPO (phase II): how fast his pattern clock runs for a player speed ratio (0 still .. 1 walking .. 1.4 sprint).
+// Never fully stopped, so a camper is not immune, but standing still is ten times slower than walking.
+export const TEMPO_FLOOR = .1;
+export const tempoRate = speedRatio => Math.min(1, Math.max(TEMPO_FLOOR, Number.isFinite(speedRatio) ? speedRatio : 0));
 
 export function bossPhaseFor(hpFraction) {
   if (hpFraction <= BOSS.phaseThresholds[1]) return 3;
@@ -44,7 +58,7 @@ export function bossPhaseFor(hpFraction) {
 export function createBoss() {
   return {
     active: false, phase: 1, mode: 'dormant', t: 0, patternIndex: 0, pattern: null, total: 0,
-    angle: 0, locked: false, emit: 0, spin: 0, sweepDir: 1, fired: false,
+    angle: 0, locked: false, emit: 0, spin: 0, sweepDir: 1, fired: false, tempo: 1, beatCount: 0, beatSeen: null, beatClock: 0,
     invuln: false, exposed: 0, hitWall: false, intro: 0,
     telegraph: null, // {kind, progress 0..1, angle} for the renderer / HUD while winding up
   };
@@ -69,6 +83,7 @@ function nextPattern(boss) {
 const angleTo = (from, to) => Math.atan2(to.y - from.y, to.x - from.x);
 
 function beginTelegraph(boss, kind, ctx) {
+  if (kind === 'beat') { boss.pattern = kind; boss.angle = angleTo(ctx.boss, ctx.player); fire(boss, PATTERN_SPECS.beat, ctx, {actions: []}); return; }
   const spec = PATTERN_SPECS[kind];
   boss.mode = 'telegraph'; boss.pattern = kind; boss.t = spec.telegraph; boss.total = spec.telegraph;
   boss.locked = false; boss.fired = false; boss.emit = 0;
@@ -96,6 +111,14 @@ function ringShots(boss) {
 function fanShots(boss) {
   const count = boss.phase === 3 ? 7 : 5, arc = boss.phase === 3 ? 1.1 : .9, shots = [];
   for (let i = 0; i < count; i++) shots.push({angle: boss.angle - arc / 2 + arc * i / (count - 1), speed: boss.phase === 1 ? 165 : 185, damage: 1});
+  return shots;
+}
+
+// Phase III beat cycle (counted in beats): 0 MARK the player's line, 1 MOVE (off-beat), 2 FIRE along the mark, 3 rest.
+export const beatStage = count => ['mark', 'move', 'fire', 'rest'][((count % 4) + 4) % 4];
+function beatShots(boss) {
+  const shots = [];
+  for (let i = -2; i <= 2; i++) shots.push({angle: boss.angle + i * .14, speed: 215, damage: 1});
   return shots;
 }
 
@@ -165,6 +188,25 @@ export function stepBoss(boss, dt, ctx) {
       if (boss.t <= 0 || boss.hitWall) { boss.hitWall = false; boss.mode = 'recover'; boss.t = BOSS.exposedTime; boss.exposed = BOSS.exposedTime; out.actions.push({type: 'exposed', duration: BOSS.exposedTime}); }
       break;
     }
+    case 'beat': {
+      // Locked to the music: ctx.beat = {index, phase} from the audible clock; without music a world-time clock stands in.
+      let index, phase;
+      if (ctx.beat) { index = ctx.beat.index; phase = ctx.beat.phase ?? 0; }
+      else { boss.beatClock += step * BEAT_FALLBACK_HZ; index = Math.floor(boss.beatClock); phase = boss.beatClock - index; }
+      boss.t = Infinity;
+      if (boss.beatSeen === null) boss.beatSeen = index - 1; // the first beat we see starts the cycle
+      if (index !== boss.beatSeen) {
+        boss.beatSeen = index;
+        const stage = beatStage(boss.beatCount);
+        if (stage === 'mark') { boss.angle = angleTo(ctx.boss, ctx.player); boss.locked = true; }
+        else if (stage === 'fire') out.actions.push({type: 'bullets', shots: beatShots(boss), beat: true});
+        boss.stage = stage; boss.beatCount++;
+        if (boss.beatCount >= BEATS_PER_BEAT_PATTERN) { boss.mode = 'recover'; boss.t = PATTERN_SPECS.beat.recover; boss.telegraph = null; boss.locked = false; break; }
+      }
+      const marking = boss.stage === 'mark' || boss.stage === 'move';
+      boss.telegraph = marking ? {kind: 'beat', stage: boss.stage, progress: boss.stage === 'mark' ? phase * .5 : .5 + phase * .5, angle: boss.angle, locked: true, ring: null} : null;
+      break;
+    }
     case 'recover':
       boss.telegraph = null;
       if (boss.t <= 0) { boss.mode = 'idle'; boss.t = boss.phase === 3 ? .35 : .6; }
@@ -183,6 +225,8 @@ function fire(boss, spec, ctx, out) {
     const room = Math.max(0, BOSS.maxAdds - (ctx.adds || 0)), count = Math.min(room, boss.phase === 3 ? 3 : 2);
     if (count > 0) out.actions.push({type: 'summon', count});
     boss.mode = 'recover'; boss.t = spec.recover;
+  } else if (kind === 'beat') {
+    boss.mode = 'beat'; boss.t = Infinity; boss.beatCount = 0; boss.beatSeen = null; boss.stage = 'rest';
   } else if (kind === 'charge') {
     boss.mode = 'charge'; boss.t = BOSS.chargeTime; boss.hitWall = false;
     out.actions.push({type: 'charge', angle: boss.angle});

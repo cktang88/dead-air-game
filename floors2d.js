@@ -8,7 +8,7 @@ export const FLOOR_BASE = {
   concrete: '#76757b', tile: '#aab2ba', metal: '#59606c', carpet: '#666a8c', grate: '#343a43',
   wood: '#8a6a4b', dirt: '#9a8468', vault: '#4a4752', hazard: '#5c535a', corridor: '#575c66',
 };
-const ACCENT_MIX = {concrete: 0.07, tile: 0.1, metal: 0.08, carpet: 0.28, grate: 0.0, wood: 0.05, dirt: 0.04, vault: 0.05, hazard: 0.1, corridor: 0};
+const ACCENT_MIX = {concrete: 0.17, tile: 0.14, metal: 0.15, carpet: 0.28, grate: 0.1, wood: 0.12, dirt: 0.16, vault: 0.12, hazard: 0.14, corridor: 0};
 
 export function floorColor(mat, accent) {
   const base = FLOOR_BASE[mat] || FLOOR_BASE.concrete;

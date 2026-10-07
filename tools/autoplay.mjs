@@ -802,6 +802,8 @@ async function playSeed(browser, seed, o, ctx) {
   // a returning player: the one-time Signal Check tutorial floor is marked done so the seeded run starts directly
   await context.addInitScript(() => { try { localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); } catch { /* ignore */ } });
   const page = await context.newPage();
+  // The bot plays generated floors: mark the first-run Signal Check tutorial as done.
+  await page.addInitScript(() => { try { localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); } catch {} });
   const errors = new Map();
   const noteErr = (t) => { const k = t.slice(0, 200); errors.set(k, (errors.get(k) || 0) + 1); };
   page.on('console', m => { if (m.type() === 'error') noteErr('console: ' + m.text()); });

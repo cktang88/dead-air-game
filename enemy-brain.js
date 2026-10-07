@@ -130,6 +130,7 @@ function perceive(c) {
     const inView = asleep ? d < 26 : (d <= SUSPICION.close || inCone(e, ai.face, vis.half, vis.range, p, 6));
     sees = false;
     ai.inView = inView && d <= vis.range && clearLine(world, e, p);
+    if (world.stillCloak && d > world.stillCloak && Math.hypot(p.vx ?? 0, p.vy ?? 0) < 24) ai.inView = false;   // BLACKOUT rank 3: stillness is cover
     ai.suspicion = stepSuspicion(ai.suspicion, {inView: ai.inView, d, range: vis.range, speed: Math.hypot(p.vx ?? 0, p.vy ?? 0), dt});
     if (ai.suspicion >= SUSPICION.alertAt) { sees = true; ai.spotted = true; }
   }

@@ -44,29 +44,31 @@ function clickIfVisible(selector) {
   return false;
 }
 
+// Resolve whatever dialog the game has opened, the way a player would: loadout confirm, supply drop (three visible options),
+// the frequency pick, the extract/descend decision. Everything is null-safe: panels that no longer exist are skipped.
+const report_ = {supplyTaken: [], frequencyPicked: [], decisions: []};
 function serviceDialogs() {
   const doc = frameDoc();
   const snapshot = gameState();
-  if (snapshot.weaponPickup) {
-    const choice = doc.querySelector('#weapon-pickup [data-pickup-slot]:not(:disabled)');
-    if (choice) choice.click();
-    else clickIfVisible('#decline-weapon-pickup');
-  }
-  if (!doc.querySelector('#loadout-confirm').hidden) clickIfVisible('#loadout-accept');
+  const confirm = doc.querySelector('#loadout-confirm');
+  if (confirm && !confirm.hidden) clickIfVisible('#loadout-accept');
   else if (doc.querySelector('#loadout').classList.contains('show')) doc.querySelector('#close-loadout').click();
-  if (!doc.querySelector('#cache-panel').hidden) {
-    const ammo=doc.querySelector('#cache-options [data-cache="ammo"]:not(:disabled)');
-    const health=doc.querySelector('#cache-options [data-cache="health"]:not(:disabled)');
-    if(ammo&&snapshot.player?.ammo+snapshot.player?.reserve<30)ammo.click();
-    else if(health&&snapshot.player?.health<snapshot.player?.maxHealth)health.click();
-    else if(ammo)ammo.click();
-    else clickIfVisible('#close-cache');
+  const supply = doc.querySelector('#supply-panel');
+  if (supply && !supply.hidden) {
+    const rows = [...doc.querySelectorAll('#supply-options .merchant-row')];
+    const usable = kind => rows.find(row => row.dataset.kind === kind && row.querySelector('[data-supply]:not(:disabled)'));
+    const p = snapshot.player || {};
+    const hurt = p.health < p.maxHealth, low = (p.ammo + p.reserve) < 30;
+    const choice = (hurt && usable('heal')) || (low && usable('ammo')) || usable('freq') || usable('gun') || usable('mod') || usable('ammo') || rows.find(row => row.querySelector('[data-supply]:not(:disabled)'));
+    if (choice) { report_.supplyTaken.push(choice.dataset.kind); choice.querySelector('[data-supply]').click(); }
+    else clickIfVisible('#close-supply');
   }
-  if (!doc.querySelector('#merchant-panel').hidden) {
-    const medkit = [...doc.querySelectorAll('#merchant-stock [data-merchant]')].find(button =>
-      button.parentElement?.textContent.includes('FIELD MEDKIT') && !button.disabled);
-    if (medkit && snapshot.player?.health < snapshot.player?.maxHealth) medkit.click();
-    clickIfVisible('#close-merchant');
+  if (snapshot.runModal === 'freq') {
+    const card = doc.querySelector('#run-modal [data-freq]');
+    if (card) { report_.frequencyPicked.push(card.dataset.freq); card.click(); }
+  } else if (snapshot.runModal === 'decision') {
+    report_.decisions.push('extract');
+    doc.querySelector('#run-modal [data-act="extract"]')?.click();
   }
   return snapshot;
 }
@@ -267,7 +269,7 @@ function fightInCurrentRoom(state){
     key(dodge);advance(24);releaseMovement();return true;
   }
   if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){
-    if(!state.player.reloading)press('Shift');
+    if(!state.player.reloading)press(bindings.reload);
     advance();
     return true;
   }
@@ -334,10 +336,10 @@ async function probeRangedDodge(roomIndex){
       if(!result.dodgeKey){result.aborted='no-safe-dodge-direction';return result;}
       result.healthBefore=state.player.health;result.armorBefore=state.player.armor;
       result.playerBeforeDodge={x:state.player.x,y:state.player.y};
-      key(result.dodgeKey);
+      key(result.dodgeKey);advance(8);
       result.movementTimeScale=gameState().timeScale;
       const remainingDistance=Math.max(0,((target.x-incoming.x)*incoming.vx+(target.y-incoming.y)*incoming.vy)/velocity);
-      const resolveFrames=Math.min(100,Math.max(1,Math.ceil(remainingDistance/velocity*60)+12));
+      const resolveFrames=Math.min(500,Math.max(1,Math.ceil(remainingDistance/velocity*60/0.3)+12)); // enemy bullets fly on world time: ~0.35x while walking
       result.healthEvents=[];
       for(let step=0;step<resolveFrames;step++){
         const before=gameState();
@@ -365,7 +367,7 @@ async function probeRangedDodge(roomIndex){
     if(distraction){
       restedAfterCombat=false;
       if(dodgeIncomingProjectile(state)){await wait(5);continue;}
-      if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press('Shift');advance();continue;}
+      if(state.player.reloading||state.player.ammo<=1&&state.player.reserve>0){if(!state.player.reloading)press(bindings.reload);advance();continue;}
       shootAt(distraction,state);advance();continue;
     }
     if(!restedAfterCombat){await wait(400);restedAfterCombat=true;continue;}
@@ -395,7 +397,8 @@ async function waitForGame() {
 async function run() {
   const report = {seed, fullFloor, rooms: [], events: [], errors: []};
   try {
-    frame.src = '../index.html?full-floor-browser-harness&v=retired-enemy-prune-3';
+    localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); // skip the Signal Check tutorial floor
+    frame.src = '../index.html?full-floor-browser-harness';
     await new Promise((resolve, reject) => {
       frame.addEventListener('load', resolve, {once: true});
       setTimeout(() => reject(new Error('Game page load timed out')), 45000);
@@ -447,16 +450,13 @@ async function run() {
     if(fullFloor)report.fullFloorTargets=encountersToClear.map(({name,index,role})=>({name,index,role}));
 
     if(fullFloor){
-      for(const room of rooms.filter(candidate=>['armory','merchant'].includes(candidate.role))){
+      for(const room of rooms.filter(candidate=>['armory'].includes(candidate.role))){
         state=serviceDialogs();
         if(state.mode!=='play'||!state.player)break;
         const path=roomNavigationPath(room),reached=path.length>0&&movePath(path,16);
         state=serviceDialogs();
         report.events.push({event:'service-room',room:room.name,role:room.role,reached,player:sample(state)});
         if(!reached||state.mode!=='play')continue;
-        if(room.role==='merchant'){
-          press(bindings.interact);advance();state=serviceDialogs();
-        }
       }
     }
 
@@ -467,7 +467,7 @@ async function run() {
       const gate = state.lockedDoors.find(door => !door.opened && door.room === room.name);
       if (gate) {
         const gatePath = gateApproachPath(gate);
-        if (!gatePath.length||!movePath(gatePath)) throw new Error(`Could not reach cache gate before ${room.name}`);
+        if (!gatePath.length||!movePath(gatePath)) throw new Error(`Could not reach supply-room gate before ${room.name}`);
         press('e'); advance(2); state = serviceDialogs();
         if (state.lockedDoors.some(door => door.room === room.name && !door.opened)) {
           report.events.push({event: 'room-skipped', room: room.name, reason: 'gate could not be opened'});
@@ -506,7 +506,7 @@ async function run() {
           continue;
         }
         if (state.player.reloading || state.player.ammo <= 1 && state.player.reserve > 0) {
-          if (!state.player.reloading) press('Shift');
+          if (!state.player.reloading) press(bindings.reload);
           advance(); continue;
         }
         if(throwFragAtCluster(enemies,state))continue;
@@ -521,8 +521,15 @@ async function run() {
       if (state.mode !== 'play' || !state.player) break;
 
       // Exercise the market modal in a market room; serviceDialogs buys a medkit if useful.
-      if (state.merchant) { press('e'); advance(); state = serviceDialogs(); }
-      if (room.role==='cache'&&!state.cacheOpen) { press(bindings.interact); advance(); state=serviceDialogs(); }
+      if (room.role==='cache') {
+        // the supply drop: walk to its pickup, interact, and let serviceDialogs take one of the three visible options
+        const drop = state.pickups.find(pickup => pickup.type === 'supply' && pickup.roomIndex === room.index);
+        const dropPath = drop ? navigationPath({x: Math.floor(drop.x / 32), y: Math.floor(drop.y / 32)}) : [];
+        const reached = dropPath.length > 0 && movePath(dropPath, 14);
+        if (reached) { press(bindings.interact); advance(2); state = serviceDialogs(); advance(2); }
+        report.events.push({event: 'supply-drop', room: room.name, found: !!drop, reached, taken: report_.supplyTaken.slice()});
+        state = serviceDialogs();
+      }
       if(fullFloor&&clinicRoom&&!clinicVisited&&state.player.health<state.player.maxHealth){
         state=serviceDialogs();
         const healing=state.pickups.find(pickup=>pickup.type==='heal'&&pickup.roomIndex===clinicRoom.index);
@@ -570,7 +577,7 @@ async function run() {
       report.error='The probe could not open an affordable scrap gate';
     }
     if(!report.error&&report.rangedDodge&&(!report.rangedDodge.telegraphSeen||report.rangedDodge.planningTimeScale!==idleScale.toFixed(2)||
-      report.rangedDodge.movementTimeScale!=='1.00'||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
+      !(Number(report.rangedDodge.movementTimeScale)>0.2)||!report.rangedDodge.enemyBulletSeen||!report.rangedDodge.wouldHitIfStill||
       report.rangedDodge.healthEvents?.length>0||report.rangedDodge.healthBefore!==report.rangedDodge.healthAfter||
       report.rangedDodge.armorBefore!==report.rangedDodge.armorAfter)){
       report.error=report.rangedDodge.aborted?`Ranged probe stopped: ${report.rangedDodge.aborted}`:
@@ -588,6 +595,7 @@ async function run() {
     restoreStorage();
     report.localStorageRestored = true;
     report.errors = browserErrors;
+    report.dialogs = report_;
     if (browserErrors.length && !report.error) report.error = 'The browser reported a runtime error';
     result.className = report.error ? 'fail' : 'pass';
     result.textContent = JSON.stringify(report, null, 2);

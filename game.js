@@ -2,8 +2,8 @@ import {createRenderer,hexStr} from './render2d.js';
 import {VIEW_HALF_HEIGHT as CAMERA_HALF_HEIGHT} from './camera2d.js';
 import RAPIER from 'https://esm.sh/@dimforge/rapier2d-compat@0.17.3';
 import * as ROT from 'https://esm.sh/rot-js@2.1.3';
-import {playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playLowAmmo, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playUiClick, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
-import {armMusicOnGesture, loadMusicSettings, musicSyncGame, setMasterMusicVolume, setMusicTimeScale} from './music.js';
+import {playFootstep, playNearMiss, playShieldBlock, playSniperLock, isAudioMuted, loadAudioSettings, playArmorHit, playBruteWindup, playCrateBreak, playEmptyClick, playLowAmmo, playEnemyShot, playEnemyTell, playExplosion, playExtraction, playFlashbang, playFire, playGateUnlock, playGunshot, playHit, playKill, playPickup, playPlayerHurt, playReload, playReloadEnd, playRoomClear, playSlowmoEnter, playSlowmoExit, playSmoke, playUiClick, playWallImpact, setAudioMuted, setMasterVolume, setTimeScaleAudio, unlockAudio} from './audio.js';
+import {armMusicOnGesture, getMusicBeat, loadMusicSettings, musicSting, musicSyncGame, setMasterMusicVolume, setMusicTimeScale} from './music.js';
 import {ambienceSync, ambienceChatter} from './ambience.js';
 import {ENEMY_TYPES, GEAR, GUNS, MODS, MOD_BY_ID, modFits, SHOTGUN_SHELLS, TAU, TILE, WALL_H} from './catalog.js';
 import {drawIcon} from './icons.js';
@@ -18,7 +18,8 @@ import {recordRun} from './goals.js';
 import {assignRoomRewards, computeDoorLinks, doorPreviews} from './door-rewards.js';
 import {collectTape, operatorLines, causeName} from './story.js';
 import {interferenceStats, toggleInterference} from './interference.js';
-import {spawnBoss, updateBossEnemy, bossDamageFor} from './boss-fight.js';
+import {spawnBoss, updateBossEnemy, bossDamageFor, bossLights, bossCamShift} from './boss-fight.js';
+import {BOSS_ROOM_NAME} from './boss.js';
 import {BOSS} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
@@ -28,7 +29,8 @@ import {findRoomCratePosition as findGuaranteedRoomCratePosition, findRoomPropPo
 import {paceEnemyCount} from './room-templates.js';
 import {generateDungeon} from './dungeon.js';
 import {createNav, stepEnemyBrain, brainState} from './enemy-brain.js';
-import {choosePostures, damageModifier, deathCause, shotNoiseRadius} from './stealth.js';
+import {SHOVE,DRY_DROP_VALUE,isAllDry,shoveOutcome,shoveReady,shoveTargets} from './shove.js';
+import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadius} from './stealth.js';
 import {noiseRayLengths} from './stealth2d.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
 import {supplyOffers,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
@@ -39,7 +41,7 @@ import {particleBurstBudget} from './particles.js';
 import {resolveProjectileImpacts} from './projectile-impacts.js';
 import {pickGunIndex,pickModId} from './loot.js';
 import {edgeView}from './timefx.js';
-import {TIME_RULE,addBeat,drainBeat,rateLabel,shotBeat,sprintNoiseStep,timeBand}from './time-rule.js';
+import {PLAYER_BULLET_CLOCK,TIME_RULE,addBeat,drainBeat,playerBulletDt,rateLabel,shotBeat,sprintNoiseStep,timeBand}from './time-rule.js';
 import {showBanner,gunIcon,strokeIcon,statBarsHtml,categoryColor,hudOccludes,formatClock,pushFeed,roomBanner,roomClearBanner,updateLowHealth,pulseHurt,setPauseScreen,runEndHtml,keycap,feedTone,syncPips,tickNumber,flashEl,syncKeycaps,hintHtml,costHtml,animateCounts} from './hud-ui.js';
 import {mergeBest,readBest,writeBest} from './best-run.js';
 export {pushFeed};
@@ -69,7 +71,7 @@ const state = {
   progress:loadProgress(), paidOut:false,
   aim:{x:1,y:0}, lastAction:0, lastActionKind:'other', fireCooldown:0, weaponBurst:null, reloadTimer:0, invuln:0, shake:0, flashTimer:0, hitstop:0, toastTimer:0, roomToast:'', sector:1,
   throwableIndex:2, throwables:{smoke:1,flash:1,frag:2}, shotgunShellId:'buckshot', supplyOpen:false, supplyPickup:null,
-  physics:null, workbench:null,
+  physics:null,
   doorProps:[], glass:[], peek:null, signal:null, signalLayout:null,
   onboarding:(()=>{try{return loadOnboarding(localStorage);}catch{return emptyOnboarding();}})(),
 };
@@ -83,7 +85,7 @@ const state = {
 //   impact      {surface:'wall'|'cover'|'crate'|'enemy',owner}   round ended on geometry
 //   reloadStart {gun,duration,empty}  reloadEnd {gun,cancelled}  empty {gun,dry}  (dry = no reserve ammo)
 // Other eased/readable feel values: timeScaleSmoothed, timeScaleTarget, recoil{x,y,amount}, sprintBlend(0..1), bloom{value}.
-Object.assign(state,{floor:1,floorCfg:floorConfig(1),freq:{},daily:false,runModal:null,timeCredit:0,stillFor:0,floorHit:false,floorsCleared:0,runRooms:0,floor1Seconds:0,stillRoomClears:0,slowTriples:0,slowKills:0,tripleFlag:false,noHitFloors:0,roomMove:0,lastPos:null,bossKilled:false,bossPistol:false,lastHitType:null,doorMarkers:[],doorLinks:[],boss:null,metaTab:'unlocks',shotDamageMult:1,levelSeed:0,freqOffers:[],freqThen:null,outcome:null,events:[],timeScaleSmoothed:1,timeScaleTarget:1,frameDt:1/60,recoil:{x:0,y:0,amount:0},sprintBlend:0,bloom:newBloom(),pressUntil:-1,wasFiring:false,playerVel:{x:0,y:0},playerKnock:{x:0,y:0},lastPhysicsStep:0,cmdVel:{x:0,y:0},stepHitstop:false,reloadTotal:0,dryTimer:0});
+Object.assign(state,{floor:1,floorCfg:floorConfig(1),freq:{},daily:false,runModal:null,timeCredit:0,stillFor:0,floorHit:false,floorsCleared:0,runRooms:0,floor1Seconds:0,stillRoomClears:0,slowTriples:0,slowKills:0,tripleFlag:false,noHitFloors:0,roomMove:0,lastPos:null,bossKilled:false,bossPistol:false,lastHitType:null,echoes:[],flourishT:0,shotGroup:null,shotExtra:null,doorMarkers:[],doorLinks:[],boss:null,metaTab:'unlocks',shotDamageMult:1,levelSeed:0,freqOffers:[],freqThen:null,outcome:null,events:[],timeScaleSmoothed:1,timeScaleTarget:1,frameDt:1/60,recoil:{x:0,y:0,amount:0},sprintBlend:0,bloom:newBloom(),pressUntil:-1,wasFiring:false,playerVel:{x:0,y:0},playerKnock:{x:0,y:0},lastPhysicsStep:0,cmdVel:{x:0,y:0},stepHitstop:false,reloadTotal:0,dryTimer:0});
 const emit=(type,x,y,extra)=>pushEvent(state.events,{type,t:state.time,x,y,...extra});
 const input = {keys:new Set(), mouseX:innerWidth/2, mouseY:innerHeight/2, firing:false, interact:false};
 const controls={bindings:{...DEFAULT_KEY_BINDINGS},waitingFor:null};
@@ -148,7 +150,7 @@ function syncWeaponPanel(){
 function routeStats(){let total=0,cleared=0;for(const r of state.rooms){if(r.branch===true||!roomHasEncounter(r))continue;total++;if(r.cleared)cleared++;}return {total,cleared};}
 function syncRunStats(){
   tickNumber($('kills'),state.kills,2);tickNumber($('scrap'),state.scrap,3);
-  {const r=routeStats();setText($('sector-count'),`${r.cleared} / ${r.total}`);}
+  {const r=routeStats(),stat=$('sector-count').parentElement;if(stat)stat.hidden=signalOn();setText($('sector-count'),`${r.cleared} / ${r.total}`);}   // Signal Check has its own N / 5 chip: the route counter would read 0 / 0
   setText($('run-clock'),`RUN ${formatClock(state.realElapsed)}`);
   setText($('room-name'),state.roomToast||(signalOn()?`SIGNAL CHECK · ${state.rooms[state.currentRoom]?.name||'BREATH'}`:`FLOOR ${String(state.floor).padStart(2,'0')} · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`));
 }
@@ -299,13 +301,14 @@ function makeLevel(){
   if(sig)buildSignalDoors();else buildDoorProps();
   const start=state.rooms[0],sp=sig?roomStartPx(0):null;const sx=sp?sp.x:(start.cx+.5)*TILE,sy=sp?sp.y:(start.cy+.5)*TILE;
   const body=makeBody({x:sx,y:sy},8,false);body.lockRotations(true,true);body.setLinearDamping(4);body.collider(0).setFriction(0);Object.assign(state,{playerVel:{x:0,y:0},playerKnock:{x:0,y:0},cmdVel:{x:0,y:0},recoil:{x:0,y:0,amount:0},bloom:newBloom(),events:[],sprintBlend:0,pressUntil:-1,cornerStuck:0,cornerSign:1});
-  state.player={body,x:sx,y:sy,hp:state.health};state.workbench=null;
+  state.player={body,x:sx,y:sy,hp:state.health};
   if(!sig){const exit=state.rooms.at(-1);dropPickup('exit',(exit.cx+.5)*TILE,(exit.cy+.5)*TILE);}
   state.boss=!sig&&state.floorCfg.boss?spawnBoss(bossApi,state.rooms.at(-1),interferenceStats(state.progress).bossHpMult):null;
+  if(state.boss)state.rooms.at(-1).name=BOSS_ROOM_NAME;state.stageLights=[];state.camFocus={x:0,y:0};
   state.currentRoom=0;state.roomsCleared=0;if(sig)spawnSignalRoom(0);updateRoom();makeMinimap();hud();view.setLevel();
 }
 function clearLevel(){
-  state.player=null;state.enemies=[];state.bullets=[];state.pickups=[];state.crates=[];state.cover=[];state.thrown=[];state.effects=[];state.workbench=null;state.colliders=[];state.doors=[];state.lockedDoors=[];state.solidMap=[];state.doorProps=[];state.glass=[];state.peek=null;peekMachine.cancel();setPeekChrome(false);
+  state.player=null;state.enemies=[];state.bullets=[];state.echoes=[];state.pickups=[];state.crates=[];state.cover=[];state.thrown=[];state.effects=[];state.colliders=[];state.doors=[];state.lockedDoors=[];state.solidMap=[];state.doorProps=[];state.glass=[];state.peek=null;peekMachine.cancel();setPeekChrome(false);
   physics?.free();
   physics=new RAPIER.World({x:0,y:0});state.physics=physics;
 }
@@ -409,7 +412,8 @@ function fireBullet(owner,x,y,dx,dy,gun,damageScale=1,projectile={}){
   const start=owner==='player'?muzzlePoint(x,y,dx,dy,gun):{x:x+dx*13,y:y+dy*13};
   const color=owner==='player'?gun.color:0xff6a64;
   const bullet={owner,enemyId:owner==='enemy'?projectile.enemyId:null,body:null,color,x:start.x,y:start.y,ox:x,oy:y,vx:dx*speed,vy:dy*speed,damage:projectile.damage??(stats?.damage??gun.damage)*damageScale,life:(projectile.range??stats?.range??gun.range??speed*1.7)/speed,penetration:owner==='player'&&!projectile.lob?weaponPenetration(gun,mod):{enemies:0,crates:0,walls:0},hitEnemies:new Set(),hitCrates:new Set(),insideWall:false,style:projectile.lob?'lob':projectile.style||null,lob:projectile.lob?gun.lob:null,missed:false};
-  if(owner==='player'){const f=freqStats(state.freq);bullet.burn=stats.burn;bullet.stun=stats.stun;bullet.maxBounces=f.ricochet+stats.bounces;bullet.bounces=0;bullet.penetration={...bullet.penetration,enemies:bullet.penetration.enemies+f.pierce};bullet.homing=f.homing;bullet.damage*=state.shotDamageMult;}
+  if(owner==='player'){const f=freqStats(state.freq),sx=state.shotExtra||{};bullet.burn=stats.burn;bullet.stun=stats.stun;bullet.maxBounces=f.ricochet+stats.bounces;bullet.bounces=0;bullet.bounceSeek=f.bounceSeek;bullet.penetration={...bullet.penetration,enemies:bullet.penetration.enemies+f.pierce+(sx.pierce||0),crates:bullet.penetration.crates+(f.crateThru?9:0)};bullet.homing=f.homing;bullet.homingRange=f.homingRange||280;bullet.damage*=state.shotDamageMult;
+    if(!projectile.noShot){bullet.power=sx.power||1;bullet.rageBlast=sx.rageBlast||0;if(state.shotGroup){bullet.shot=state.shotGroup;state.shotGroup.n++;}}}
   if(owner==='player')bullet.sneak=new Map(state.enemies.filter(e=>e.alive&&!e.aware&&e.type!=='boss').map(e=>[e,{x:e.face?.x??1,y:e.face?.y??0,asleep:e.posture==='sleep'}]));// stealth: who was unaware (and facing where) when the trigger was pulled; the shot's own noise must not cancel a sneak hit
   state.bullets.push(bullet);
 }
@@ -421,8 +425,16 @@ function firePlayerRound(gun,stats){
   if(!p)return;
   playGunshot(gun,{suppressed:modOf(gun)==='suppressor'});
   addShotBeat(gun,stats);
-  {const sup=modOf(gun)==='suppressor';emitNoise(p.x,p.y,shotNoiseRadius({mult:stats.noise*freqStats(state.freq).noiseMult,silent:state.heldSilent}),sup?'suppressed':'shot');}
-  const fq=freqStats(state.freq);{let mult=runStats().damageMult*(1+fq.missingHpDamage*Math.max(0,state.maxHealth-state.health))*(state.health<=1&&fq.lastStand?1+fq.lastStand:1);if(fq.heldBreath>0&&state.stillFor>=.6){mult*=1+fq.heldBreath;state.stillFor=0;view.fx.floater(p.x,p.y-20,fq.heldBreathSilent?'HELD BREATH · SILENT':'HELD BREATH','#ffd27a',13,1);state.heldSilent=fq.heldBreathSilent;}else state.heldSilent=false;state.shotDamageMult=mult;}
+  const fq=freqStats(state.freq);
+  {// Per-shot modifiers: RED LINE (damage, size, pierce, burst), HELD BREATH (charged shot), noise (DEAD MIC defers it until the shot's fate is known).
+    const missing=Math.max(0,state.maxHealth-state.health),extra={pierce:0,power:1,rageBlast:0};let mult=runStats().damageMult*(1+fq.missingHpDamage*missing);
+    if(fq.missingHpDamage>0){extra.power=1+.3*missing;if(fq.ragePierce&&state.health<=2)extra.pierce+=1;if(fq.rageBlast&&state.health<=1)extra.rageBlast=fq.rageBlast;}
+    state.heldSilent=false;
+    if(fq.heldBreath>0&&state.stillFor>=.6){mult*=1+fq.heldBreath;state.stillFor=0;if(fq.heldPierce)extra.pierce+=9;extra.power=Math.max(extra.power,1.5);view.fx.ring(p.x,p.y,6,26,'#ffd27a',.35,2);view.fx.floater(p.x,p.y-20,fq.heldBreathSilent?'HELD BREATH · SILENT':'HELD BREATH','#ffd27a',13,1);state.heldSilent=fq.heldBreathSilent;}
+    state.shotDamageMult=mult;state.shotExtra=extra;
+    const sup=modOf(gun)==='suppressor',noise={x:p.x,y:p.y,radius:shotNoiseRadius({mult:stats.noise*fq.noiseMult,silent:state.heldSilent}),kind:sup?'suppressed':'shot'};
+    state.shotGroup=fq.quietKill&&noise.radius>0?{n:0,noise,quiet:false,loud:false,flushed:false}:null;
+    if(!state.shotGroup)emitNoise(noise.x,noise.y,noise.radius,noise.kind);}
   if(state.quickdrawFor===state.weaponIndex){state.quickdrawFor=-1;state.shotDamageMult*=MOD_BY_ID.get('quickdraw').firstShotMult;view.fx.floater(p.x,p.y-26,'QUICK-DRAW x2','#ffd27a',13,1);}
   const feel=gunFeel(gun),first=registerShot(state.bloom,feel);
   const aim=Math.atan2(state.aim.y,state.aim.x),shell=gun.id==='shotgun'?shotgunShellStats(shellForRun(),stats):null;
@@ -433,22 +445,58 @@ function firePlayerRound(gun,stats){
   const angles=count>1?fanAngles(aim,count,shell?spread:Math.max(spread,(count-1)*.08),(random()-.5)*spread*.18):[aim+(random()-.5)*spread];
   if(gun.lob){const target=view.screenToWorld(input.mouseX,input.mouseY),reach=clamp(distance(p,target),70,stats.range);fireBullet('player',p.x,p.y,Math.cos(aim),Math.sin(aim),gun,1,{lob:true,range:reach});}
   else for(const angle of angles)fireBullet('player',p.x,p.y,Math.cos(angle),Math.sin(angle),gun,1,shell?{damage:shell.damage,range:shell.range}:{});
+  if(state.shotGroup&&state.shotGroup.n===0)flushShotNoise(state.shotGroup);
+  if(fq.echoCount&&state.health<=2&&!gun.lob)for(let k=1;k<=fq.echoCount;k++)state.echoes.push({t:.2*k,x:p.x,y:p.y,angles,gun,scale:fq.echoDmg,stats});
   const muzzle=muzzlePoint(p.x,p.y,state.aim.x,state.aim.y,gun);
   state.recoil=addRecoil(state.recoil,state.aim.x,state.aim.y,feel.kick);
   state.playerKnock.x-=state.aim.x*feel.nudge;state.playerKnock.y-=state.aim.y*feel.nudge;
   state.shake=Math.max(state.shake,feel.shake);burst(muzzle.x,muzzle.y,0xffd08a,4);
   emit('shot',muzzle.x,muzzle.y,{dx:state.aim.x,dy:state.aim.y,gun:gun.id,pellets:count,kick:feel.kick,shake:feel.shake,spread,first});
 }
+// DEAD MIC rank 2: the shot's noise is held back until its fate is known. A shot that kills an unaware enemy (and never
+// hurts an aware one) is silent; any other shot makes its noise when its last bullet is gone.
+function flushShotNoise(group){if(group.flushed)return;group.flushed=true;if(!group.quiet||group.loud)emitNoise(group.noise.x,group.noise.y,group.noise.radius,group.noise.kind);}
+function stepEchoes(dt){
+  for(let i=state.echoes.length-1;i>=0;i--){const e=state.echoes[i];e.t-=dt;if(e.t>0)continue;state.echoes.splice(i,1);if(!state.player||state.mode!=='play')continue;
+    state.shotExtra={pierce:0,power:1,rageBlast:0};for(const angle of e.angles){fireBullet('player',e.x,e.y,Math.cos(angle),Math.sin(angle),e.gun,e.scale,{noShot:true});const b=state.bullets.at(-1);if(b){b.color=0xff7a8a;b.echo=true;b.power=1.25;}}
+    view.fx.ring(e.x,e.y,4,18,'#ff7a8a',.3,2);}
+}
+// SHOVE (shove.js): the melee fallback when both guns are dry, and the way to take a quiet enemy down without a gun.
+const RIOT_SHIELD_TURN=1.05;// rad/s: slow enough that circling a riot (or a shove that drops its shield) gets you behind it
+function playerShove(){
+  const p=state.player;if(!p||state.mode!=='play'||state.peek||state.paused||state.loadoutOpen||state.supplyOpen||state.runModal)return;
+  if(!shoveReady(state.realElapsed,state.shoveReadyAt||0))return;
+  state.shoveReadyAt=state.realElapsed+SHOVE.cooldown;
+  const aim=state.aim,hits=shoveTargets(p,aim,state.enemies,{hitRadius:e=>e.def.hitRadius||(e.type==='brute'?13:11)}),ang=Math.atan2(aim.y,aim.x);
+  view.fx.spark(p.x+aim.x*20,p.y+aim.y*20,ang,6,.9,[120,260],'#e8f4ff');view.fx.ring(p.x+aim.x*16,p.y+aim.y*16,6,26,'#e8f4ff',.22,3);
+  state.playerKnock.x+=aim.x*SHOVE.lunge;state.playerKnock.y+=aim.y*SHOVE.lunge;
+  state.beatBank=addBeat(state.beatBank||0,SHOVE.beat);state.beatPulse=Math.max(state.beatPulse||0,.5);markAction('fire');
+  let loud=false;
+  for(const {enemy,dir} of hits){
+    const out=shoveOutcome({type:enemy.type,hp:enemy.hp,aware:!!enemy.aware,asleep:enemy.posture==='sleep'&&!enemy.aware,elite:!!enemy.elite,facing:enemy.face,dir,shieldFacing:enemy.def.shield?enemy.shieldFacing:null});
+    if(out.kind==='ignored'){view.fx.spark(enemy.x,enemy.y,Math.atan2(-dir.y,-dir.x),5,1);continue;}
+    if(out.kind!=='takedown')loud=true;
+    enemy.stun=Math.max(enemy.stun||0,out.stagger);enemy.knock.x=dir.x*out.knock;enemy.knock.y=dir.y*out.knock;
+    if(out.kind==='blocked'){enemy.shieldFlash=.28;playShieldBlock({distance:distance(enemy,p),pan:(enemy.x-p.x)/480});view.fx.spark(enemy.x-dir.x*8,enemy.y-dir.y*8,Math.atan2(-dir.y,-dir.x),6,1);view.fx.floater(enemy.x,enemy.y-26,out.label,'#bfd4e4',14,1.1);state.shake=Math.max(state.shake,3);continue;}
+    enemy.hp-=out.damage;view.fx.hitEnemy(enemy,out.damage,dir.x,dir.y,enemy.hp<=0);
+    if(out.label)view.fx.floater(enemy.x,enemy.y-30,out.label,out.kind==='takedown'?'#b49bff':'#ffd27a',out.kind==='takedown'?20:14,1.2);
+    state.shake=Math.max(state.shake,3);state.hitstop=Math.max(state.hitstop,.05);
+    if(enemy.hp<=0)killEnemy(enemy,{vx:dir.x*300,vy:dir.y*300,damage:30,owner:'shove'});else playHit();
+    if(out.kind==='takedown'){state.takedowns=(state.takedowns||0)+1;}
+  }
+  if(loud)emitNoise(p.x,p.y,SHOVE.noise*freqStats(state.freq).noiseMult,'shove');
+  if(!hits.length)playFootstep();
+}
 function startReload(){
   const gun=GUNS[state.weaponIndex],ammo=state.weaponAmmo[state.weaponIndex];
   state.reloadTimer=state.reloadTotal=reloadTime(reloadDuration(gun),ammo);state.weaponBurst=null;
   state.beatBank=addBeat(state.beatBank||0,TIME_RULE.beat.reload);state.beatPulse=Math.max(state.beatPulse||0,.6);
   playReload();emit('reloadStart',state.player.x,state.player.y,{gun:gun.id,duration:state.reloadTotal,empty:ammo<=0});
-  const bloom=freqStats(state.freq).smokeReload;if(bloom>0){const item={...throwableById('smoke'),radius:bloom,duration:3};state.effects.push({id:'smoke',item,x:state.player.x,y:state.player.y,remaining:3,elapsed:0,nextTick:0});view.fx.explode('smoke',state.player.x,state.player.y,bloom);}
+  const fsb=freqStats(state.freq),bloom=fsb.smokeReload;if(bloom>0){const item={...throwableById('smoke'),radius:bloom,duration:fsb.smokeTime};state.effects.push({id:'smoke',item,x:state.player.x,y:state.player.y,remaining:fsb.smokeTime,elapsed:0,nextTick:0});view.fx.explode('smoke',state.player.x,state.player.y,bloom);}
 }
 function notifyReady(key,gap){return cooldownReady(state.notify,key,performance.now()/1000,gap);}
 function supplyCtx(){const gi=state.weaponIndex,g=GUNS[gi],low=ammoStatus({mag:state.weaponAmmo[gi],reserve:state.reserveAmmo[gi],magSize:magSize(g)})!=='ok'||state.weaponSlots.some(i=>ammoStatus({mag:state.weaponAmmo[i],reserve:state.reserveAmmo[i],magSize:magSize(GUNS[i])})==='dry');return {health:state.health,maxHealth:state.maxHealth,ammoLow:low,armorUseful:!(state.maxArmor>0&&state.armor>=state.maxArmor)};}
-function rollSupplyDrop(source,x,y){const kind=supplyDrop(random(),source,supplyCtx());if(!kind)return;dropPickup(kind,x,y,kind==='ammo'?(source==='crate'?.35:.2):1);}
+function rollSupplyDrop(source,x,y){const kind=supplyDrop(random(),source,supplyCtx());if(!kind)return;dropPickup(kind,x,y,kind==='ammo'?(source==='crate'?.4:.3):1);}
 function playerShoot(){
   const p=state.player;if(!p||state.reloadTimer>0||state.weaponBurst)return;
   if(state.weaponAmmo[state.weaponIndex]<=0){
@@ -456,12 +504,12 @@ function playerShoot(){
     else{
       const next=nextLoadedSlot(state.weaponSlots,state.activeSlot,state.weaponAmmo,state.reserveAmmo);
       if(next>=0){switchWeapon(next);state.fireCooldown=Math.max(state.fireCooldown,state.realElapsed+.12);playUiClick();kn.autoSwapped=true;pushFeed(`SWAPPED TO ${GUNS[state.weaponIndex].name} · OUT OF AMMO`,'warn');}
-      else if(state.dryTimer<=0){state.dryTimer=.35;emit('empty',p.x,p.y,{gun:GUNS[state.weaponIndex].id,dry:true});playEmptyClick();if(notifyReady('dry',2.5))toast('NO AMMO · CLEAR ROOMS FOR AMMO DROPS',1400);}
+      else if(state.dryTimer<=0){state.dryTimer=.35;emit('empty',p.x,p.y,{gun:GUNS[state.weaponIndex].id,dry:true});playEmptyClick();if(notifyReady('dry',2.5))toast(`NO AMMO · SHOVE [${keyLabel(binding('shove'))}] · THE NEXT KILL DROPS AMMO`,2200);}
     }
     return;
   }
   const weaponIndex=state.weaponIndex,gun=GUNS[weaponIndex],stats=weaponStats(gun,modOf(gun)),now=state.realElapsed;if(now<state.fireCooldown)return;
-  state.pressUntil=-1;state.fireCooldown=nextFireTime(now,state.fireCooldown,stats.fireRate/(1+(state.loopStacks||0)*freqStats(state.freq).loopPerStack),state.frameDt||1/60);state.weaponAmmo[weaponIndex]--;firePlayerRound(gun,stats);
+  state.pressUntil=-1;state.fireCooldown=nextFireTime(now,state.fireCooldown,stats.fireRate,state.frameDt||1/60);state.weaponAmmo[weaponIndex]--;firePlayerRound(gun,stats);
   if(state.weaponAmmo[weaponIndex]<=0)emit('empty',p.x,p.y,{gun:gun.id,dry:false});
   if(gun.burst)state.weaponBurst=beginWeaponBurst({weaponIndex,shots:gun.burst.shots,interval:gun.burst.interval,firstShotAt:now,remainingAmmo:state.weaponAmmo[weaponIndex]});
   hud();markAction(hasMovementInput()?'move':'fire');
@@ -501,12 +549,17 @@ function enemyShoot(enemy,dx,dy){
 }
 function burst(){}
 
+// The guaranteed dry-ammo drop must never be lost in a wall: try the corpse, then points toward the player, then the player's feet.
+function dropAmmoNear(enemy){
+  const p=state.player;
+  for(const t of [0,.35,.7,1]){const x=enemy.x+(p.x-enemy.x)*t,y=enemy.y+(p.y-enemy.y)*t;if(dropPickup('ammo',x,y,DRY_DROP_VALUE))return;}
+}
 function killEnemy(enemy,bullet){
   if(!enemy.alive)return;enemy.alive=false;enemy.corpseTimer=3.5;enemy.aimTimer=0;enemy.meleeWindup=0;for(let i=0;i<enemy.body.numColliders();i++)enemy.body.collider(i).setEnabled(false);{const bl=Math.hypot(bullet.vx,bullet.vy)||1,kv=enemyKnockback((bullet.damage||0)*1.6,enemy.type)*1.4;enemy.body.setLinvel({x:bullet.vx/bl*kv,y:bullet.vy/bl*kv},true);}enemy.hp=0;
   view.fx.kill(enemy,bullet.vx,bullet.vy);
   state.kills++;pushFeed(`DOWNED · ${enemy.def.name}`,'kill');state.scrap+=scrapGain(6+Math.floor(random()*8));state.shake=Math.max(state.shake,3.8);state.hitstop=Math.max(state.hitstop,hitstopFor({kill:true,damage:bullet.damage||0}));burst(enemy.x,enemy.y,enemy.def.color,17,1.4);{const bl=Math.hypot(bullet.vx,bullet.vy)||1;emit('kill',enemy.x,enemy.y,{dx:bullet.vx/bl,dy:bullet.vy/bl,damage:bullet.damage||0,enemyType:enemy.type});}
   if(!signalOn()){if(random()<.2)dropPickup(random()<.55?'scrap':'mod',enemy.x,enemy.y,12+Math.floor(random()*10));
-  rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));}
+  if(isAllDry(state.weaponSlots,state.weaponAmmo,state.reserveAmmo)){dropAmmoNear(enemy);pushFeed('OUT OF AMMO · AMMO DROPPED','loot');}else rollSupplyDrop('kill',enemy.x+rand(-10,10),enemy.y+rand(-10,10));}
   playKill();onEnemyKilled(enemy,bullet);hud();checkRoomClear();
 }
 function hitPlayer(damage,x,y,srcAng=null,srcName=null){const before=state.health+state.armor,wasPlay=state.mode==='play'&&state.invuln<=0;hitPlayerBase(damage,x,y,srcAng,srcName);if(wasPlay&&state.health+state.armor<before)onPlayerDamaged();}
@@ -614,7 +667,7 @@ function takeSupply(index){
 function finishRun(result,cause){if(state.paidOut)return;finishRunImpl(result,cause);}
 function winRun(){finishRun('won');}
 /* ============================================================ macro loop: floors, decisions, frequencies, run end */
-const bossApi={get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
+const bossApi={speedRatio:()=>playerSpeedRatio(),musicBeat:()=>getMusicBeat(),get state(){return state;},get fx(){return view.fx;},spawnEnemy,findEnemySpawn,fireBullet,hitPlayer:(damage,x,y)=>{state.lastHitType='boss';state.lastHitKind='boss';hitPlayer(damage,x,y,null,'THE CONDUCTOR');},dropPickup,freeRoomPoint,random,toast,banner:(title,sub)=>showBanner(title,sub,'room'),feed:pushFeed,removeBody:body=>physics.removeRigidBody(body),onBossBar:setBossBar};
 const scrapGain=amount=>Math.max(1,Math.round(amount*interferenceStats(state.progress).scrapMult));
 function setBossBar(init,e){
   const bar=$('boss-bar');if(!bar)return;
@@ -623,22 +676,33 @@ function setBossBar(init,e){
   const fill=$('boss-fill'),ghost=$('boss-ghost');if(!fill)return;
   fill.style.width=`${Math.max(0,e.hp/e.maxHp*100)}%`;ghost.style.width=`${Math.max(0,(e.shownHp??e.hp)/e.maxHp*100)}%`;
   bar.dataset.phase=String(e.boss.phase);bar.classList.toggle('exposed',e.boss.exposed>0);bar.classList.toggle('shielded',!!e.boss.invuln);
-  const label=bar.querySelector('.boss-name small'),text=`FLOOR ${FINAL_FLOOR} · PHASE ${['','I','II','III'][e.boss.phase]}`;if(label&&label.textContent!==text)label.textContent=text;
+  const label=bar.querySelector('.boss-name small'),text=`FLOOR ${FINAL_FLOOR} · PHASE ${['','I','II · TEMPO','III · BEATDROP'][e.boss.phase]}`;if(label&&label.textContent!==text)label.textContent=text;
 }
 function trackRunClock(dt){
-  state.timeCredit=Math.max(0,state.timeCredit-dt);state.freezeT=Math.max(0,(state.freezeT||0)-dt);if(state.loopStacks>0){state.loopT-=dt;if(state.loopT<=0)state.loopStacks=0;}
+  state.timeCredit=Math.max(0,state.timeCredit-dt);state.freezeT=Math.max(0,(state.freezeT||0)-dt);
   const moving=playerSpeedRatio()>TIME_RULE.deadSpeed;state.stillFor=moving?0:state.stillFor+dt;
   if(moving){state.slowKills=0;state.tripleFlag=false;}
   const p=state.player;if(p){if(state.lastPos)state.roomMove+=Math.hypot(p.x-state.lastPos.x,p.y-state.lastPos.y);state.lastPos={x:p.x,y:p.y};}
 }
-function stunBurst(x,y,radius,seconds){
-  view.fx.pickup(x,y,'#9ad8ff');
-  for(const other of state.enemies)if(other.alive&&other.type!=='boss'&&Math.hypot(other.x-x,other.y-y)<radius)other.stun=Math.max(other.stun||0,seconds);
+// A shockwave ring (DEAD CHANNEL, BACKLASH, BORROWED PULSE): jams enemies in reach, optionally erases enemy bullets and shoves.
+function stunBurst(x,y,radius,seconds,{wipe=false,knock=false,color='#9ad8ff'}={}){
+  view.fx.pickup(x,y,color);view.fx.ring(x,y,8,radius,color,.45,3);view.fx.ring(x,y,4,radius*.6,'#ffffff',.3,2);
+  for(const other of state.enemies){if(!other.alive||other.type==='boss')continue;const d=Math.hypot(other.x-x,other.y-y);if(d>=radius)continue;other.stun=Math.max(other.stun||0,seconds);if(knock){const dx=other.x-x,dy=other.y-y,l=Math.hypot(dx,dy)||1;other.knock.x+=dx/l*150;other.knock.y+=dy/l*150;}}
+  if(wipe)for(let i=state.bullets.length-1;i>=0;i--){const bl=state.bullets[i];if(bl.owner==='enemy'&&Math.hypot(bl.x-x,bl.y-y)<radius){view.fx.spark(bl.x,bl.y,0,4,Math.PI,[40,140],color);removeBullet(i);}}
 }
-function bubbleFactor(b){const r=freqStats(state.freq).bubble,p=state.player;return r>0&&p&&Math.hypot(b.x-p.x,b.y-p.y)<r?.45:1;}
+// Jammed enemies cannot shoot and their bullets in the air vanish (JAMMER).
+function jamEnemy(enemy,seconds,{splash=0,fromFreq=true}={}){
+  if(!enemy.alive||enemy.type==='boss'||seconds<=0)return;
+  const wasJammed=enemy.stun>.2;enemy.stun=Math.max(enemy.stun||0,seconds);
+  if(!wasJammed)view.fx.floater(enemy.x,enemy.y-20,'JAMMED','#9ad8ff',11,.8);
+  for(let i=state.bullets.length-1;i>=0;i--){const bl=state.bullets[i];if(bl.owner==='enemy'&&bl.enemyId===enemy.id){view.fx.spark(bl.x,bl.y,0,4,Math.PI,[40,140],'#9ad8ff');removeBullet(i);}}
+  if(splash>0)for(const other of state.enemies)if(other.alive&&other!==enemy&&other.type!=='boss'&&Math.hypot(other.x-enemy.x,other.y-enemy.y)<splash&&!lineBlocked(enemy.x,enemy.y,other.x,other.y)){other.stun=Math.max(other.stun||0,seconds*.5);view.fx.bolt(enemy.x,enemy.y,other.x,other.y,'#9ad8ff',.25,1.6);}
+}
+function bubbleZapped(b){const f=freqStats(state.freq),p=state.player;return f.bubbleZap>0&&p&&Math.hypot(b.x-p.x,b.y-p.y)<f.bubbleZap;}
+function bubbleFactor(b){const f=freqStats(state.freq),p=state.player;if(!(f.bubble>0)||!p)return 1;const d=Math.hypot(b.x-p.x,b.y-p.y);return d<f.bubble?f.bubbleSlow:1;}
 function steerBullet(b,dt){
   let best=null,bestScore=Infinity;const heading=Math.atan2(b.vy,b.vx);
-  for(const e of state.enemies){if(!e.alive)continue;const dx=e.x-b.x,dy=e.y-b.y,d=Math.hypot(dx,dy);if(d>280||d<8)continue;let diff=Math.atan2(dy,dx)-heading;while(diff>Math.PI)diff-=TAU;while(diff<-Math.PI)diff+=TAU;if(Math.abs(diff)>.75)continue;if(d<bestScore){bestScore=d;best={diff};}}
+  for(const e of state.enemies){if(!e.alive)continue;const dx=e.x-b.x,dy=e.y-b.y,d=Math.hypot(dx,dy);if(d>(b.homingRange||280)||d<8)continue;let diff=Math.atan2(dy,dx)-heading;while(diff>Math.PI)diff-=TAU;while(diff<-Math.PI)diff+=TAU;if(Math.abs(diff)>.75)continue;if(d<bestScore){bestScore=d;best={diff};}}
   if(!best)return;const turn=Math.sign(best.diff)*Math.min(Math.abs(best.diff),b.homing*dt),speed=Math.hypot(b.vx,b.vy),a=heading+turn;b.vx=Math.cos(a)*speed;b.vy=Math.sin(a)*speed;
 }
 // Burning (INCENDIARY mod, KINDLING frequency): damage over time in world time, and the target panics: it cannot aim
@@ -671,47 +735,64 @@ function detonateShell(b){
   if(p&&distance({x,y},p)<radius&&!lineBlocked(x,y,p.x,p.y)){state.lastHitType='self';hitPlayer(1,x,y,null,'your own shell');}
 }
 function onEnemyKilled(enemy,bullet){
-  const f=freqStats(state.freq),unaware=!enemy.aware;
-  if(f.freezeKill)state.freezeT=Math.max(state.freezeT||0,f.freezeKill);
-  if(f.reloadKill&&bullet?.owner==='player'){const gi=state.weaponIndex,max=magSize(GUNS[gi]),take=Math.min(Math.ceil(max*f.reloadKill),max-state.weaponAmmo[gi]);if(take>0){state.weaponAmmo[gi]+=take;view.fx.floater(state.player.x,state.player.y-22,`+${take} ROUNDS`,'#ffd27a',12,.9);}}
-  if(f.shards&&bullet?.owner==='player'&&!bullet.shard){
-    const gun=GUNS[state.weaponIndex],near=state.enemies.filter(o=>o.alive&&o!==enemy&&distance(o,enemy)<260).sort((a,c)=>distance(a,enemy)-distance(c,enemy)),base=Math.atan2(bullet.vy,bullet.vx);
-    for(let n=0;n<f.shards;n++){const target=near[n%Math.max(1,near.length)],angle=target?Math.atan2(target.y-enemy.y,target.x-enemy.x):base+(n-(f.shards-1)/2)*.6;fireBullet('player',enemy.x,enemy.y,Math.cos(angle),Math.sin(angle),gun,.45,{range:200});const shard=state.bullets.at(-1);if(shard){shard.shard=true;shard.homing=2.5;shard.penetration={enemies:0,crates:0,walls:0};}}
+  const f=freqStats(state.freq),unaware=!enemy.aware,p=state.player,mine=bullet?.owner==='player';
+  if(f.creditPerKill){state.timeCredit+=f.creditPerKill;view.fx.floater(enemy.x,enemy.y-26,`+${f.creditPerKill} s TIME`,'#ffd27a',12,1);}
+  if(f.hangKill&&p&&playerSpeedRatio()<=TIME_RULE.deadSpeed+.04){
+    let hung=0;for(const bl of state.bullets)if(bl.owner==='enemy'&&(bl.enemyId===enemy.id||(f.hangAll&&Math.hypot(bl.x-enemy.x,bl.y-enemy.y)<f.hangAll))){bl.hang={until:state.realElapsed+f.hangKill,untilMove:!!f.hangUntilMove};hung++;}
+    if(hung){view.fx.ring(enemy.x,enemy.y,6,f.hangAll||48,'#ffd27a',.5,2);view.fx.floater(enemy.x,enemy.y-34,'HANG FIRE','#ffd27a',12,1.1);}
   }
-  if(f.creditPerKill)state.timeCredit+=f.creditPerKill;
-  if(f.stunKillCredit&&enemy.stun>.25)state.timeCredit+=f.stunKillCredit;
-  if(unaware&&f.unawareScrap){state.scrap+=scrapGain(f.unawareScrap);view.fx.floater(enemy.x,enemy.y-16,`+${f.unawareScrap} QUIET KILL`,'#b49bff',12,1);}
+  if(f.shards&&mine&&!bullet.shard){
+    const gun=GUNS[state.weaponIndex],near=state.enemies.filter(o=>o.alive&&o!==enemy&&distance(o,enemy)<260).sort((a,c)=>distance(a,enemy)-distance(c,enemy)),base=Math.atan2(bullet.vy,bullet.vx);
+    for(let n=0;n<f.shards;n++){const target=near[n%Math.max(1,near.length)],angle=target?Math.atan2(target.y-enemy.y,target.x-enemy.x):base+(n-(f.shards-1)/2)*.6;fireBullet('player',enemy.x,enemy.y,Math.cos(angle),Math.sin(angle),gun,.45,{range:200,noShot:true});const shard=state.bullets.at(-1);if(shard){shard.shard=true;shard.homing=2.5;shard.penetration={enemies:f.shardPierce?1:0,crates:0,walls:0};shard.maxBounces=f.shardBounce?1:0;shard.bounceSeek=0;}}
+  }
+  if(f.stunKillCredit&&enemy.stun>.25){state.timeCredit+=f.stunKillCredit;view.fx.floater(enemy.x,enemy.y-38,'DEAD AIR +1 s','#9ad8ff',12,1);}
+  if(unaware&&mine){
+    if(bullet.shot&&f.quietKill){bullet.shot.quiet=true;view.fx.floater(enemy.x,enemy.y-30,'QUIET','#b49bff',12,1);}
+    if(f.ammoBack){const gi=state.weaponIndex,max=magSize(GUNS[gi]);if(state.weaponAmmo[gi]<max){state.weaponAmmo[gi]++;view.fx.floater(p.x,p.y-24,'+1 ROUND','#b49bff',12,.9);}}
+  }
   if(unaware&&f.unawareHeal&&state.health<=state.maxHealth/2&&state.health<state.maxHealth){state.health++;view.fx.floater(enemy.x,enemy.y-28,'DEAD DROP +1','#74dfab',13,1.1);}
-  if(f.pulse)stunBurst(enemy.x,enemy.y,f.pulse,1);
+  if(f.pulse)stunBurst(enemy.x,enemy.y,f.pulse,1,{wipe:!!f.pulseWipe,knock:!!f.pulseKnock});
+  if(f.lowPulse&&state.health<=2){stunBurst(enemy.x,enemy.y,f.lowPulse,1,{color:'#ff7a8a'});view.fx.floater(enemy.x,enemy.y-34,'BORROWED PULSE','#ff7a8a',12,1);}
   if(f.burnKill){for(const other of state.enemies)if(other.alive&&other!==enemy&&distance(other,enemy)<f.burnKill&&!lineBlocked(enemy.x,enemy.y,other.x,other.y))igniteEnemy(other,3,7);}
   if(state.timeScaleTarget<.2&&enemy.type!=='boss'){state.slowKills++;if(state.slowKills>=3&&!state.tripleFlag){state.tripleFlag=true;state.slowTriples++;toast('THREE IN ONE BREATH',1600);pushFeed('THREE IN ONE BREATH','good');}}
   if(enemy.type==='boss')onBossKilled(enemy);
 }
 function onPlayerDamaged(){
-  kn.hits++;state.floorHit=true;const f=freqStats(state.freq);
-  if(f.hitCredit){state.timeCredit+=f.hitCredit;}
-  if(f.hitPulse&&state.player)stunBurst(state.player.x,state.player.y,f.hitPulse,1.2);
+  kn.hits++;state.floorHit=true;const f=freqStats(state.freq),p=state.player;
+  if(f.hitCredit){state.timeCredit+=f.hitCredit;if(p)view.fx.floater(p.x,p.y-26,`+${f.hitCredit} s TIME`,'#ffd27a',12,1);}
+  if(f.hitPulse&&p){stunBurst(p.x,p.y,f.hitPulse,1.2,{wipe:!!f.hitWipe,knock:!!f.hitKnock,color:'#ff7a8a'});view.fx.floater(p.x,p.y-34,'BACKLASH','#ff7a8a',12,1);}
 }
 function playerHitDamage(b,enemy){
   if(b.owner!=='player')return b.damage;
   const f=freqStats(state.freq);let dmg=b.damage;
   {const snap=b.sneak?.get(enemy),mod=damageModifier({type:enemy.type,aware:!snap&&!!enemy.aware,asleep:!!snap?.asleep,facing:snap??enemy.face,bulletDir:{x:b.vx,y:b.vy},bruteRecovering:enemy.type==='brute'&&(enemy.meleeCooldown>0||enemy.ai?.brute?.phase==='recover')});
     if(mod.mult>1){if(mod.label==='SILENT')kn.silentHit=true;dmg*=mod.mult;view.fx.floater(enemy.x,enemy.y-30,mod.label,mod.label==='SILENT'?'#b49bff':'#ffd27a',mod.label==='SILENT'?26:22,1.2);}}
-  if(!enemy.aware&&enemy.type!=='boss')dmg*=1+f.unawareDamage;
+  if(!enemy.aware&&enemy.type!=='boss'){dmg*=1+f.unawareDamage;if(f.ambush&&!['brute','riot','boss'].includes(enemy.type)&&!enemy.elite&&dmg<enemy.hp){dmg=enemy.hp+1;view.fx.floater(enemy.x,enemy.y-34,'AMBUSH','#b49bff',13,1);}}
   if((b.bounces||0)>0)dmg*=1+f.bounceDamage;
   return bossDamageFor(enemy,dmg);
 }
-function playerStunBonus(enemy){const f=freqStats(state.freq);return enemy.type==='boss'?0:f.stunBonus*(!enemy.aware?f.unawareStunMult:1);}
+function playerStunBonus(enemy){const f=freqStats(state.freq);return enemy.type==='boss'?0:f.jam*(!enemy.aware?f.unawareStunMult:1);}
+const ARC_RANGE=128;
+// A lightning bolt from `from` to the nearest unvisited enemy in reach and line of sight. Returns the struck enemy (or null).
+function arcStrike(from,damage,visited,{stun=0,color='#9ad8ff'}={}){
+  const target=state.enemies.filter(o=>o.alive&&o.type!=='boss'&&!visited.has(o)&&distance(o,from)<ARC_RANGE&&!lineBlocked(from.x,from.y,o.x,o.y)).sort((a,c)=>distance(a,from)-distance(c,from))[0];
+  if(!target)return null;
+  visited.add(target);target.hp-=damage;target.stun=Math.max(target.stun||0,.3+stun);
+  view.fx.bolt(from.x,from.y,target.x,target.y,color);view.fx.hitEnemy(target,damage,target.x-from.x,target.y-from.y,target.hp<=0);view.fx.spark(target.x,target.y,Math.atan2(target.y-from.y,target.x-from.x),7,1.2,undefined,color);playHit();
+  if(stun>0)jamEnemy(target,stun);
+  if(target.hp<=0)killEnemy(target,{vx:target.x-from.x,vy:target.y-from.y,damage});
+  return target;
+}
 function afterPlayerHit(b,enemy,dealt){
   if(enemy.type==='boss'&&dealt===0)view.fx.spark(b.x,b.y,Math.atan2(-b.vy,-b.vx),5,1);
-  if(b.owner==='player'){const lf=freqStats(state.freq);if(lf.loopPerStack>0){state.loopStacks=Math.min(5,(state.loopStacks||0)+1);state.loopT=1.5;}}
-  const f=freqStats(state.freq);if(!f.chain||b.owner!=='player')return;
-  const targets=state.enemies.filter(o=>o.alive&&o!==enemy&&o.type!=='boss'&&distance(o,enemy)<115&&!lineBlocked(enemy.x,enemy.y,o.x,o.y)).sort((a,c)=>distance(a,enemy)-distance(c,enemy)).slice(0,f.chainTargets);
-  for(const other of targets){
-    const dmg=dealt*f.chain;other.hp-=dmg;other.stun=Math.max(other.stun||0,.3);
-    view.fx.hitEnemy(other,dmg,other.x-enemy.x,other.y-enemy.y,other.hp<=0);view.fx.spark(other.x,other.y,Math.atan2(other.y-enemy.y,other.x-enemy.x),7,1.2);view.fx.spark(enemy.x,enemy.y,Math.atan2(other.y-enemy.y,other.x-enemy.x),5,1);
-    if(other.hp<=0)killEnemy(other,{vx:other.x-enemy.x,vy:other.y-enemy.y,damage:dmg});
-  }
+  if(b.owner!=='player')return;
+  const f=freqStats(state.freq);
+  if(f.jam>0&&enemy.type!=='boss'&&enemy.hp>0)jamEnemy(enemy,f.jam*(!enemy.aware?f.unawareStunMult:1),{splash:f.jamSplash});
+  if(b.rageBlast&&!b.blasted){b.blasted=true;view.fx.explode('incendiary',enemy.x,enemy.y,b.rageBlast);view.fx.ring(enemy.x,enemy.y,6,b.rageBlast*1.3,'#ff7a8a',.35,3);
+    for(const o of state.enemies)if(o.alive&&o!==enemy&&o.type!=='boss'&&distance(o,enemy)<b.rageBlast*1.3){o.hp-=dealt*.5;view.fx.hitEnemy(o,dealt*.5,o.x-enemy.x,o.y-enemy.y,o.hp<=0);if(o.hp<=0)killEnemy(o,{vx:o.x-enemy.x,vy:o.y-enemy.y,damage:dealt*.5});}}
+  if(!f.chain)return;
+  let from=enemy;const visited=new Set([enemy]);
+  for(let hop=0;hop<f.chainTargets;hop++){const hit=arcStrike(from,dealt*f.chain,visited,{stun:f.arcStun});if(!hit)break;from=hit;}
 }
 function ricochetBullet(b,previous){
   const sx=Math.sign(b.vx),sy=Math.sign(b.vy),solid=(x,y)=>state.solidMap[Math.floor(y/TILE)]?.[Math.floor(x/TILE)]!==0;
@@ -719,12 +800,24 @@ function ricochetBullet(b,previous){
   if(hitX||!hitY)b.vx=-b.vx;if(hitY||!hitX)b.vy=-b.vy;
   b.x=previous.x;b.y=previous.y;b.insideWall=false;b.bounces=(b.bounces||0)+1;b.life=Math.max(b.life,.25);
   view.fx.spark(b.x,b.y,Math.atan2(b.vy,b.vx),5,1);
+  const f=freqStats(state.freq);
+  if(b.bounceSeek){// MULTIPATH: the bounce bends toward the nearest enemy it can see
+    const t=state.enemies.filter(o=>o.alive&&!b.hitEnemies.has(o)&&distance(o,b)<300&&!lineBlocked(b.x,b.y,o.x,o.y)).sort((a,c)=>distance(a,b)-distance(c,b))[0];
+    if(t){const sp=Math.hypot(b.vx,b.vy),a=Math.atan2(t.y-b.y,t.x-b.x);b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;view.fx.ring(b.x,b.y,3,14,'#74dfab',.25,2);}
+  }
+  if(f.bounceDamage>0)b.color=0xff5a68;
+  if(f.bounceArc){const hit=arcStrike(b,b.damage*.5,new Set(),{color:'#74dfab'});if(hit)view.fx.floater(b.x,b.y-14,'SIGNAL BOOST','#9ad8ff',11,.8);}
   return true;
 }
+// The boss-death moment: the world nearly stops, he shatters into pink shards, a ring per phase colour rolls out, the music resolves.
 function onBossKilled(enemy){
   state.bossKilled=true;state.bossPistol=GUNS[state.weaponIndex].category==='PISTOL';
-  $('boss-bar').hidden=true;state.shake=12;state.hitstop=Math.max(state.hitstop,.25);
-  showBanner('THE CONDUCTOR FALLS','THE EXIT IS OPEN','clear');pushFeed('THE CONDUCTOR · DOWN','good');playExplosion();
+  $('boss-bar').hidden=true;state.shake=14;state.hitstop=Math.max(state.hitstop,.35);state.flourishT=2.4;
+  showBanner('THE CONDUCTOR FALLS','THE EXIT IS OPEN','clear');pushFeed('THE CONDUCTOR · DOWN','good');playExplosion();playRoomClear();musicSting('win');
+  const fx=view.fx;fx.explode('frag',enemy.x,enemy.y,90);
+  ['#8a2f7a','#c13a6a','#ff6a58','#ffffff'].forEach((c,n)=>fx.ring(enemy.x,enemy.y,10,90+n*70,c,.7+n*.25,4-n*.6));
+  for(let n=0;n<26;n++){const a=n/26*TAU;fx.spark(enemy.x,enemy.y,a,3,.2,[140,520],n%2?'#ff7aa8':'#e8c58c');}
+  fx.chips(enemy.x,enemy.y,0,['#8a2f7a','#e9dfe8','#ff7aa8','#e8c58c'],34,Math.PI,[60,320],[2,5],[.8,1.6]);
   for(const other of state.enemies)if(other.alive&&other!==enemy){other.hp=0;killEnemy(other,{vx:0,vy:0,damage:0});}
 }
 function roomRewardDrop(room){
@@ -772,13 +865,18 @@ function openFreqPick(source='door',then=null){
   const meta={floor:['TUNE IN.','FLOOR REWARD · PICK ONE FREQUENCY'],elite:['ELITE SIGNAL.','ELITE CLEARED · PICK ONE FREQUENCY'],door:['TUNE IN.','FREQUENCY FOUND · PICK ONE'],supply:['TUNE IN.','SUPPLY DROP · PICK ONE FREQUENCY']}[source]||['TUNE IN.','PICK ONE'];
   setRunModal('freq',freqOfferHtml({offers,owned:state.freq,title:meta[0],eyebrow:meta[1]}));
 }
+// A crossfade unlocking is a moment: name card, a beat of near-frozen time, a chord, and a ring from the player in both station colors.
+function crossfadeFlourish(cf){
+  state.flourishT=1.5;pushFeed(`CROSSFADE · ${cf.name}`,'good');showBanner(cf.name,cf.desc,'clear');playRoomClear();playSlowmoEnter();
+  const p=state.player;if(p){cf.stations.forEach((id,n)=>view.fx.ring(p.x,p.y,10+n*6,70+n*34,STATION_BY_ID.get(id).color,.9,3));view.fx.floater(p.x,p.y-34,`CROSSFADE · ${cf.name}`,'#ffffff',14,1.6);}
+}
 function pickFreq(id){
   const offer=state.freqOffers.find(item=>item.id===id);if(!offer||state.runModal!=='freq')return;
   const before=new Set(activeCrossfades(state.freq).map(c=>c.id));
   state.freq=pickFrequency(state.freq,id);
   const fresh=activeCrossfades(state.freq).filter(c=>!before.has(c.id));
   kn.freqPicked=true;closeRunModal();playPickup('mod');toast(`${offer.name} · ${offer.isNew?'NEW':`RANK ${offer.rank}`}`,1700);
-  if(fresh.length){pushFeed(`CROSSFADE · ${fresh[0].name}`,'good');showBanner(fresh[0].name,fresh[0].desc,'clear');}
+  if(fresh.length)crossfadeFlourish(fresh[0]);
   hud();const then=state.freqThen;state.freqThen=null;then?.();
 }
 function runModalKey(e,key){
@@ -856,7 +954,7 @@ function roomClearSupplies(room){
 function checkExtractionOpen(){
   if(state.extractionOpen||state.mode!=='play')return;
   if(hasUnclearedRouteEnemies(state.rooms,state.enemies))return;
-  state.extractionOpen=true;showBanner('EXTRACTION OPEN','FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
+  state.extractionOpen=true;if(state.bossKilled)showBanner('THE CONDUCTOR FALLS','EXTRACTION OPEN · FOLLOW THE ARROW','clear');else showBanner('EXTRACTION OPEN','FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
 }
 function updateRoom(){
   const px=state.player.x/TILE,py=state.player.y/TILE;let found=state.rooms.findIndex(r=>px>=r.x1-1&&px<=r.x2+1&&py>=r.y1-1&&py<=r.y2+1);
@@ -877,7 +975,7 @@ function interact(){
 function selectedThrowable(){return THROWABLES[state.throwableIndex];}
 function throwThrowable(){const item=selectedThrowable(),inventory=consumeThrowable(state.throwables,item.id);if(!inventory.consumed){const n=THROWABLES.length;for(let k=1;k<n;k++){const j=(state.throwableIndex+k)%n;if((state.throwables[THROWABLES[j].id]||0)>0){state.throwableIndex=j;updateThrowableHud();markAction();return;}}toast('OUT OF GRENADES',800);return;}const p=state.player,body=makeBody({x:p.x+state.aim.x*12,y:p.y+state.aim.y*12},3,false);body.enableCcd(true);body.setLinearDamping(0);body.setGravityScale(0,true);const speed=item.range/(item.fuse+.28);body.setLinvel({x:state.aim.x*speed,y:state.aim.y*speed},true);state.thrown.push({id:item.id,item,body,fuse:item.fuse,x:p.x,y:p.y});state.throwables=inventory.inventory;markAction();updateThrowableHud();toast(`${item.name.toUpperCase()} OUT`,700);}
 function detonateThrowable(projectile){({frag:playExplosion,flash:playFlashbang,smoke:playSmoke,incendiary:playFire})[projectile.id]?.({distance:distance(projectile,state.player),pan:(projectile.x-state.player.x)/480});physics.removeRigidBody(projectile.body);const {item,id,x,y}=projectile;const effect={id,item,x,y,remaining:item.duration,elapsed:0,nextTick:0};state.effects.push(effect);view.fx.explode(id,x,y,item.radius);if(id==='frag')state.shake=Math.max(state.shake,6);else if(id==='flash')state.shake=Math.max(state.shake,2);if(id==='flash'&&distance({x,y},state.player)<item.radius&&!lineBlocked(x,y,state.player.x,state.player.y))state.flashTimer=.24;
-  if(id==='frag'||id==='flash'){for(const enemy of state.enemies){if(!enemy.alive)continue;const d=distance({x,y},enemy),blocked=lineBlocked(x,y,enemy.x,enemy.y);if(!throwableAffectsTarget(id,{distance:d,blockedByWall:blocked}))continue;if(id==='flash'){enemy.stun=Math.max(enemy.stun,item.duration);enemy.aimTimer=0;}else{const dmg=item.damage*(1-d/item.radius*.48);enemy.hp-=dmg;view.fx.hitEnemy(enemy,dmg,enemy.x-x,enemy.y-y,enemy.hp<=0);const dx=enemy.x-x,dy=enemy.y-y,len=Math.hypot(dx,dy)||1;enemy.knock.x=dx/len*54;enemy.knock.y=dy/len*54;if(enemy.hp<=0)killEnemy(enemy,{vx:dx/len*600,vy:dy/len*600});}}if(id==='frag'&&distance({x,y},state.player)<item.radius&&!lineBlocked(x,y,state.player.x,state.player.y)){state.lastHitKind='blast';state.lastHitType='frag';hitPlayer(1,x,y,null,'a frag grenade');}}
+  if(id==='frag'||id==='flash'){for(const enemy of state.enemies){if(!enemy.alive)continue;const d=distance({x,y},enemy),blocked=lineBlocked(x,y,enemy.x,enemy.y);if(!throwableAffectsTarget(id,{distance:d,blockedByWall:blocked}))continue;if(id==='flash'){enemy.stun=Math.max(enemy.stun,item.duration);enemy.aimTimer=0;}else{const dmg=bossDamageFor(enemy,item.damage*(1-d/item.radius*.48));enemy.hp-=dmg;view.fx.hitEnemy(enemy,dmg,enemy.x-x,enemy.y-y,enemy.hp<=0);const dx=enemy.x-x,dy=enemy.y-y,len=Math.hypot(dx,dy)||1;enemy.knock.x=dx/len*54;enemy.knock.y=dy/len*54;if(enemy.hp<=0)killEnemy(enemy,{vx:dx/len*600,vy:dy/len*600});}}if(id==='frag'&&distance({x,y},state.player)<item.radius&&!lineBlocked(x,y,state.player.x,state.player.y)){state.lastHitKind='blast';state.lastHitType='frag';hitPlayer(1,x,y,null,'a frag grenade');}}
 }
 function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projectile=state.thrown[i];projectile.fuse-=dt;const p=projectile.body.translation();projectile.x=p.x;projectile.y=p.y;if(projectile.fuse<=0){detonateThrowable(projectile);state.thrown.splice(i,1);}}}
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);view.fx.hitEnemy(enemy,effect.item.damage,0,-1,enemy.hp<=0);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){state.effects.splice(i,1);}}}
@@ -885,7 +983,7 @@ function updateThrowableHud(){const sel=selectedThrowable();$('throwable-readout
 function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else view.canvas.focus();}
 function playerSpeedRatio(){const v=state.playerVel;if(!v)return 0;return Math.hypot(v.x,v.y)/(state.walkTop||runStats().moveSpeed||112);}
 // THE TIME RULE (time-rule.js): world rate follows the player's actual speed. Perks/interference only ever pull the rate DOWN (or lift the still floor).
-function getTimeScale(){if(state.peek)return 0;const base=timeScale({mode:state.mode,paused:state.paused||state.supplyOpen||!!state.runModal,loadoutOpen:state.loadoutOpen,speedRatio:playerSpeedRatio(),idleScale:runStats().idleScale});if(base>0&&state.freezeT>0)return Math.min(base,TIME_RULE.stillFloor);if(base>.5&&(state.timeCredit>0||(state.health<=1&&freqStats(state.freq).lastStand>0)))return .5;const ih=interferenceStats(state.progress);if(ih.lowHealthIdle&&state.health<=2&&base>0&&base<ih.lowHealthIdle&&playerSpeedRatio()<=TIME_RULE.deadSpeed)return ih.lowHealthIdle;return base;}
+function getTimeScale(){if(state.peek)return 0;const base=timeScale({mode:state.mode,paused:state.paused||state.supplyOpen||!!state.runModal,loadoutOpen:state.loadoutOpen,speedRatio:playerSpeedRatio(),idleScale:runStats().idleScale});if(base>0&&(state.freezeT>0||state.flourishT>0))return Math.min(base,TIME_RULE.stillFloor);if(base>.5&&(state.timeCredit>0||(state.health<=1&&freqStats(state.freq).lastStand>0)))return .5;const ih=interferenceStats(state.progress);if(ih.lowHealthIdle&&state.health<=2&&base>0&&base<ih.lowHealthIdle&&playerSpeedRatio()<=TIME_RULE.deadSpeed)return ih.lowHealthIdle;return base;}
 function updatePlayer(dt){
   const p=state.player;if(!p)return;
   const rd0=state.frameDt||dt,{x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);if(vx!==0||vy!==0)markAction('move');
@@ -903,7 +1001,7 @@ function updatePlayer(dt){
     state.cornerStuck=blockedRatio<.35&&(vx!==0||vy!==0)?state.cornerStuck+1:0;if(state.cornerStuck>8){state.cornerSign=-(state.cornerSign||1);state.cornerStuck=0;}
     const nudge=cornerNudge({x:vx,y:vy},blockedRatio,topSpeed,state.cornerSign||1);
     state.cmdVel={x:state.playerVel.x+state.playerKnock.x+nudge.x,y:state.playerVel.y+state.playerKnock.y+nudge.y};
-    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult,kind:'sprint'});}
+    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise&&!freqStats(state.freq).sprintSilent)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult,kind:'sprint'});}
     state.sprintBlend=approach(state.sprintBlend,sprinting?1:0,12,rdt);state.recoil=stepRecoil(state.recoil,rdt);state.dryTimer=Math.max(0,state.dryTimer-rdt);
     stepBloom(state.bloom,rd0,gunFeel(GUNS[state.weaponIndex]));
     p.x=here.x;p.y=here.y;
@@ -913,7 +1011,7 @@ function updatePlayer(dt){
   state.invuln=Math.max(0,state.invuln-rd0);
   if(state.reloadTimer>0){state.reloadTimer-=rd0;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;playReloadEnd();hud();emit('reloadEnd',p.x,p.y,{gun:gun.id,cancelled:false});}}
   if(input.firing&&!state.wasFiring)state.pressUntil=state.realElapsed+PRESS_BUFFER;state.wasFiring=input.firing;if(input.firing||state.realElapsed<state.pressUntil)playerShoot();updateWeaponBurst();if(input.interact){input.interact=false;interact();}
-  for(const pickup of state.pickups){if(state.supplyOpen)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
+  for(const pickup of state.pickups){if(state.supplyOpen||state.runModal)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
   {const blocked=state.loadoutOpen||state.supplyOpen||!!state.runModal,targets=blocked?[]:interactTargets();state.interact={targets,active:activeInteraction(targets),ambient:ambientPrompt(targets),key:keyLabel(binding('interact'))};}
   updateTutorHint(p);
   updateRoom();
@@ -961,7 +1059,7 @@ function updateEnemies(dt){
     e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;e.suspicion=out.suspicion||0;e.spotted=!!out.spotted;e.dodging=!!out.dodging;if(out.dodging)e.dodgeDir=e.ai?.dodge;
     if(out.aiming&&!e.wasAiming)playEnemyTell();e.wasAiming=out.aiming;
     if(out.locked&&!e.locked&&e.type==='sniper')playSniperLock({distance:d,pan:(e.x-player.x)/480});e.locked=!!out.locked;
-    if(e.def.shield){if(!e.shieldInit){e.shieldInit=true;e.shieldAng=Math.atan2(ny,nx);}e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,1.5);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}
+    if(e.def.shield){if(!e.shieldInit){e.shieldInit=true;e.shieldAng=Math.atan2(ny,nx);}e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,RIOT_SHIELD_TURN);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}
     if(e.def.melee){
       if(e.stun>0){e.meleeWindup=0;}
       else{
@@ -987,8 +1085,26 @@ function updateEnemies(dt){
   if(enemyAlerts.length){const seen=new Set();(state.alertPulses??=[]);for(const a of enemyAlerts){state.alertPulses.push({from:a.from,to:a.to,age:0});if(!seen.has(a.from)){seen.add(a.from);try{ambienceChatter(a.from.id,Math.max(-1,Math.min(1,(a.from.x-player.x)/480)),.16);}catch{}}}enemyAlerts.length=0;}
   state.noises.length=0;
 }
+// Per-frame frequency upkeep on the real clock: queued echoes, the cone scale BLACKOUT applies to brain + renderer, and the DISTORTION ring.
+// Boss arena staging: stage lights so he is always lit, and a camera nudge toward him while the fight is on.
+function stageDirect(){
+  const boss=state.boss,p=state.player,live=boss?.alive&&boss.boss?.active&&state.currentRoom===boss.roomIndex;
+  state.stageLights=live||(boss&&!boss.alive&&boss.corpseTimer>0)?bossLights(state.rooms[boss.roomIndex],{...boss,alive:true}):[];
+  const want=live?bossCamShift(p,boss):{x:0,y:0},cf=state.camFocus||(state.camFocus={x:0,y:0}),k=Math.min(1,(state.frameDt||1/60)*3);
+  cf.x+=(want.x-cf.x)*k;cf.y+=(want.y-cf.y)*k;
+}
+function stepFrequencyFx(dt){stageDirect();
+  const f=freqStats(state.freq),p=state.player;
+  stepEchoes(dt);setConeScale({range:f.coneRange,half:f.coneHalf});enemyWorld.stillCloak=f.stillCloak;
+  state.flourishT=Math.max(0,(state.flourishT||0)-dt);
+  if(p&&f.bubble>0){state.bubbleT=(state.bubbleT||0)-dt;if(state.bubbleT<=0){state.bubbleT=.55;view.fx.ring(p.x,p.y,f.bubble*.82,f.bubble,'#9ad8ff',.55,1.5);if(f.bubbleZap>0)view.fx.ring(p.x,p.y,f.bubbleZap*.8,f.bubbleZap,'#ffffff',.4,1);}}
+  if(p&&f.heldBreath>0&&state.stillFor>=.6&&!state.heldPing){state.heldPing=true;view.fx.ring(p.x,p.y,24,6,'#ffd27a',.3,2);}else if(state.stillFor<.6)state.heldPing=false;
+}
 function updateBullets(worldDt,realDt){
-  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],dt=b.owner==='player'?realDt:worldDt,previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};b.ox=undefined;b.life-=dt;if(b.life<=0){if(b.lob)detonateShell(b);removeBullet(i);continue;}if(!state.stepHitstop){if(b.homing)steerBullet(b,dt);const k=b.owner==='enemy'?bubbleFactor(b):1;b.x+=b.vx*dt*k;b.y+=b.vy*dt*k;}
+  for(let i=state.bullets.length-1;i>=0;i--){const b=state.bullets[i],dt=b.owner==='player'?playerBulletDt(worldDt,realDt,PLAYER_BULLET_CLOCK):worldDt,previous=b.ox!==undefined?{x:b.ox,y:b.oy}:{x:b.x,y:b.y};
+    if(b.hang){if(state.realElapsed>=b.hang.until||(b.hang.untilMove&&playerSpeedRatio()>.3))b.hang=null;else continue;}// HANG FIRE: frozen mid-air, harmless
+    if(b.owner==='enemy'&&bubbleZapped(b)){view.fx.spark(b.x,b.y,0,5,Math.PI,[60,200],'#9ad8ff');view.fx.ring(b.x,b.y,2,12,'#9ad8ff',.25,2);removeBullet(i);continue;}
+    b.ox=undefined;b.life-=dt;if(b.life<=0){if(b.lob)detonateShell(b);removeBullet(i);continue;}if(!state.stepHitstop){if(b.homing)steerBullet(b,dt);const k=b.owner==='enemy'?bubbleFactor(b):1;b.x+=b.vx*dt*k;b.y+=b.vy*dt*k;}
     const impacts=[];
     if(b.owner==='player'&&!b.lob)for(const enemy of state.enemies){if(!enemy.alive||b.hitEnemies.has(enemy))continue;const t=segmentCircleHitTime(previous,b,enemy,enemy.def.hitRadius||(enemy.type==='brute'?13:11));if(t!==null){const blocked=enemy.def.shield&&shieldBlocks({facing:enemy.shieldFacing,halfArc:enemy.def.shieldHalfArc,bulletVx:b.vx,bulletVy:b.vy,stun:enemy.stun});impacts.push({t,kind:blocked?'shield':'enemy',target:enemy});}}
     if(!b.lob)for(const crate of state.crates){if(b.hitCrates.has(crate))continue;const t=segmentCircleHitTime(previous,b,crate,17);if(t!==null)impacts.push({t,kind:'crate',target:crate});}
@@ -1001,7 +1117,7 @@ function updateBullets(worldDt,realDt){
     let removed=resolution.stopped;{const tail=resolution.impacts.at(-1);if(removed&&tail&&Number.isFinite(tail.t)){b.x=previous.x+(b.x-previous.x)*tail.t;b.y=previous.y+(b.y-previous.y)*tail.t;}}
     for(const impact of resolution.impacts){
       if(impact.kind==='enemy'){
-        const enemy=impact.target;b.hitEnemies.add(enemy);const dealt=playerHitDamage(b,enemy);enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,.1+playerStunBonus(enemy)+(enemy.type==='boss'?0:b.stun||0));afterPlayerHit(b,enemy,dealt);if(b.burn&&enemy.hp>0)igniteEnemy(enemy,b.burn.seconds,b.burn.dps);const len=Math.hypot(b.vx,b.vy)||1,kn=enemyKnockback(b.damage,enemy.type);enemy.knock.x=b.vx/len*kn;enemy.knock.y=b.vy/len*kn;view.fx.hitEnemy(enemy,b.damage,b.vx,b.vy,enemy.hp<=0);if(enemy.hp>0){state.hitstop=Math.max(state.hitstop,hitstopFor({damage:b.damage}));emit('hit',b.x,b.y,{dx:b.vx/len,dy:b.vy/len,damage:b.damage,target:'enemy',kill:false});}else emit('hit',b.x,b.y,{dx:b.vx/len,dy:b.vy/len,damage:b.damage,target:'enemy',kill:true});
+        const enemy=impact.target;b.hitEnemies.add(enemy);if(b.shot&&enemy.aware)b.shot.loud=true;const dealt=playerHitDamage(b,enemy);enemy.hp-=dealt;enemy.stun=Math.max(enemy.stun||0,.1+playerStunBonus(enemy)+(enemy.type==='boss'?0:b.stun||0));afterPlayerHit(b,enemy,dealt);if(b.burn&&enemy.hp>0)igniteEnemy(enemy,b.burn.seconds,b.burn.dps);const len=Math.hypot(b.vx,b.vy)||1,kn=enemyKnockback(b.damage,enemy.type);enemy.knock.x=b.vx/len*kn;enemy.knock.y=b.vy/len*kn;view.fx.hitEnemy(enemy,b.damage,b.vx,b.vy,enemy.hp<=0);if(enemy.hp>0){state.hitstop=Math.max(state.hitstop,hitstopFor({damage:b.damage}));emit('hit',b.x,b.y,{dx:b.vx/len,dy:b.vy/len,damage:b.damage,target:'enemy',kill:false});}else emit('hit',b.x,b.y,{dx:b.vx/len,dy:b.vy/len,damage:b.damage,target:'enemy',kill:true});
         if(enemy.hp<=0)killEnemy(enemy,b);else{playHit();}
       }else if(impact.kind==='crate'){
         const crate=impact.target;kn.crateHit=true;b.hitCrates.add(crate);crate.hp=damageDurability(crate.hp,b.damage);emit('hit',b.x,b.y,{dx:b.vx/(Math.hypot(b.vx,b.vy)||1),dy:b.vy/(Math.hypot(b.vx,b.vy)||1),damage:b.damage,target:'crate',kill:crate.hp===0});updateCrateDamageVisual(crate);if(crate.hp>0)view.fx.hitCrate(crate,b.vx,b.vy);if(crate.hp===0)breakCrate(crate);
@@ -1020,7 +1136,7 @@ function updateBullets(worldDt,realDt){
     if(removed){if(b.lob)detonateShell(b);removeBullet(i);continue;}
   }
 }
-function removeBullet(i){const b=state.bullets[i];if(b.body)physics.removeRigidBody(b.body);state.bullets.splice(i,1);}
+function removeBullet(i){const b=state.bullets[i];if(b.body)physics.removeRigidBody(b.body);if(b.shot&&--b.shot.n<=0)flushShotNoise(b.shot);state.bullets.splice(i,1);}
 function updateCorpses(dt){for(let i=state.enemies.length-1;i>=0;i--){const e=state.enemies[i];if(e.alive||!e.corpseTimer)continue;e.corpseTimer-=dt;const p=e.body.translation();e.x=p.x;e.y=p.y;if(e.corpseTimer<=0){if(e.type!=='boss')view.fx.decals.push({kind:'corpse',type:e.elite?'elite':e.type,x:e.x,y:e.y,a:(e.vis?.ang||0)+(e.vis?.spin||0)*.3,seed:Math.floor(e.id*1e6)});physics.removeRigidBody(e.body);state.enemies.splice(i,1);}}}
 function syncPauseScreen(){const show=state.mode==='play'&&state.paused;syncPauseKnowledge(show);setPauseScreen(show,show?{'pause-room':state.rooms[state.currentRoom]?.name||'ENTRY','pause-time':formatClock(state.realElapsed),'pause-kills':String(state.kills),'pause-seed':String(state.seed)}:{});}
 function update(dt){
@@ -1038,7 +1154,7 @@ function update(dt){
     if(state.player&&state.cmdVel){const k=Math.min(60,dt/ts);state.player.body.setLinvel({x:state.cmdVel.x*k,y:state.cmdVel.y*k},true);}
     physics.step();state.lastPhysicsStep=ts;state.lastMoveDt=dt;};
   if(state.hitstop>0){state.hitstop-=dt;if(state.hitstop<=0)stepPhysics();}else stepPhysics();
-  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateDoors(dt);updateSignal(dt,step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
+  state.time+=step;state.elapsed+=step;state.realElapsed+=dt;stepFrequencyFx(dt);updatePlayer(step);updateSurvival(dt);updateEnemies(step);updateDoors(dt);updateSignal(dt,step);updateBullets(step,dt);updateCrateVisuals(step);updateThrown(step);updateEffects(step);updateCorpses(step);view.update(step);state.shake=Math.max(0,state.shake-dt*14);state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0){$('toast').classList.remove('show');if(state.roomToast){state.roomToast='';hud();}}
   pollKnowledge(dt);
   drawMinimap();syncHudFrame();
 }
@@ -1075,7 +1191,7 @@ function drawMinimap(){
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
 function newRun(opts={}){
-  input.keys.clear();input.firing=false;input.interact=false;state.daily=!!opts.daily;state.freq={};state.runModal=null;$('run-modal').hidden=true;$('boss-bar').hidden=true;const chosenSeed=state.daily?dailySeed():parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));state.floor=1;state.floorCfg=floorConfig(1);ROT.RNG.setSeed(floorSeed(state.seed,1));$('seed-display').textContent=state.daily?`${state.seed} · DAILY`:String(state.seed);Object.assign(state,{floorsCleared:0,runRooms:0,floor1Seconds:0,stillRoomClears:0,slowTriples:0,slowKills:0,tripleFlag:false,noHitFloors:0,floorHit:false,roomMove:0,lastPos:null,bossKilled:false,bossPistol:false,lastHitType:null,timeCredit:0,freezeT:0,loopStacks:0,loopT:0,stillFor:0,outcome:null,boss:null,doorMarkers:[],freqOffers:[],freqThen:null});
+  input.keys.clear();input.firing=false;input.interact=false;state.daily=!!opts.daily;state.freq={};state.shotsFired=0;state.beatBank=0;state.heldSilent=false;state.runModal=null;$('run-modal').hidden=true;$('boss-bar').hidden=true;const chosenSeed=state.daily?dailySeed():parseRunSeed($('seed-input').value);state.seed=chosenSeed??(1+Math.floor(Math.random()*MAX_RUN_SEED));state.floor=1;state.floorCfg=floorConfig(1);ROT.RNG.setSeed(floorSeed(state.seed,1));$('seed-display').textContent=state.daily?`${state.seed} · DAILY`:String(state.seed);Object.assign(state,{floorsCleared:0,runRooms:0,floor1Seconds:0,stillRoomClears:0,slowTriples:0,slowKills:0,tripleFlag:false,noHitFloors:0,floorHit:false,roomMove:0,lastPos:null,bossKilled:false,bossPistol:false,lastHitType:null,timeCredit:0,freezeT:0,flourishT:0,echoes:[],shotGroup:null,shotExtra:null,stillFor:0,outcome:null,boss:null,doorMarkers:[],freqOffers:[],freqThen:null});
   state.supplyOpen=false;state.supplyPickup=null;$('supply-panel').hidden=true;$('supply-panel').setAttribute('aria-hidden','true');state.mode='play';state.paused=false;state.running=true;state.paidOut=false;state.elapsed=0;state.realElapsed=0;state.calmTimer=0;state.notify={};state.lastMagWarn={};state.extractionOpen=false;state.objTimer=0;state.time=0;state.kills=0;state.scrap=runStats().startScrap;state.maxHealth=runStats().maxHealth;state.health=state.maxHealth;state.armor=0;state.maxArmor=0;state.gear=null;state.weaponSlots=(kitById(state.progress.kit)||kitById('standard')).guns.map(id=>GUNS.findIndex(gun=>gun.id===id));state.activeSlot=0;state.weaponAmmo=GUNS.map(g=>g.mag);state.reserveAmmo=GUNS.map(g=>g.reserve);state.gunMods={};state.gunTouched=new Set(state.weaponSlots);state.swapUntil=0;state.quickdrawFor=-1;state.throwables=kitThrowables(state.progress,state.progress.kit);state.throwableIndex=Math.max(0,THROWABLES.findIndex(item=>state.throwables[item.id]>0));state.shotgunShellId='buckshot';state.lastAction=0;state.lastActionKind='other';state.fireCooldown=0;state.weaponBurst=null;state.reloadTimer=0;state.invuln=0;state.shake=0;state.roomsCleared=0;state.roomToast='';$('run-result').hidden=true;$('start-button').innerHTML='<span>ENTER THE SECTOR</span><span class="arrow">↗</span>';$('start-button').classList.remove('again');$('game-shell')?.classList.remove('dying');state.lastHitBy=null;state.lastHitKind=null;state.lastHitSpotted=false;state.noiseRings=[];state.alertPulses=[];$('meta-panel').hidden=true;$('overlay').classList.remove('show');toggleLoadout(false);$('vignette').style.background='';kn.reset();state.peek=null;setPeekChrome(false);showSigHint(null);showSigComplete(false);{const want=!opts.fromSignal&&shouldRunSignalCheck(state.onboarding,state.progress,{daily:state.daily,forced:!!opts.signal});state.signal=want?createSignalProgress():null;if(want&&opts.signal){state.onboarding.cards=state.onboarding.cards.filter(id=>!SIGNAL_CARD_IDS.includes(id));}}makeLevel();updateThrowableHud();setTimeout(()=>{if(signalOn()){showBanner('SIGNAL CHECK','ROOM 1 OF 5','room');queueCard('time.breath');return;}const r=state.rooms[state.currentRoom];if(r&&state.mode==='play')roomBanner(r.name,state.enemies.filter(e=>e.alive&&e.roomIndex===state.currentRoom).length);},400);}
 function resize(){view?.resize();}
 let timeEdgeEl=null;
@@ -1152,6 +1268,7 @@ function setupControls(){
     if(key==='m'&&state.paused&&state.mode==='play'){const to=document.querySelector('.pause-card')?.dataset.tab==='manual'?'pause':'manual';setPauseTab(to);if(to==='manual')onManualOpen();}
     if(key===binding('throwableCycle')&&state.mode==='play'){state.throwableIndex=(state.throwableIndex+1)%THROWABLES.length;updateThrowableHud();markAction();}
     if(key===binding('shellCycle'))cycleShotgunShell();
+    if(key===binding('shove'))playerShove();
     if(key===binding('throwableUse')&&state.mode==='play'&&!state.peek&&!state.supplyOpen&&!state.paused&&!state.loadoutOpen)throwThrowable();
     if(key==='r'&&(state.mode==='dead'||state.mode==='won')){newRun();return;}
     if(key==='escape'&&(e.repeat||performance.now()-dialogClosedAt<350))return;
@@ -1165,7 +1282,7 @@ function setupControls(){
   addEventListener('keyup',e=>{const k=normalizeKey(e.key);input.keys.delete(resolveMovementKey(k,controls.bindings));if(k===binding('interact')){input.eHeld=false;input.eUp=true;}});
   addEventListener('blur',()=>{input.keys.clear();input.firing=false;input.eHeld=false;input.eUp=true;if(state.mode==='play')state.paused=true;});
   addEventListener('mousemove',e=>{input.mouseX=e.clientX;input.mouseY=e.clientY;});
-  addEventListener('mousedown',e=>{if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.peek&&!state.paused&&!state.loadoutOpen&&!state.supplyOpen&&!state.runModal)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});
+  addEventListener('mousedown',e=>{if(e.button===2)playerShove();if(e.button===0){input.firing=true;markAction('fire');if(state.mode==='play'&&!state.peek&&!state.paused&&!state.loadoutOpen&&!state.supplyOpen&&!state.runModal)playerShoot();}});addEventListener('mouseup',e=>{if(e.button===0)input.firing=false;});addEventListener('contextmenu',e=>e.preventDefault());
   $('start-button').addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun();view.canvas.focus();});
   $('daily-button')?.addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun({daily:true});view.canvas.focus();});
   $('replay-signal')?.addEventListener('click',()=>{void unlockAudio();input.firing=false;input.interact=false;newRun({signal:true});view.canvas.focus();});
@@ -1357,7 +1474,7 @@ function knowledgeCtx(){
     noiseRing:kn.noiseRing,silentHit:kn.silentHit,thrown:state.thrown.length>0||state.effects.length>0,glassSeen:state.glass.some(g=>!g.broken&&near((g.x+.5)*TILE,(g.y+.5)*TILE,7)),shotCategory:gun.category,
     enemies,offscreenThreat:state.enemies.some(e=>e.alive&&(e.aimTimer>0||e.meleeWindup>0)&&!onScreen(e.x,e.y)),pickedUp:kn.picked,doorSeen:state.doorProps.some(d=>!d.gate&&near(d.x*TILE,d.y*TILE,7)),roomsCleared:state.roomsCleared,calmRegen:kn.calmRegen,
     startScrap:runStats().startScrap,rewardDoors:state.doorMarkers.length>0,minimapEnemies:state.enemies.some(e=>e.alive&&state.rooms[e.roomIndex]?.visited),scrap:state.scrap,gateSeen:state.lockedDoors.some(g=>!g.opened&&near((g.x+.5)*TILE,(g.y+.5)*TILE,8)),
-    supplySeen:state.pickups.some(pk=>pk.available&&(pk.kind==='cache'||pk.kind==='locker')&&near(pk.x,pk.y,6))||state.rooms[state.currentRoom]?.role==='merchant',freqPicked:kn.freqPicked,exitOpen:state.extractionOpen,gunPickup:kn.gunPickup,modPickup:kn.modPickup,coinsBanked:(state.progress.stats?.runs||0)>0};
+    supplySeen:state.pickups.some(pk=>pk.available&&pk.kind==='supply'&&near(pk.x,pk.y,6)),freqPicked:kn.freqPicked,exitOpen:state.extractionOpen,gunPickup:kn.gunPickup,modPickup:kn.modPickup,coinsBanked:(state.progress.stats?.runs||0)>0};
 }
 function wantedCards(ctx){
   const list=[];
@@ -1384,8 +1501,8 @@ function syncPauseKnowledge(show){
 
 async function boot(){
   await RAPIER.init();
-  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta,kn,openDoorProp,enterSignalRoom,signalRoomFail,resetSignalRoom,finishSignal,pickAlcove,lineBlocked,startPeek,endPeek};
+  view=createRenderer($('game'),state);if(new URLSearchParams(location.search).has("debug"))window.__deadair={playerShove,PLAYER_BULLET_CLOCK,state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta,kn,openDoorProp,enterSignalRoom,signalRoomFail,resetSignalRoom,finishSignal,pickAlcove,lineBlocked,startPeek,endPeek};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').innerHTML='<span>ENTER THE SECTOR</span><span class="arrow">↗</span>';
-  let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;musicSyncGame(state,dt);ambienceSync(state,dt);if(state.mode==='play')update(dt);render(dt);}requestAnimationFrame(loop);
+  let previous=performance.now();function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-previous)/1000);previous=now;musicSyncGame(state,dt);ambienceSync(state,dt);if(state.mode==='play')update(dt);else if(state.toastTimer>0){state.toastTimer=Math.max(0,state.toastTimer-dt*1000);if(state.toastTimer<=0)$('toast').classList.remove('show');}render(dt);}requestAnimationFrame(loop);
 }
 boot().catch(error=>{console.error(error);$('start-button').disabled=true;$('start-button').textContent='GAME COULD NOT LOAD';$('overlay').classList.add('show');$('overlay').querySelector('p').textContent='The game could not load. Start a local web server and check that the three game libraries are reachable.';});

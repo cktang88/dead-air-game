@@ -1,6 +1,6 @@
 // Screen rectangles the DOM HUD occupies, shared by every canvas-drawn label that must not hide behind it (edge arrows,
 // door reward plates). `hudSafeRects()` reads the DOM (cached ~4x a second); the rest is pure so it can be unit tested.
-const IDS = ['topbar', 'top-center', 'hud', 'hud-right', 'feed', 'build-strip', 'boss-bar', 'tutor-hint', 'room-banner'];
+const IDS = ['topbar', 'top-center', 'hud', 'hud-right', 'feed', 'build-strip', 'boss-bar', 'tutor-hint', 'room-banner', 'name-card', 'manual-chip', 'sig-cause', 'toast'];
 let cache = [], cacheAt = -1e9;
 
 export function hudSafeRects(pad = 10, now = typeof performance !== 'undefined' ? performance.now() : 0) {

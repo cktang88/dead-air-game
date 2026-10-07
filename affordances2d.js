@@ -59,11 +59,13 @@ export function createAffordances() {
     const subW = subText ? textW(ctx, subText, 11, MONO, 700) : 0;
     const line1 = (kw ? kw + gap : 0) + iconSz + gap + headW + (costW ? gap + costW : 0);
     const w = Math.max(line1, subW) + 22, h = subText ? 50 : 34;
-    const cx = sp.x, top = sp.y - (target.kind === 'exit' ? 62 : 38) - h * scaleIn - (1 - scaleIn) * 8;
+    let cx = sp.x, top = sp.y - (target.kind === 'exit' ? 62 : 38) - h * scaleIn - (1 - scaleIn) * 8, tail = true;
+    const sh = clearShift({x0: cx - w / 2 - 6, x1: cx + w / 2 + 6, y0: top - 4, y1: top + h + 12}, hudSafeRects(4), cam.w, cam.h, 140);   // the prompt is the one thing that must stay readable: slide it clear of the HUD
+    if (sh && (sh.dx || sh.dy)) { cx += sh.dx; top += sh.dy; tail = false; }
     ctx.save();
     ctx.globalAlpha = a; ctx.translate(cx, top + h / 2); ctx.scale(0.8 + 0.2 * scaleIn, 0.8 + 0.2 * scaleIn); ctx.translate(-cx, -(top + h / 2));
     // pointer tail
-    ctx.fillStyle = PANEL; ctx.beginPath(); ctx.moveTo(cx - 6, top + h - 1); ctx.lineTo(cx + 6, top + h - 1); ctx.lineTo(cx, top + h + 7); ctx.closePath(); ctx.fill();
+    if (tail) { ctx.fillStyle = PANEL; ctx.beginPath(); ctx.moveTo(cx - 6, top + h - 1); ctx.lineTo(cx + 6, top + h - 1); ctx.lineTo(cx, top + h + 7); ctx.closePath(); ctx.fill(); }
     rr(ctx, cx - w / 2, top, w, h, RADII.md); ctx.fillStyle = PANEL; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = accent; ctx.globalAlpha = a * (0.7 + pulse * 0.3); ctx.stroke(); ctx.globalAlpha = a;
     let x = cx - w / 2 + 11; const y1 = top + 8 + 9;
@@ -84,7 +86,9 @@ export function createAffordances() {
   function drawTag(ctx, target, sp, alpha, withKey) {
     const label = target.kind === 'gate' ? `${target.cost} SCRAP` : target.kind === 'exit' ? (target.enabled ? 'EXTRACT' : 'EXIT · LOCKED') : target.subject;
     const size = 13, iconSz = 14, tw = textW(ctx, label, size), w = tw + iconSz + 18 + (withKey ? 25 : 0), h = 23;
-    const x = sp.x - w / 2, y = sp.y - 34;
+    let x = sp.x - w / 2, y = sp.y - 34;
+    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), ctx.canvas.clientWidth || 1e5, ctx.canvas.clientHeight || 1e5, 100);
+    if (sh) { x += sh.dx; y += sh.dy; } else return;
     ctx.save(); ctx.globalAlpha = alpha;
     rr(ctx, x, y, w, h, RADII.md); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = target.kind === 'exit' && !target.enabled ? BAD : target.color; ctx.lineWidth = 1; ctx.stroke();
     let cx = x + 6;
@@ -177,7 +181,10 @@ export function createAffordances() {
 
   function drawAutoTag(ctx, tg, sp, a) {
     if (a <= 0.02) return;
-    const label = tg.subject, size = 11, iconSz = 12, w = textW(ctx, label, size) + iconSz + 14, h = 17, x = sp.x - w / 2, y = sp.y - 28;
+    const label = tg.subject, size = 11, iconSz = 12, w = textW(ctx, label, size) + iconSz + 14, h = 17;
+    let x = sp.x - w / 2, y = sp.y - 28;
+    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), ctx.canvas.clientWidth || 1e5, ctx.canvas.clientHeight || 1e5, 80);   // pickup tags never print under the HUD panels
+    if (sh) { x += sh.dx; y += sh.dy; } else return;
     ctx.save(); ctx.globalAlpha = a;
     rr(ctx, x, y, w, h, RADII.sm); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = tg.color; ctx.lineWidth = 1; ctx.globalAlpha = a * 0.7; ctx.stroke(); ctx.globalAlpha = a;
     if (tg.pickupKind === 'scrap') hex(ctx, x + 8, y + h / 2, 5, tg.color); else drawIcon(ctx, tg.icon, x + 8, y + h / 2, iconSz, tg.color);

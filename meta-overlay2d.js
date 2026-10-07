@@ -1,7 +1,7 @@
 // World-space glyphs for the roguelike layer: door reward markers (Hades-style) and the FREQUENCY pickup.
 // Hooked once from render2d.js after the lighting pass, so these read clearly in the dark.
 import {REWARDS} from './door-rewards.js';
-import {hudSafeRects, clearShift} from './hud-safe.js';
+import {hudSafeRects, clearShift, boxHits} from './hud-safe.js';
 
 const TAU = Math.PI * 2;
 const INK = '#120d1a';
@@ -45,18 +45,26 @@ export function drawMetaWorld(ctx, state, now, tile = 32) {
   const t = now;
   const tf = ctx.getTransform?.(), canvas = ctx.canvas, cssW = canvas?.clientWidth || 0, cssH = canvas?.clientHeight || 0;
   const k = tf && cssW ? canvas.width / cssW : 1, rects = tf && cssW ? hudSafeRects() : [];
-  for (const m of state.doorMarkers || []) {
+  // Plates keep out from under the DOM HUD and out of each other's way (a nudged plate used to land its icon on a neighbour's label).
+  // Markers the HUD does not touch are placed first; the rest then treat those placed plates as extra obstacles.
+  const sc = tf && cssW ? tf.a / k : 0, toScreenPt = (x, y) => [(tf.a * x + tf.c * y + tf.e) / k, (tf.b * x + tf.d * y + tf.f) / k];
+  const items = (state.doorMarkers || []).map(m => {
     const info = m.info || REWARDS[m.reward];
     let x = m.x * tile, y = m.y * tile - 6;
-    if (rects.length) {
-      // keep the plate and its label out from under the DOM HUD: find the smallest world-space nudge that clears it
-      const sc = tf.a / k, sx = (tf.a * x + tf.c * y + tf.e) / k, sy = (tf.b * x + tf.d * y + tf.f) / k;
-      const halfW = Math.max(16, (info.label || '').length * 3.4) * sc + 6;
-      const sh = clearShift({x0: sx - halfW, x1: sx + halfW, y0: sy - 18 * sc, y1: sy + 30 * sc}, rects, cssW, cssH);
-      if (sh && sc > 0) { x += sh.dx / sc; y += sh.dy / sc; }
+    const halfW = Math.max(16, (info.label || '').length * 3.4) * sc + 6;
+    const boxAt = (px, py) => { const [sx, sy] = toScreenPt(px, py); return {x0: sx - halfW, x1: sx + halfW, y0: sy - 18 * sc, y1: sy + 30 * sc}; };
+    return {info, x, y, boxAt, hit: rects.length && sc > 0 && boxHits(boxAt(x, y), rects)};
+  });
+  const placed = [];
+  for (const it of [...items.filter(i => !i.hit), ...items.filter(i => i.hit)]) {
+    if (it.hit) {
+      // a plate that has to move far from its door would mislead; the door is then behind the HUD itself, so the plate hides with it
+      const sh = clearShift(it.boxAt(it.x, it.y), rects.concat(placed), cssW, cssH, state.signal?.active ? 260 : 72);
+      if (sh) { it.x += sh.dx / sc; it.y += sh.dy / sc; } else it.skip = true;
     }
-    plate(ctx, x, y, info, t, true);
+    if (sc > 0 && !it.skip) { const b = it.boxAt(it.x, it.y); placed.push({x0: b.x0 - 4, x1: b.x1 + 4, y0: b.y0 - 4, y1: b.y1 + 4}); }
   }
+  for (const it of items) if (!it.skip) plate(ctx, it.x, it.y, it.info, t, true);
   for (const pk of state.pickups) {
     if (pk.kind !== 'freq' || !pk.available) continue;
     const info = REWARDS.freq, bob = Math.sin(t * 3 + pk.x) * 2.4;
