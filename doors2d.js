@@ -97,23 +97,23 @@ export function createDoorLayer() {
       const span = Math.max(1, p.endX - p.resetX), u = (p.x - p.resetX) / span, fade = p.fade ? smooth(0, 0.1, u) * smooth(1, 0.86, u) : 1;
       if (fade <= 0.01) continue;
       const col = mixHex('#4fc8ff', '#ffa83a', k), hot = mixHex('#bfeeff', '#ffe2a0', k), seed = p.seed || 0;
-      const pulse = 0.5 + 0.5 * Math.sin(time * 4 + seed * 1.7), L = (9 + rate * 270) * (p.vx / 190);
+      const pulse = 0.5 + 0.5 * Math.sin(time * 4 + seed * 1.7), L = Math.min(90, (9 + rate * 110) * (p.vx / 190));
       ctx.save(); ctx.globalAlpha = fade; ctx.translate(p.x, p.y);
       ctx.globalCompositeOperation = 'screen';
       // soft glow halo
-      const R = 12 + 6 * k, glow = ctx.createRadialGradient(0, 0, 1, 0, 0, R); glow.addColorStop(0, withAlpha(col, 0.16 + 0.1 * k)); glow.addColorStop(0.5, withAlpha(col, 0.05)); glow.addColorStop(1, withAlpha(col, 0));
+      const R = 9 + 3 * k, glow = ctx.createRadialGradient(0, 0, 1, 0, 0, R); glow.addColorStop(0, withAlpha(col, 0.1 + 0.05 * k)); glow.addColorStop(0.5, withAlpha(col, 0.05)); glow.addColorStop(1, withAlpha(col, 0));
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
       // streak: bright core + two faint speed lines, longer the faster the world runs
       const tail = ctx.createLinearGradient(0, 0, -L, 0); tail.addColorStop(0, withAlpha(col, 0.85)); tail.addColorStop(1, withAlpha(col, 0));
-      ctx.strokeStyle = tail; ctx.lineCap = 'round'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-L, 0); ctx.stroke();
-      if (k > 0.05) { ctx.lineWidth = 1.2; ctx.globalAlpha = fade * clamp(k * 1.4); for (const o of [-5, 5]) { ctx.beginPath(); ctx.moveTo(-3, o); ctx.lineTo(-L * 0.7, o * 1.5); ctx.stroke(); } ctx.globalAlpha = fade; }
+      ctx.strokeStyle = tail; ctx.lineCap = 'round'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-L, 0); ctx.stroke();
+      if (k > 0.3) { ctx.lineWidth = 0.8; ctx.globalAlpha = fade * 0.5 * clamp(k); for (const o of [-5, 5]) { ctx.beginPath(); ctx.moveTo(-3, o); ctx.lineTo(-L * 0.7, o * 1.5); ctx.stroke(); } ctx.globalAlpha = fade; }
       // wake of flecks (glass / casing dust) hanging behind the round
       for (let i = 0; i < 5; i++) {
         const fx = -(8 + i * 9 + ((seed * 13 + i * 7) % 6)) - L * 0.15 * i, fy = (((seed * 31 + i * 17) % 11) - 5) * 1.6, tw = 0.5 + 0.5 * Math.sin(time * 3 + i + seed);
         ctx.fillStyle = withAlpha(hot, 0.25 + 0.4 * tw); ctx.fillRect(fx, fy, 1.8 + (i % 2), 1.4);
       }
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = fade * (0.55 + 0.4 * pulse); ctx.strokeStyle = withAlpha(col, 0.6); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 10 + pulse * 3, 0, TAU); ctx.stroke(); ctx.globalAlpha = fade;
+      ctx.globalAlpha = fade * (0.25 + 0.2 * pulse) * (1 - 0.7 * k); ctx.strokeStyle = withAlpha(col, 0.5); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 9 + pulse * 2, 0, TAU); ctx.stroke(); ctx.globalAlpha = fade;
       // the round: a capsule pointing along its travel
       ctx.rotate(Math.atan2(p.vy, p.vx));
       ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, 0, 9.5, 4.6, 0, 0, TAU); ctx.fill();
