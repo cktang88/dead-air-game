@@ -81,7 +81,8 @@ export function updateBossEnemy(g, e, dt) {
   // Movement: velocity from the brain (it is already in sim seconds because dt is scaled; the body velocity is
   // converted the same way every other enemy's is).
   const wanted = Math.hypot(out.move.x, out.move.y);
-  e.body.setLinvel({x: out.move.x + e.knock.x * .15, y: out.move.y + e.knock.y * .15}, true);
+  e.knock.x = e.knock.y = 0; // the Conductor is not shoved by hits (the knock never decayed on the boss branch and made him drift)
+  e.body.setLinvel({x: out.move.x, y: out.move.y}, true);
   const pos = e.body.translation(); e.x = pos.x; e.y = pos.y;
   if (boss.mode === 'charge' && boss.t < BOSS.chargeTime - .12) {
     const vel = e.body.linvel();

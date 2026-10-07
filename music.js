@@ -357,7 +357,7 @@ export function musicSyncGame(state,dt=1/60){
       if(!e.alive||!e.aware)continue;
       const near=e.roomIndex===state.currentRoom||Math.hypot(e.x-state.player.x,e.y-state.player.y)<560;
       if(!near)continue;
-      aware++;if(e.elite&&e.roomIndex===state.currentRoom)boss=true;
+      aware++;if((e.elite||e.type==='boss')&&e.roomIndex===state.currentRoom)boss=true;
     }
   }
   const fight=combatTracker.update(dt,aware,boss);
