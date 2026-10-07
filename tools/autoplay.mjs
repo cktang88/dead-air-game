@@ -618,7 +618,7 @@ class Bot {
 
     // navigation goal
     let goalDir = null, steer = null;
-    const toTask = () => this.steerTo(S, {x: task.x, y: task.y}, task.tol);
+    const toTask = () => this.steerTo(S, {x: task.x, y: task.y}, (task.kind === 'hunt' && !this.nav.los(S.px, S.py, task.x, task.y)) ? 10 : task.tol);   // no clear shot (cover between us): keep closing in
     let stalkInfo = null;
     if (stalk) {
       const vis = visionFor(stalk.type), f = stalk.face || {x: 1, y: 0}, fl = hyp(f.x, f.y) || 1, fx = f.x / fl, fy = f.y / fl;
