@@ -21,7 +21,7 @@ A run is **three floors and a boss floor** (about 10–20 minutes). Floors reuse
 
 1. Pick a **starting kit** (title screen / safehouse) and enter FLOOR 01 with that loadout, a workbench and the run seed.
 2. Every room carries a **reward** that pays out when it is cleared. Each doorway out of a cleared room shows an icon for the reward beyond it: FREQUENCY, scrap, weapon, medkit, supply drop, or an ELITE skull. Choosing a door is choosing a build.
-3. Fight, use cover and the slow-time rule, pick up rewards, spend scrap at the workbench and Black Market.
+3. Fight, use cover and the slow-time rule, pick up rewards, spend scrap at supply drops and vault gates (see the economy numbers below).
 4. When the main route is clear, the exit opens. Reaching it shows the **greed choice**: **EXTRACT NOW** (bank every coin earned this run, end the run) or **DESCEND** (pick one FREQUENCY, get a little ammo and one health back, and enter the next floor). Dying keeps only 40% of the run's coins (25% with HIGH ROLLER).
 5. Floors escalate: floors 2 and 3 shift encounter depth (+0.30 / +0.55) so MARKSMAN and RIOT squads arrive early, add +1 enemy to ordinary rooms, convert 1 / 2 ordinary rooms to WARDEN rooms, and raise enemy health (+15% / +30%) and speed (+4% / +8%).
 6. FLOOR 04 is **THE CONDUCTOR**: a hunt through a few rooms into a generous arena, ending in the boss fight. Beating it is the true win.
@@ -43,6 +43,60 @@ A run is **three floors and a boss floor** (about 10–20 minutes). Floors reuse
 Pacing target: the cheapest unlocks cost 35 to 60 coins, a typical run pays 30 to 120 coins, and goals pay 10 to 80 coins plus an unlock, so a new player buys or unlocks something after nearly every run for the first ten runs. The catalog totals about 1,400 coins of purchases plus 8 goal-only unlocks (roughly 25 to 30 runs of play); the first boss win is expected around runs 10 to 15.
 
 The first room should teach movement, aiming, slow time, shooting, cover, and switching weapons in under two minutes.
+
+## In-run economy and difficulty numbers (balance pass)
+
+One in-run currency, **scrap**, now buys decisions instead of piling up. All numbers live in `economy.js` (`SCRAP`), `supply.js` (`PRICES`), `run-loop.js` (`FLOORS`) and `enemy-brain.js` / `catalog.js` (enemy timing).
+
+**Scrap income** (was about 1100 scrap per bot run, spent about 6; now about 300 to 550 per four-floor run, 35 to 50% spent by the bot):
+
+| Source | Old | New |
+| --- | --- | --- |
+| Kill | 6 to 13 | 1 to 3 |
+| Room clear bonus | 20 (+2 per SALVAGER) | 6 (+2 per SALVAGER), plus six 1-scrap piles |
+| Scrap-role room pile | 30 to 50 | 15 to 25 |
+| Loose pile in every other room | 10 to 30 | 4 to 8 |
+| Crate (35% chance) | 8 to 20 | 3 to 6 |
+| Enemy scrap/mod drop (20% of kills) | 12 to 21 | 6 to 10 |
+| "Scrap" door reward | 4 piles of 14 | 4 piles of 5 |
+
+**Scrap sinks** (every price is printed on the prompt or card before you commit):
+
+- SUPPLY DROP: three cards, **buy any you can afford** (no longer pick one). RESTOCK 20, MEDKIT 30 (+2 HP), named MOD 40, named GUN 60, TUNE A SIGNAL (frequency) 45. A full set costs 105 to 135, so a run affords about half. The panel shows your purse. **RESHUFFLE ARMS** (key R) re-rolls the arms card for 15, then 25, 35 and so on. Unbought cards stay on the drop if you leave.
+- Vault gate: 18 -> 40 scrap (shown on the E prompt).
+- **Cash-out:** leftover scrap converts to coins at **5 scrap = 1 coin** when you EXTRACT or win (shown on the decision card); a death loses all scrap. Spending on a medkit (30) is worth far more than the 6 coins it would bank.
+
+**Healing:** the room-clear medkit is now a lifeline (+1 HP only on your last point), kill and crate heal drops are about 40% rarer. Real healing is the medkit card (30 scrap), clinics, and the medkit door reward.
+
+**Difficulty** (retargeted at a human: shorter tells, real melee threat; every tell is still drawn, and standing still still makes everything readable):
+
+| Knob | Old | New |
+| --- | --- | --- |
+| Gunner / warden wind-up | 0.48 / 0.62 s | 0.28 / 0.36 s |
+| Marksman wind-up, lock, reaction | 1.6 s, 0.5 s, 0.4 to 0.7 s | 1.3 s, 0.4 s, 0.2 to 0.4 s |
+| Aware reaction delay (gunner, rusher, others) | 0.18 to 0.6 s | 0.05 to 0.15 s |
+| Gunner / warden fire gap | 1.0 to 2.0 / 1.6 to 2.6 s | 0.5 to 1.0 / 0.9 to 1.6 s |
+| Simultaneous shooters (squad of 4+) | 3 (2 otherwise) | 5 (3 otherwise) |
+| Gunner / warden bullet speed | 190 / 215 | 215 / 220 (readability test caps at under 2x player speed) |
+| Rusher speed, lunge wind-up | 72, 0.48 s | 110, 0.30 s |
+| Brute speed, wind-up, charge wind-up, charge cooldown | 30, 0.48, 0.55, 2.2 to 3.4 s | 52, 0.34, 0.36, 1.6 to 2.6 s |
+| Riot speed, wind-up | 30, 0.48 s | 50, 0.30 s |
+| Enemy aim error multiplier (`aimMul`, floors 1 to 4) | 1 | 0.55 / 0.45 / 0.40 / 0.55 |
+| Extra enemies in combat rooms (floors 1 to 4) | 0 / 1 / 1 / 0 | 1 / 3 / 3 / 0 |
+| WARDEN rooms (floors 1 to 4) | 0 / 1 / 2 / 1 | 0 / 2 / 3 / 1 |
+
+Enemy HP is deliberately unchanged (basics die in one or two good hits). Per-floor `hpMult` stays 1 / 1.08 / 1.15 / 1.15.
+
+**Measurement** (`tools/autoplay.mjs`, seeds 7001 to 7004, `--width 640 --height 360 --speed 12 --max-game-time 900`; the box was heavily loaded, so wall-clock timeouts were replaced by a 900 s game clock). The bot's low-skill curve was widened (reaction 0.9 - 0.8k s, aim sigma 0.22 - 0.2k, stand-still odds 0.05 + 0.85k, dodge weight 0.05 + 0.95k) because at the old curve even skill 0.3 never took damage. The bot now also buys at supply drops.
+
+| Skill | Before (old game, old bot curve; seeds finished) | After (this pass, merged enemy AI) |
+| --- | --- | --- |
+| 0.3 | 7001 F4 timeout, 7002 F4 timeout, 7003 bot stuck F2; 0 deaths, about 0 to 1 hits per run | 7001 died F3, 7002 died F4, 7003 F4 timeout, 7004 died F4; 3 of 4 deaths, floors reached 3 / 4 / 4 / 4 |
+| 0.5 | 7001 F4 timeout, 7002 F4 timeout; 0 deaths | 7001 F4 timeout, 7002 F4 timeout, 7003 died F4, 7004 died F4 |
+| 0.7 | 7001 died F4, 7002 F4 timeout, 7003 died F4 (earlier baseline: 1 win, 5 timeouts, 0 deaths, 0.83 HP lost per run) | 7001 died F4, 7002 bot stuck F1, 7003 died F4, 7004 died F4; 0 wins |
+| Scrap earned / spent per run (0.7) | about 1100 / 6 | about 300 to 540 / 40 to 130 |
+
+Reading: the bot still clears floors 1 to 3 at every skill (it reads state perfectly, and standing still gives it near-frozen time), but it now dies instead of idling, mostly on the boss floor, and scrap is a real budget. The targets "0.3 dies on floor 1 to 2" and "0.7 wins about half" are NOT met by the bot; the human-facing direction (shorter tells, melee threat) was prioritised over bot targets. Follow-ups: ease boss phase I/II bullet density (0.7 wins 0 of 4), and re-measure with a human or a less omniscient bot.
 
 ## Time and combat rules
 
@@ -164,7 +218,7 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 ## Loot and room rewards
 
-- Run scrap buys attachments and services during a run. It is not permanent currency.
+- Run scrap buys supply drop cards, reshuffles and vault gates during a run. It is not permanent currency, except that leftover scrap cashes out at 5 per coin on extraction.
 - Attachment loot has four named tiers: common, uncommon, rare, and prototype. Each tier scales the attachment’s own bonus by 1.00×, 1.15×, 1.30×, and 1.45×; installed tiers stay visible on the weapon and in the workbench. Ground loot uses both a distinct color and a rarity name when collected.
 - Crates may drop a small amount of scrap. Enemies reward a predictable small amount; rooms grant a clear bonus for clearing.
 - Healing should be uncommon enough that taking damage matters but common enough to prevent a long unwinnable run.
