@@ -129,7 +129,7 @@ export function setStackScale(pxPerUnit) {
   if (lv !== PX) { PX = lv; clearStackCache(); }
 }
 export function clearStackCache() {
-  for (const e of cache.values()) for (const b of e.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } }
+  for (const e of cache.values()) { e.dead = true; for (const b of e.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } } }
   cache.clear(); byId.clear(); bytes = 0; stackStats.pending = 0; if (worker) worker.postMessage({t: 'clear'});
 }
 onSpriteScale(setStackScale);
@@ -190,7 +190,7 @@ function fail(msg) {
 function entryFor(model, variant) {
   // fast path: the last entry this (model, variant, scale) resolved to (no string building / map lookup per part per frame)
   let e = model._ee;
-  if (e && model._ev === variant && e.PX === PX && cache.get(e.key) === e) { e.tick = ++tickCounter; return e; }
+  if (e && model._ev === variant && !e.dead && e.PX === PX) { e.tick = ++tickCounter; return e; }
   const key = model.id + '|' + variantKey(variant) + '|' + PX;
   e = cache.get(key);
   if (!e) { const t0 = now(); e = buildEntry(model, variant, key); cache.set(key, e); stackStats.entries = cache.size; stackStats.builds++; stackStats.buildMs += now() - t0; }
@@ -278,7 +278,7 @@ function evict(keep) {
   const dropped = [];
   for (const v of list) {
     if (bytes <= STACK_CONFIG.cacheBytes * 0.7) break;
-    bytes -= v.size; cache.delete(v.key); byId.delete(v.id); dropped.push(v.id);
+    bytes -= v.size; v.dead = true; cache.delete(v.key); byId.delete(v.id); dropped.push(v.id);
     for (const p of v.pend) if (p) stackStats.pending--;
     if (v.model._ee === v) v.model._ee = null;
     for (const b of v.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } }
