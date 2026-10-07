@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Heavy stack contact sheet</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="1600" height="1200"></canvas>
+<script type="module">
+// Contact sheet for WARDEN / MARKSMAN / RIOT. ?kind=guard|sniper|riot  ?elite=1  ?zoom=1..4  ?rows=stand,walk,act,dead  ?cols=8  ?h=84
+import {setSpriteScale} from '../sprites2d.js';
+import {beginStackFrame, stackStats} from '../stack2d.js';
+import {drawHeavy, drawHeavyCorpse} from '../heavies2d.js';
+const q = new URLSearchParams(location.search);
+const kind = q.get('kind') || 'guard', elite = q.get('elite') === '1', zoom = +(q.get('zoom') || 2), rows = (q.get('rows') || 'stand,walk,act,dead').split(','), cols = +(q.get('cols') || 8);
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+c.width = +(q.get('w') || 1600); c.height = +(q.get('ph') || 1200);
+setSpriteScale(zoom);
+const T = 10;
+const bg = (x, y, w, h) => { ctx.fillStyle = '#2b2736'; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(255,255,255,0.03)'; for (let i = 0; i < w; i += 32) ctx.fillRect(x + i, y, 1, h); for (let j = 0; j < h; j += 32) ctx.fillRect(x, y + j, w, 1); };
+function mk(o) {
+  const ang = o.ang ?? 0;
+  const e = {type: kind, elite, id: 3, alive: true, aimTimer: o.aim ? 1 - o.aim : 0, meleeWindup: o.wind ? 0.48 * (1 - o.wind) : 0, stun: o.stun || 0, shieldFlash: o.block || 0, shieldAng: o.sa ?? ang, locked: !!o.locked, side: 1};
+  const v = {ang, mvAng: o.move ?? ang, mv: o.amp || 0, phase: o.phase || 0, kick: o.kick || 0, hvK: o.kick || 0, punch: o.hurt || 0, flash: o.flash || 0, idleT: o.idleT || 0, raise: o.raise ?? (o.aim ? 1 : 0), rel: 0, lunge: o.lunge || 0, brace: o.brace || 0,
+    aimMax: 1, alertT: o.alert ? 0.9 - o.alert : 0, speed: (o.amp || 0) * (o.speedK ?? 60), hvShotAt: T - (o.shotT ?? 9), cracks: o.cracks || 0, hvFl: o.block || 0, antX: o.antX || 0, antY: o.antY || 0, deathT: o.deathT, spin: o.spin || 0};
+  return {e, v};
+}
+function cell(x, y, w, h, label, o) {
+  bg(x, y, w, h); beginStackFrame();
+  const {e, v} = mk(o);
+  ctx.save(); ctx.translate(x + w / 2, y + h * 0.58);
+  if (o.deathT !== undefined) { e.alive = false; drawHeavyCorpse(ctx, e, v, null); } else drawHeavy(ctx, e, v, T, null);
+  ctx.restore();
+  ctx.fillStyle = '#aaa'; ctx.font = `${10 / zoom}px monospace`; ctx.fillText(label, x + 4, y + 12 / zoom);
+}
+function drawAll() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#1a1722'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.scale(zoom, zoom);
+  const cw = c.width / zoom, W = cw / cols, H = +(q.get('h') || Math.max(76, 100 / Math.max(1, zoom / 2)));
+  let r = 0;
+  const d1 = (i, rr, label, o) => cell((i % cols) * W, (rr + Math.floor(i / cols)) * H, W - 1, H - 1, label, o);
+  const adv = Math.ceil(8 / cols);
+  if (rows.includes('stand')) { for (let i = 0; i < 8; i++) d1(i, r, `stand ${i * 45}`, {ang: i * Math.PI / 4, cracks: i % 4}); r += adv; }
+  if (rows.includes('walk')) {
+    for (let i = 0; i < 8; i++) d1(i, r, `walk E ph${i}`, {ang: 0, amp: 1, phase: i / 8}); r += adv;
+    for (let i = 0; i < 8; i++) d1(i, r, `walk S ph${i}`, {ang: Math.PI / 2, amp: 1, phase: i / 8}); r += adv;
+  }
+  if (rows.includes('act')) {
+    const a = 0.35;
+    const L = kind === 'riot' ? [['alert', {ang: a, alert: 0.12}], ['brace', {ang: a, brace: 1, amp: 0}], ['wind .3', {ang: a, wind: 0.3}], ['wind .8', {ang: a, wind: 0.8}], ['strike', {ang: a, lunge: 1}], ['block', {ang: a, block: 0.28, brace: 1, cracks: 1}], ['stagger', {ang: a, stun: 1, hurt: 0.5, flash: 0.4}], ['hurt', {ang: a, hurt: 1, flash: 0.8}]]
+      : [['alert', {ang: a, alert: 0.12}], ['aim .3', {ang: a, aim: 0.3}], ['aim .7', {ang: a, aim: 0.7}], ['aim 1', {ang: a, aim: 1, locked: true}], ['fire', {ang: a, kick: 1, shotT: 0.02}], [kind === 'sniper' ? 'bolt up' : 'rack back', {ang: a, shotT: 0.34}], [kind === 'sniper' ? 'bolt back' : 'rack hold', {ang: a, shotT: 0.55}], ['hurt', {ang: a, hurt: 1, flash: 0.8}]];
+    L.forEach(([n, o], i) => d1(i, r, n, o)); r += adv;
+    const L2 = [['sprint', {ang: 0, amp: 1, phase: 0.3, speedK: 120}], ['idle1', {ang: 0.7, idleT: 4.6}], ['idle2', {ang: 0.7, idleT: 11}], ['idle3', {ang: 0.7, idleT: 17.8}], ['idle4', {ang: 0.7, idleT: 24.4}], ['idle5', {ang: 1.6, idleT: 31}], ['strafe', {ang: 0, move: 1.6, amp: 1, phase: 0.2}], ['aim N', {ang: -Math.PI / 2, aim: 1}]];
+    L2.forEach(([n, o], i) => d1(i, r, n, o)); r += adv;
+  }
+  if (rows.includes('dead')) {
+    const dur = {guard: 0.75, sniper: 0.9, riot: 0.85}[kind];
+    [0.08, 0.2, 0.35, 0.55, 0.75, 1.05].forEach((t, i) => d1(i, r, 'dead ' + t, {ang: 0.5, deathT: t * dur, spin: 2.5}));
+    d1(6, r, 'dead face W', {ang: Math.PI, deathT: 3, spin: -2}); d1(7, r, 'dead face S', {ang: Math.PI / 2, deathT: 3, spin: 1});
+    r += adv;
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#9f9'; ctx.font = '12px monospace'; ctx.fillText(`bakes ${stackStats.bakes} ${stackStats.mb.toFixed(1)}MB bakeMs ${stackStats.bakeMs.toFixed(0)}`, 8, c.height - 8);
+}
+window.__sheet = {drawAll};
+requestAnimationFrame(() => { drawAll(); drawAll(); drawAll(); window.__ready = true; });
+</script>

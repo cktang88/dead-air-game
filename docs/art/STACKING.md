@@ -140,3 +140,17 @@ Real fights: serve the repo, load `index.html?debug`, use `window.__deadair.spaw
 * Every distinct `variant.key` x model x scale level is a separate bake. Use few variants (floor tints are 4, dead is 1).
 * Models are cached by `id`: change a model's cells => change its `id` (or reload) while iterating in a long-lived page.
 * `emit` colours skip shading but DO go through variants (a dead or floor tint dims lenses too).
+
+## Heavy humanoids: WARDEN, MARKSMAN, RIOT (+ elite trims)
+
+| file | what |
+| --- | --- |
+| `heavy-models2d.js` | specs + voxel builders: per-type torso / head / legs (swapped into the shared `humanoidKit`), `heavyGun` (twin-barrel shotgun + separate pump, scoped rifle + separate bolt), `riotBaton`, `riotShield(crack)` (4 crack levels, upright) and `riotShieldFlat` (dropped), marksman ghillie strip + wrapped arm |
+| `heavies2d.js` | `drawHeavy(ctx, e, v, t, variant)` (call at the enemy origin, un-rotated), `heavyPose`, `deadRig` + `drawHeavyCorpse`, the fidgets, elite banners, scope / visor lights, `heavyMuzzle(e)` for telegraph lines |
+| `tools/stack-heavy-sheet.html` | `?kind=guard\|sniper\|riot&elite=1&zoom=4&rows=stand,walk,act,dead&cols=4` |
+
+Elites are a different spec (gold / orange trim, extra plates, spikes, a pennant on the antenna slot), not a tint. Type extras are data on top of `humanoidPose`: it still owns arms and gun placement; the
+type code feeds `gunRot gunDx handDx lunge kick hurt sprint`, then offsets parts (`shiftUpper`, `shiftLegs`) and appends extra items located from the gun item (pump, bolt) or torso (strips, shield).
+Moving parts are timed from `v.hvShotAt` (set on the kick edge): pump 0.16-0.6 s after a shot, bolt 0.25-0.95 s. Shield cracks count blocks in `v.cracks` (edge of `e.shieldFlash`).
+`deadRig` is a real topple: parts swing about the feet by height (`z*sin(theta)` along the fall axis), then lie flat with arms splayed and the gun / shield / baton thrown beside the body; the baked corpse decal
+is the same pose (`corpseOverrides['guard'|'guard+'...]`; `game.js` stamps `type + '+'` for elites). Fidgets can be limited per kind with `only: ['riot']` (`fidgetAt(idleT, seed, kind)`).

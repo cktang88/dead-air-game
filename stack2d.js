@@ -108,7 +108,7 @@ const cache = new Map();     // key -> entry
 let bytes = 0;
 export const STACK_CONFIG = {
   enabled: true,
-  kinds: new Set(['player', 'gunner']),   // actor kinds drawn as stacks; everything else keeps the legacy sprites
+  kinds: new Set(['player', 'gunner', 'guard', 'sniper', 'riot']),   // actor kinds drawn as stacks; everything else keeps the legacy sprites
   cacheBytes: 56 * 1024 * 1024,           // hard cap on baked composites
   bakeBudgetMs: 2.5,                      // per-frame lazy bake allowance; over budget we reuse the nearest baked angle
 };

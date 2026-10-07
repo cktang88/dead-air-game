@@ -13,6 +13,7 @@ import {beginStackFrame} from './stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
+import {isHeavy, drawHeavy, drawHeavyCorpse, heavyMuzzle} from './heavies2d.js';
 import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
@@ -398,7 +399,7 @@ export function createRenderer(container, state) {
     for (const e of state.enemies) {
       if (!inView(e, b, 40)) continue;
       const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
-      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (!dying && isStacked(kindOf(e)) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
+      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (!dying && (isStacked(kindOf(e)) || isHeavy(e)) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
     }
     const p = state.player;
     if (p) drawBlobShadow(ctx, p.x, p.y + (isStacked('player') ? feetDrop() : 0), 10, 1.5);
@@ -720,7 +721,7 @@ export function createRenderer(container, state) {
     if (windP > 0) { const rb = outCubic(windP) * 4.5; ctx.translate(-Math.cos(ang) * rb, -Math.sin(ang) * rb); }
     if (lunge > 0) { const l = outQuad(lunge) * 7; ctx.translate(Math.cos(ang) * l, Math.sin(ang) * l); }
     if (aimP > 0 && !e.elite) { ctx.translate(-Math.cos(ang) * aimP * 1.2, -Math.sin(ang) * aimP * 1.2); }
-    const stk = isStacked(kind);
+    const hv = isHeavy(e), stk = isStacked(kind) || hv;
     walkPose(v.phase || 0, _wp);
     if (!stk) drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
     // squash and stretch: along travel while running, bigger on the wind-up, a punch when hit, a hop when alerted
@@ -736,7 +737,9 @@ export function createRenderer(container, state) {
       actorRim(look.r, tint(look.color, 0.2), 0.42);
     }
     ctx.save(); ctx.rotate(ang);
-    if (e.type === 'chaser' && !e.elite) {
+    if (hv) {
+      ctx.rotate(-ang); drawHeavy(ctx, e, v, vis.time, floorStackVariant(state.floor)); ctx.rotate(ang);
+    } else if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
     } else if (e.type === 'riot') {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -805,7 +808,7 @@ export function createRenderer(container, state) {
       }
     }
     ctx.restore();
-    if (e.type === 'riot') drawRiotShield(e, v, e.shieldAng || 0, false, 1);
+    if (e.type === 'riot' && !hv) drawRiotShield(e, v, e.shieldAng || 0, false, 1);
     if (v.flash > 0 && !stk) {
       ctx.globalAlpha = Math.min(1, v.flash * 1.6);
       ctx.drawImage(spr.whiteBase, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -847,6 +850,7 @@ export function createRenderer(container, state) {
 
   // Death animation per type, then the body settles into the same pose the baked corpse decal uses (angle + spin*0.3, 0.94 x 0.9).
   function drawCorpse(e, v, kind, spr, look) {
+    if (isHeavy(e)) { drawHeavyCorpse(ctx, e, v, floorStackVariant(state.floor)); return; }
     const D = DEATH[kind] || DEATH.gunner, dt = v.deathT ?? 1, t = clamp(dt / D.dur), spin = v.spin || 0, ang0 = v.ang || 0, sgn = spin < 0 ? -1 : 1;
     const settle = outCubic(t), base = e.elite ? 0.9 : 1;
     const ang = ang0 + spin * 0.3 * settle + sgn * D.whirl * hump(Math.min(1, t * 1.15)) * 0.9;
@@ -915,7 +919,7 @@ export function createRenderer(container, state) {
 
   function drawSniperLaser(e) {
     const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
-    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = 3 + gun.visual.length * 0.82 + 2;
+    const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : 3 + gun.visual.length * 0.82 + 2;
     const sx = e.x + dx * m, sy = e.y + dy * m, len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
     const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
     ctx.lineCap = 'round';
@@ -948,8 +952,8 @@ export function createRenderer(container, state) {
         ctx.restore();
       } else if (e.aimTimer > 0) {
         const p = clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), range = e.type === 'brute' ? 130 : Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
-        const gun = ENEMY_GUNS[e.type], m = gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
-        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
+        const gun = ENEMY_GUNS[e.type], hvg = isHeavy(e) && gun, m = hvg ? heavyMuzzle(e) : gun ? 3 + gun.visual.length * 0.82 + 2 : 14;
+        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' && !hvg ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
         const len = rayWall(e.x, e.y, dx, dy, range);
         const ex = e.x + dx * len, ey = e.y + dy * len;
         const hot = mix('#ff8a5a', '#ff2a48', p);

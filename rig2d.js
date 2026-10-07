@@ -20,7 +20,7 @@ export const RIG = {
   legY: 2.5,
 };
 
-const POOL = 20;
+const POOL = 30;
 export function newRigOut() {
   const items = [];
   for (let i = 0; i < POOL; i++) items.push({model: null, x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, flash: 0, key: 0, draw: null, a: 0, b: 0});
@@ -40,7 +40,7 @@ function add(out, model, x, y, z, yaw, sx = 1, sy = 1, flash = 0) {
 // Append your own with registerIdleFidget; later agents hang easter eggs here (checking a watch, kicking a pebble...).
 export const IDLE_FIDGETS = [
   {id: 'look', from: 3.5, dur: 2.4, apply(p, u) { const s = Math.sin(u * TAU); p.headYaw += 0.62 * s * (u < 0.5 ? 1 : 0.75); p.torsoYaw += 0.08 * s; }},
-  {id: 'antenna', from: 5, dur: 1.2, apply(p, u) { p.antenna += Math.sin(u * TAU * 3) * (1 - u) * 1.6; p.headYaw += 0.3 * Math.sin(u * Math.PI); }},
+  {id: 'antenna', only: ['player', 'gunner'], from: 5, dur: 1.2, apply(p, u) { p.antenna += Math.sin(u * TAU * 3) * (1 - u) * 1.6; p.headYaw += 0.3 * Math.sin(u * Math.PI); }},
   {id: 'shrug', from: 8, dur: 1.1, apply(p, u) { const h = Math.sin(u * Math.PI); p.shrug = h; p.torsoZ += 0.5 * h; p.headZ += 0.7 * h; }},
   {id: 'stretch', from: 10, dur: 1.8, apply(p, u) { const h = Math.sin(u * Math.PI); p.leanX -= 1.1 * h; p.headZ += 0.5 * h; p.torsoYaw -= 0.1 * h; }},
 ];
@@ -48,11 +48,13 @@ export function registerIdleFidget(f) { IDLE_FIDGETS.push(f); }
 const SLOT = 6.5;   // seconds between fidgets once still
 const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0};
 /** Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure. */
-export function fidgetAt(idleT, seed = 0) {
+export function fidgetAt(idleT, seed = 0, kind = '') {
   const first = IDLE_FIDGETS[0].from;
   if (!(idleT > first)) return null;
   const slot = Math.floor((idleT - first) / SLOT), within = (idleT - first) - slot * SLOT;
-  const f = IDLE_FIDGETS[(slot + (seed | 0)) % IDLE_FIDGETS.length];
+  // fidgets may be limited to some actor kinds with `only: [...]`
+  const pool = kind ? IDLE_FIDGETS.filter((q) => !q.only || q.only.includes(kind)) : IDLE_FIDGETS;
+  const f = pool[(slot + (seed | 0)) % pool.length];
   if (within > f.dur) return null;
   return {fidget: f, u: within / f.dur};
 }
@@ -81,7 +83,7 @@ export function humanoidPose(kit, inp, out) {
   _fp.headYaw = _fp.headZ = _fp.torsoZ = _fp.torsoYaw = _fp.leanX = _fp.antenna = _fp.shrug = 0;
   out.fidget = '';
   if (dead === null && amp < 0.05 && (inp.idleT || 0) > 0) {
-    const f = fidgetAt(inp.idleT, inp.id || 0);
+    const f = fidgetAt(inp.idleT, inp.id || 0, inp.kind || '');
     if (f) { f.fidget.apply(_fp, f.u, inp); out.fidget = f.fidget.id; }
   }
   // gait numbers
@@ -187,7 +189,7 @@ export function solveElbow(sx, sy, hx, hy, L, side, bodyYaw, out = {x: 0, y: 0})
   return out;
 }
 
-function sortItems(out) {
+export function sortItems(out) {
   const a = out.items, n = out.n;
   for (let i = 1; i < n; i++) { const v = a[i]; let j = i - 1; while (j >= 0 && a[j].key > v.key) { a[j + 1] = a[j]; j--; } a[j + 1] = v; }
 }
