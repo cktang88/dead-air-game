@@ -136,11 +136,11 @@ export function pushFeed(text, tone) {
 
 let bannerTimer = 0;
 /** Big animated centre-top banner. kind: room | clear | secret */
-export function showBanner(title, sub = '', kind = 'room') {
+export function showBanner(title, sub = '', kind = 'room', kicker = '') {
   const el = $('room-banner');
   if (!el) return;
   el.className = '';
-  el.innerHTML = `<small>${esc(kind === 'clear' ? 'ZONE SECURED' : kind === 'secret' ? 'DISCOVERY' : 'ENTERING')}</small><strong>${esc(title)}</strong><span>${esc(sub)}</span>`;
+  el.innerHTML = `<small>${esc(kicker || (kind === 'clear' ? 'ZONE SECURED' : kind === 'secret' ? 'DISCOVERY' : 'ENTERING'))}</small><strong>${esc(title)}</strong><span>${esc(sub)}</span>`;
   void el.offsetWidth;
   el.className = `show ${kind}`;
   clearTimeout(bannerTimer);

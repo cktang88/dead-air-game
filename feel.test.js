@@ -188,3 +188,14 @@ test('approach converges without overshoot', () => {
   assert.ok(approach(10, 0, 50, 1) < .001);
   assert.equal(approach(10, 0, 0, 1), 10);
 });
+
+import {effectiveSpeedRatio, smoothActualSpeed} from './feel.js';
+test('time follows actual displacement: a wall-pushing player stays slow', () => {
+  assert.equal(effectiveSpeedRatio(112, 0, 112), 0);
+  assert.equal(effectiveSpeedRatio(112, 112, 112), 1);
+  assert.equal(effectiveSpeedRatio(112, undefined, 112), 1);
+  assert.equal(effectiveSpeedRatio(50, 400, 100), 0.5);
+  let a = 112; for (let i = 0; i < 12; i++) a = smoothActualSpeed(a, 0, 1 / 60);
+  assert.ok(a < 20);
+  assert.equal(smoothActualSpeed(undefined, 80, 0.016), 80);
+});

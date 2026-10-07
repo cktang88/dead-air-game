@@ -50,13 +50,13 @@ const RAW = [
   ]},
   // ---------------------------------------------------------------- DEADLINE: time is a currency
   {id:'borrowed', station:'deadline', name:'BORROWED TIME', effect:'credit', unlockCost:null, ranks:[
-    {fx:{creditPerKill:.8}, text: f => `Each kill refunds ${f.creditPerKill} s of slow time: the world runs at half speed while you walk.`},
+    {fx:{creditPerKill:.8}, text: f => `Each kill banks ${f.creditPerKill} s of borrowed time: while it lasts the world runs at half its speed, even when you sprint.`},
     {fx:{creditPerKill:.8, hitCredit:1.5}, text: f => `Twist: getting hit refunds ${f.hitCredit} s too, so a mistake buys room to recover.`},
-    {fx:{creditPerKill:.8, hitCredit:1.5, lastStand:1}, text: () => 'Flourish: at 1 health the world always runs at half speed while you walk.'},
+    {fx:{creditPerKill:.8, hitCredit:1.5, lastStand:1}, text: () => 'Flourish: at 1 health the world always runs at half its speed, even when you sprint.'},
   ]},
   {id:'freeze', station:'deadline', name:'HANG FIRE', effect:'hang', unlockCost:45, ranks:[
-    {fx:{hangKill:1.5}, text: f => `A kill while you stand still freezes the victim's bullets in mid-air for ${f.hangKill} s.`},
-    {fx:{hangKill:4, hangUntilMove:1}, text: f => `Twist: frozen bullets hang until you move again (at most ${f.hangKill} s).`},
+    {fx:{hangKill:1.5}, text: f => `Every kill freezes the victim's bullets solid in mid-air for ${f.hangKill} s, even at a full sprint.`},
+    {fx:{hangKill:4, hangUntilMove:1}, text: f => `Twist: they hang for ${f.hangKill} s, and if you killed standing still, until you move again.`},
     {fx:{hangKill:4, hangUntilMove:1, hangAll:192}, text: f => `Flourish: the kill freezes every enemy bullet within ${tiles(f.hangAll)} tiles.`},
   ]},
   {id:'held_breath', station:'deadline', name:'HELD BREATH', effect:'heldBreath', unlockCost:null, ranks:[
