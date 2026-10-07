@@ -5,6 +5,8 @@ import {INK, TAU, actorSprite, corpseSprite, hash2, makeCanvas, mix, rgba, seede
 import {blotch, carpetTile, dirtTile, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2d.js';
 import {paintFloorTile} from './floors2d.js';
 import {LIGHT, coverStyle, lampPool, paintCover, paintDecor, shadowKey, COVER_HEIGHT} from './props2d.js';
+import {paintPropStack, propLive, drawPropsLive} from './prop-stack2d.js';
+import {STACK_CONFIG} from './stack2d.js';
 
 export const CHUNK_TILES = 12;
 const CW = CHUNK_TILES * TILE;
@@ -89,13 +91,14 @@ export class WorldLayer {
       stains.push({x: (tx + rnd()) * TILE, y: (ty + rnd()) * TILE, r: 10 + rnd() * 30, kind: t < 0.42 ? 'oil' : t < 0.7 ? 'rust' : t < 0.88 ? 'damp' : 'pale'});
     }
     // animated / lighting extras: server LEDs, flickering lamps, beacons
-    const live = {leds: [], lamps: [], beacons: []};
+    const live = {leds: [], lamps: [], beacons: [], props: []};
     for (const [idx, c] of cover) {
       const tx = idx % w, ty = (idx / w) | 0;
-      if (c.style === 'server') for (let i = 0; i < 6; i++) {
+      if (c.style === 'server' && !STACK_CONFIG.props) for (let i = 0; i < 6; i++) {
         const hv = hash2(tx * 6 + i, ty, seed + 4);
         live.leds.push({x: tx * TILE + 3.5 + i * 4.6, y: ty * TILE + 28.6, ph: hv * 40, rate: 0.6 + hash2(tx, ty * 6 + i, seed) * 3.2, col: hv < 0.55 ? '90,255,170' : hv < 0.8 ? '255,180,70' : '90,210,255', room: c.room});
-      } else if (c.style === 'beacon') live.beacons.push({x: tx * TILE + 16, y: ty * TILE + 13, ph: hash2(tx, ty, seed) * 6, room: c.room});
+      } else if (c.style === 'beacon') live.beacons.push({x: tx * TILE + 16, y: ty * TILE + (STACK_CONFIG.props ? 6 : 13), ph: hash2(tx, ty, seed) * 6, room: c.room});
+      if (STACK_CONFIG.props) { const items = propLive(this.coverCtx(cover, rooms, w, seed, tx, ty, c)); if (items) for (const it of items) live.props.push(it); }
     }
     rooms.forEach((room, index) => {
       const accent = room.theme?.accent || '#ffb070', emergency = room.role === 'hazard';
@@ -470,8 +473,10 @@ export class WorldLayer {
       if (kindAt(x, y) !== 3) continue;
       const c = L.cover.get(y * L.w + x), room = L.rooms[c.room];
       const same = (dx, dy) => L.cover.get((y + dy) * L.w + x + dx)?.style === c.style;
+      if (STACK_CONFIG.props) continue; // stacked cover is blitted below (it overhangs into neighbouring tiles / chunks)
       paintCover(g, {tx: x, ty: y, kind: c.kind, style: c.style, accent: room.theme?.accent || '#eaaa66', room, seed: L.seed, j: {n: same(0, -1), s: same(0, 1), e: same(1, 0), w: same(-1, 0)}});
     }
+    if (STACK_CONFIG.props) this.paintStackedCover(g, tx0, ty0, tx1, ty1);
     // doorway frames: threshold plates and jambs at every opening of every room
     for (const room of L.rooms) {
       for (const o of room.openings || []) {
@@ -480,6 +485,35 @@ export class WorldLayer {
       }
     }
     for (const door of L.doors) this.paintDoor(g, door, x0, y0);
+  }
+
+  // cover context for the stacked prop module (joins to same-style neighbours, run index for 2-tile props)
+  coverCtx(cover, rooms, w, seed, tx, ty, c) {
+    const at = (x, y) => cover.get(y * w + x), same = (x, y) => at(x, y)?.style === c.style;
+    let run = 0;
+    if (c.style === 'desk') while (same(tx - 1 - run, ty)) run++;
+    else if (c.style === 'bed') while (same(tx, ty - 1 - run)) run++;
+    const room = rooms[c.room];
+    return {tx, ty, kind: c.kind, style: c.style, accent: room?.theme?.accent || '#eaaa66', room, seed, run, j: {n: same(tx, ty - 1), s: same(tx, ty + 1), e: same(tx + 1, ty), w: same(tx - 1, ty)}};
+  }
+
+  // Stacked cover: blit the baked tile image of every cover tile whose picture touches this chunk (tall props lift up into
+  // the chunk above; desks and beds are 2 tiles wide / tall and are drawn from their first tile).
+  paintStackedCover(g, tx0, ty0, tx1, ty1) {
+    const L = this.level;
+    for (let y = Math.max(0, ty0 - 2); y < Math.min(L.h, ty1 + 2); y++) for (let x = Math.max(0, tx0 - 1); x < Math.min(L.w, tx1 + 1); x++) {
+      const c = L.cover.get(y * L.w + x);
+      if (!c) continue;
+      const cc = this.coverCtx(L.cover, L.rooms, L.w, L.seed, x, y, c);
+      if (!paintPropStack(g, cc, this.cs)) { if (y >= ty0 && y < ty1 && x >= tx0 && x < tx1) paintCover(g, cc); }
+    }
+  }
+
+  // Animated parts of stacked cover (fans, tape reels, CRT flicker, VU meters, heart monitors, LEDs): world space, drawn each frame.
+  drawPropLive(ctx, bounds, t) {
+    const L = this.level;
+    if (!L || !STACK_CONFIG.props || !L.live.props.length) return;
+    drawPropsLive(ctx, L.live.props, t, bounds);
   }
 
   paintOpening(g, o, accent, kindAt) {

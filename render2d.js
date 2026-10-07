@@ -9,7 +9,8 @@ import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inO
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
-import {beginStackFrame} from './stack2d.js';
+import {beginStackFrame, STACK_CONFIG} from './stack2d.js';
+import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {kitFor, gunStack, gunGeometry} from './models2d.js';
 import {humanoidPose, newRigOut, drawRig, DEAD_VARIANT} from './rig2d.js';
@@ -339,6 +340,7 @@ export function createRenderer(container, state) {
       if (gv.t <= 0 && g.id !== 'flash') { gv.t = 0.045; fx.smoke(g.x, g.y, 3.2, 1, '#aaa4ac', 5, [0.35, 0.6], 0.3); }
     }
     updatePickups(step);
+    stepDebris(step);
     for (const c of state.crates) {
       const w = c.wob; if (!w) continue;
       const h = Math.min(step, 1 / 40);
@@ -411,6 +413,11 @@ export function createRenderer(container, state) {
   const inView = (o, b, pad = 0) => o.x > b.x0 - pad && o.x < b.x1 + pad && o.y > b.y0 - pad && o.y < b.y1 + pad;
 
   function drawCrates(b) {
+    if (STACK_CONFIG.props) {
+      drawCrateStacks(ctx, state.crates, b, vis.time, (crate, stage) => bar(crate.x, crate.y - 33, 24, 3.4, crate.hp / crate.maxHp, stage === 2 ? '#ff5266' : stage === 1 ? '#f2a45f' : '#83ddae'));
+      drawDebris(ctx, b);
+      return;
+    }
     for (const crate of state.crates) {
       if (!inView(crate, b, 30)) continue;
       const stage = crate.damageStage || 0, variant = Math.floor(hashPos(crate.x, crate.y) * 3), img = crateSprite(stage, variant);
@@ -461,6 +468,14 @@ export function createRenderer(container, state) {
       ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
       ctx.globalAlpha = 1 - open * open;
       const half = span / 2, slide = open * half * 0.95, rattle = open > 0 && open < 1 ? Math.sin(vis.time * 70) * 0.7 * Math.sin(open * Math.PI) : 0;
+      if (STACK_CONFIG.props) {
+        ctx.restore(); ctx.save(); ctx.globalAlpha = 1 - open * open;
+        for (const side of [-1, 1]) {
+          const along = side * (slide + half / 2), perp = rattle * side, wx = cx + (vertical ? perp : along), wy = cy + (vertical ? along : perp);
+          drawPanel(ctx, wx, wy, vertical, half, 'gate', gate.opened ? '#4aa878' : '#e9b23c', 1);
+        }
+        ctx.restore(); ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2); ctx.globalAlpha = 1 - open * open;
+      } else
       for (const side of [-1, 1]) {
         ctx.save(); ctx.translate(side * slide, rattle * side);
         const x0 = side < 0 ? -half : 0, w = half;
@@ -496,6 +511,7 @@ export function createRenderer(container, state) {
   }
 
   function drawPickupShape(pk, t, ph, color) {
+    if (STACK_CONFIG.props && drawPickupStack(ctx, pk, t, ph, color, drawIcon, MOD_ICON, GUNS)) return;
     const spin = Math.sin(t * 1.4 + ph) * 0.25;
       if (pk.kind === 'scrap') {
         ctx.rotate(spin + t * 0.6);
@@ -654,6 +670,7 @@ export function createRenderer(container, state) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.strokeStyle = 'rgba(14,10,20,0.9)'; ctx.fillStyle = col;
     ctx.restore(); ctx.save(); ctx.translate(pk.x, pk.y);
+    if (STACK_CONFIG.props) drawExitMast(ctx, 0, 6, t, ready, col);
     // vertical beacon pillar so the exit is visible from across the room
     const bw = 10 + Math.sin(t * 3) * 2, bg = lgrad(ctx, 0, -120, 0, -20, rgba(col, 0), rgba(col, ready ? 0.45 : 0.25));
     ctx.fillStyle = bg; ctx.fillRect(-bw, -120, bw * 2, 100);
@@ -1262,6 +1279,7 @@ export function createRenderer(container, state) {
     drawGates(bp);
     doorLayer.draw(ctx, state, bp, vis.time);
     drawProps(bp);
+    world.drawPropLive(ctx, bp, vis.time);
     details.drawWorld(ctx, state, bp, vis.time || now);
     drawPillars(bp);
     drawCrates(bp);

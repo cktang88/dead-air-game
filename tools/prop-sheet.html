@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Prop contact sheet</title>
+<body style="margin:0;background:#1a1722">
+<canvas id="c" width="2400" height="1500"></canvas>
+<script type="module">
+// Contact sheet for stacked world props. ?px=4 (bake scale)  ?set=cover|items  ?seed=7
+import {setSpriteScale} from '../sprites2d.js';
+import {propImage, clearPropCache} from '../prop-stack2d.js';
+const q = new URLSearchParams(location.search);
+const px = +(q.get('px') || 4), seed = +(q.get('seed') || 7), set = q.get('set') || 'cover';
+setSpriteScale(px);
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const room = {cx: 100};
+const mk = (style, extra = {}) => ({tx: 3, ty: 3, kind: style === 'concrete' || style === 'hazard' || style === 'beacon' ? 'pillar' : 'wall', style, accent: '#5ad0e6', room, seed, run: 0, j: {n: false, s: false, e: false, w: false}, ...extra});
+const J = (s) => { const j = {n: 0, s: 0, e: 0, w: 0}; for (const ch of s) j[ch] = 1; return j; };
+const cases = [
+  ['concrete', mk('concrete')], ['hazard', mk('hazard')], ['beacon', mk('beacon')], ['vault pillar', mk('vault', {kind: 'pillar'})], ['vault wall', mk('vault')],
+  ['sandbag h', mk('sandbag', {j: J('we')})], ['sandbag end', mk('sandbag', {j: J('e')})], ['sandbag v', mk('sandbag', {j: J('ns')})],
+  ['jersey', mk('jersey', {j: J('we')})], ['jersey hz', mk('jersey-hazard', {j: J('we')})], ['jersey v', mk('jersey', {j: J('ns')})],
+  ['partition', mk('partition', {j: J('we')})], ['partition v', mk('partition', {j: J('ns')})],
+  ['rack a', mk('rack', {j: J('ns'), tx: 3, ty: 3})], ['rack b', mk('rack', {j: J('s'), tx: 5, ty: 4})], ['rack c', mk('rack', {j: J('n'), tx: 7, ty: 9})], ['rack d', mk('rack', {j: {}, tx: 9, ty: 2})],
+  ['rack e', mk('rack', {j: J('ns'), tx: 11, ty: 2})], ['rack f', mk('rack', {j: J('ns'), tx: 12, ty: 5})], ['rack g', mk('rack', {j: J('ns'), tx: 14, ty: 7})],
+  ['server a', mk('server', {j: J('we'), tx: 3})], ['server b', mk('server', {j: J('we'), tx: 4})], ['server c', mk('server', {j: J('e'), tx: 6})], ['server d', mk('server', {j: J('w'), tx: 8})], ['server e', mk('server', {j: J('w'), tx: 10})],
+  ['server f', mk('server', {j: {}, tx: 12})], ['server g', mk('server', {j: {}, tx: 14})], ['server h', mk('server', {j: {}, tx: 16, ty: 5})],
+  ['desk pair', mk('desk', {j: J('e')})], ['desk single', mk('desk', {tx: 5, ty: 5})], ['desk pair b', mk('desk', {j: J('e'), tx: 6, ty: 9})], ['desk pair c', mk('desk', {j: J('e'), tx: 10, ty: 4})],
+  ['bed', mk('bed', {j: J('s')})], ['bed b', mk('bed', {j: J('s'), tx: 5, ty: 8})],
+];
+function draw() {
+  clearPropCache();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#1a1722'; ctx.fillRect(0, 0, c.width, c.height);
+  let x = 10, y = 10, rowH = 0; const S = +(q.get('s') || 1);
+  for (const [label, cc] of cases) {
+    const e = propImage(cc, px);
+    if (!e || e.skip) continue;
+    const w = e.cv.width * S, h = e.cv.height * S;
+    if (x + w + 20 > c.width) { x = 10; y += rowH + 24; rowH = 0; }
+    ctx.fillStyle = '#3a4650'; ctx.fillRect(x, y + 14, w + 10, h + 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; for (let i = 0; i < w + 10; i += 32 * px * S) ctx.fillRect(x + i, y + 14, 1, h + 10);
+    ctx.drawImage(e.cv, x + 5, y + 19, w, h);
+    ctx.fillStyle = '#aaa'; ctx.font = '10px monospace'; ctx.fillText(label, x, y + 10);
+    x += w + 24; rowH = Math.max(rowH, h + 10);
+  }
+  window.__ready = true;
+}
+draw();
+</script>
