@@ -56,13 +56,24 @@ export const REWARD_INFO = {
   supply: {id: 'supply', label: 'SUPPLY', color: '#ffd27a', glyph: 'crate'},
 };
 
+/**
+ * R1's frozen firefight: a field of rounds hanging in the air, flanking the lane you walk. Every one rides world time,
+ * so standing still freezes the field and each step sets it streaming (the renderer lengthens their streaks and warms
+ * their colour with the world rate). `fade` rounds wrap from endX back to resetX without a pop. Tile units.
+ */
+export const GHOST_FIELD = [
+  {x: 9.5, y: 5.5, vx: 190, vy: 0}, {x: 7.0, y: 4.3, vx: 150, vy: 0}, {x: 11.6, y: 4.6, vx: 235, vy: 0}, {x: 13.6, y: 5.3, vx: 170, vy: 0},
+  {x: 5.9, y: 8.2, vx: 205, vy: 0}, {x: 10.2, y: 8.9, vx: 160, vy: 0}, {x: 13.2, y: 7.9, vx: 250, vy: 0}, {x: 8.4, y: 7.5, vx: 180, vy: -10},
+  {x: 12.1, y: 6.9, vx: 215, vy: 6}, {x: 14.2, y: 6.2, vx: 140, vy: 0}, {x: 6.6, y: 5.6, vx: 260, vy: 0}, {x: 9.0, y: 9.7, vx: 175, vy: 0},
+].map((p, i) => ({kind: 'ghost-round', seed: i, ...p, resetX: 3.4, endX: 15.1, fade: true}));
+
 /** Per-room script. Positions are tiles; game.js turns them into px. `idle` is the single word shown when stuck. */
 export const SCRIPT = [
   {
-    id: 'breath', name: 'BREATH', start: {x: 4.5, y: 6.5}, idleHint: {after: 4, keys: 'move', word: 'MOVE'},
+    id: 'breath', name: 'BREATH', start: {x: 4.5, y: 6.5}, idleHint: {after: 1.2, keys: 'move', word: 'MOVE'},
     goal: {type: 'reach', x: 13},                     // player x (tiles) >= 13 opens the gate
     unlock: 'gate:breath',
-    props: [{kind: 'ghost-round', x: 9.5, y: 5.5, vx: 190, vy: 0, resetX: 9.5, endX: 15.1}],
+    props: GHOST_FIELD,
     enemies: [],
     card: {id: 'time.breath', title: 'BREATH', line: 'time follows your feet'},
   },

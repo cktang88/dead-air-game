@@ -200,3 +200,19 @@ export function pushEvent(events, event, cap = EVENT_CAP) {
   if (events.length > cap) events.splice(0, events.length - cap);
   return event;
 }
+
+// Time follows ACTUAL displacement: pushing into a wall keeps the key down and the commanded velocity up, but the
+// body goes nowhere, so the world must stay slow. `actual` is the smoothed measured speed (px/s) or undefined/NaN
+// before the first measurement (then the commanded speed stands).
+export function effectiveSpeedRatio(cmdSpeed, actual, walkTop) {
+  const top = Math.max(1, walkTop || 112);
+  const cmd = Math.max(0, cmdSpeed || 0);
+  const a = Number.isFinite(actual) ? Math.max(0, actual) : cmd;
+  return Math.min(cmd, a) / top;
+}
+export function smoothActualSpeed(prev, raw, dt) {
+  if (!Number.isFinite(raw)) return prev;
+  if (!Number.isFinite(prev)) return raw;
+  const k = raw > prev ? 40 : 25;
+  return prev + (raw - prev) * (1 - Math.exp(-k * Math.max(0, dt)));
+}

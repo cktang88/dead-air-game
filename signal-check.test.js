@@ -80,11 +80,11 @@ test('alcoves: three icons, one per reward, found by position', () => {
 });
 test('text is limited to keycaps and single words', () => {
   for (const s of SCRIPT) {
-    if (s.idleHint) { assert.ok(!/\s/.test(s.idleHint.word)); assert.ok(s.idleHint.after >= 4); }
+    if (s.idleHint) { assert.ok(!/\s/.test(s.idleHint.word)); assert.ok(s.idleHint.after >= 1); }
     assert.ok(s.card.line.split(' ').length <= 6);
   }
-  assert.equal(idleHint(0, 3), null);
-  assert.equal(idleHint(0, 4.5).word, 'MOVE');
+  assert.equal(idleHint(0, 0.8), null);
+  assert.equal(idleHint(0, 1.3).word, 'MOVE');
   assert.equal(idleHint(1, 7, 1), null, 'no FIRE hint once you have fired');
   assert.equal(idleHint(2, 99), null);
 });
