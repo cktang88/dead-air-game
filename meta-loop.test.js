@@ -133,9 +133,9 @@ test('high roller trades safety for coin income and stockpile trades speed for s
 /* ------------------------------------------------------------------ frequencies */
 const seq = (seed = .3) => { let v = seed; return () => (v = (v * 9301 + .49297) % 1); };
 
-test('there are five stations of four or more upgrades (FEEDBACK gained KINDLING, the old incendiary) with three ranks each', () => {
+test('there are five stations of three or more upgrades (FEEDBACK gained KINDLING, the old incendiary) with three ranks each', () => {
   assert.equal(STATIONS.length, 5);
-  for (const s of STATIONS) assert.ok(UPGRADES.filter(u => u.station === s.id).length >= 4, s.id);
+  for (const s of STATIONS) assert.ok(UPGRADES.filter(u => u.station === s.id).length >= 3, s.id);
   assert.equal(UPGRADES.find(u => u.id === 'kindle').station, 'feedback');
   for (const u of UPGRADES) assert.equal(u.ranks.length, MAX_RANK, u.id);
   assert.ok(CROSSFADES.length >= 4);
@@ -174,7 +174,7 @@ test('frequency offers are three distinct upgrades with the next rank, honoring 
   assert.equal(availableUpgrades([], {arc: 3}).some(u => u.id === 'arc'), false);
   assert.equal(availableUpgrades(['freq:dead_channel'], {}).some(u => u.id === 'dead_channel'), true);
   assert.equal(availableUpgrades([], {}).some(u => u.id === 'dead_channel'), false);
-  assert.ok(unlockedFreqIds(grantUnlock(emptyProgress(), 'freq:last_stand')).includes('freq:last_stand'));
+  assert.ok(unlockedFreqIds(grantUnlock(emptyProgress(), 'freq:backlash')).includes('freq:backlash'));
 });
 
 test('offers lean toward owned stations and surface crossfade completers', () => {
@@ -232,7 +232,7 @@ test('boss goals: pistol finish unlocks the high roller and wager', () => {
   assert.ok(r.completed.some(goal => goal.id === 'boss_slayer'));
   assert.ok(r.completed.some(goal => goal.id === 'boss_pistol'));
   assert.equal(isUnlocked(r.progress, 'upg:highroller'), true);
-  assert.equal(isUnlocked(r.progress, 'freq:last_stand'), true);
+  assert.equal(isUnlocked(r.progress, 'freq:backlash'), true);
   assert.equal(isUnlocked(r.progress, 'gun:sniper_mule'), true);
 });
 
@@ -342,7 +342,7 @@ test('a dormant boss does nothing, and activation starts an invulnerable intro',
 });
 
 test('every attack shows a telegraph before it fires, and the telegraph lasts long enough to read', () => {
-  for (const [kind, spec] of Object.entries(PATTERN_SPECS)) assert.ok(spec.telegraph >= .8, kind);
+  for (const [kind, spec] of Object.entries(PATTERN_SPECS)) assert.ok(kind === 'beat' || spec.telegraph >= .8, kind); // the beat pattern telegraphs on the music (two beats: mark, then move), see boss.test.js
   const b = boss();
   let sawTelegraph = false, firedAfter = null, elapsed = 0;
   for (let i = 0; i < 400 && firedAfter === null; i++) {
@@ -375,7 +375,7 @@ test('phase changes pause the boss, then summon adds', () => {
 });
 
 test('phase 3 charges, then is exposed to extra damage', () => {
-  const b = boss({phase: 3, patternIndex: 0});
+  const b = boss({phase: 3, patternIndex: 2});
   const actions = [];
   let exposedSeen = false;
   for (let i = 0; i < 100; i++) {

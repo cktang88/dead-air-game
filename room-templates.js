@@ -218,7 +218,6 @@ const THEMES = {
   clinic: {floor: 'tile', tint: '#34393f', accent: '#8fe3c8'},
   hazard: {floor: 'hazard', tint: '#2b2226', accent: '#ff5367'},
   elite: {floor: 'carpet', tint: '#2d1f27', accent: '#c43d52'},
-  merchant: {floor: 'wood', tint: '#2f2824', accent: '#ffc46b'},
 };
 const COMBAT_LOOKS = {
   'desk-rows': {floor: 'carpet', tint: '#272a35', accent: '#6fa8dc'},

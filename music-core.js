@@ -39,6 +39,16 @@ export function stepDuration(bpm,rate=1){
   return 60/Math.max(30,b)/4/clamp(r,.05,4);
 }
 
+/**
+ * The beat the listener is hearing right now. The scheduler runs ahead of the audio clock: `step` is the next step to be
+ * scheduled at `nextTime`, so the step sounding at `now` is step - (nextTime - now) / stepDuration. Four steps = one beat.
+ * Returns {index (whole beats since the track started), phase (0..1 within the beat), bpm}.
+ */
+export function beatAt({step,nextTime,now,bpm,rate=1}){
+  const dur=stepDuration(bpm,rate),heard=Math.max(0,step-Math.max(0,nextTime-now)/dur),beats=heard/4;
+  return {index:Math.floor(beats),phase:beats-Math.floor(beats),bpm};
+}
+
 /** Global low-pass for a tape rate and health state: dull when slow, choked when nearly dead. */
 export function musicCutoff(rate,{lowHealth=false,paused=false}={}){
   const slow=1-clamp((rate-MIN_RATE)/(1-MIN_RATE),0,1);

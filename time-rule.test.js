@@ -76,3 +76,14 @@ test('sprint noise pings only at sprint speed, on an interval', () => {
 });
 
 test('rateLabel', () => { assert.equal(rateLabel(0.08), '0.08×'); assert.equal(rateLabel(1), '1.00×'); });
+
+import {PLAYER_BULLET_CLOCK, playerBulletDt} from './time-rule.js';
+test('player bullets ride world time but never slower than the minimum visible flight rate', () => {
+  const dt = 1 / 60;
+  assert.equal(playerBulletDt(dt * 0.08, dt, {mode: 'real', minRate: 0.4}), dt);
+  assert.equal(playerBulletDt(dt * 0.08, dt, {mode: 'world', minRate: 0.4}), dt * 0.4);
+  assert.equal(playerBulletDt(dt, dt, {mode: 'world', minRate: 0.4}), dt, 'at full rate the bullet is untouched');
+  assert.equal(playerBulletDt(dt * 0.6, dt, {mode: 'world', minRate: 0.4}), dt * 0.6, 'faster world time wins over the floor');
+  assert.equal(PLAYER_BULLET_CLOCK.mode, 'world');
+  assert.ok(PLAYER_BULLET_CLOCK.minRate > 0.2 && PLAYER_BULLET_CLOCK.minRate < 1);
+});

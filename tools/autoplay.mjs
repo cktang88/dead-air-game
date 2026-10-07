@@ -119,7 +119,8 @@ function installHooks() {
   };
   window.__bot = {
     rooms() { return s.rooms.map(r => ({i: r.index, role: r.role, branch: !!r.branch, name: r.name, cx: r.cx, cy: r.cy, x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2, depth: r.depth, secret: !!r.secret, path: r.pathLength})); },
-    solid() { return s.solidMap.map(r => r.slice()); },
+    // Closable doors never lock (they open when walked into), so the bot's grid treats them as passable; paid gates stay solid.
+    solid() { const g = s.solidMap.map(r => r.slice()); for (const d of s.doorProps || []) if (!d.gate) for (const c of d.cells || []) if (g[c.y]) g[c.y][c.x] = 0; return g; },
     snap() {
       const p = s.player;
       const out = {mode: s.mode, outcome: s.outcome || null, floor: s.floor, rm: s.runModal || null, paused: s.paused, t: s.realElapsed, st: s.elapsed, ts: s.timeScaleSmoothed, ev: evs.splice(0)};
@@ -707,6 +708,8 @@ async function playSeed(browser, seed, o, ctx) {
   const res = {seed, skill: o.skill, result: 'timeout', reason: ''};
   const context = await browser.newContext({viewport: {width: o.width, height: o.height}});
   const page = await context.newPage();
+  // The bot plays generated floors: mark the first-run Signal Check tutorial as done.
+  await page.addInitScript(() => { try { localStorage.setItem('dead-air.onboarding.v1', JSON.stringify({signalDone: true, manual: [], cards: []})); } catch {} });
   const errors = new Map();
   const noteErr = (t) => { const k = t.slice(0, 200); errors.set(k, (errors.get(k) || 0) + 1); };
   page.on('console', m => { if (m.type() === 'error') noteErr('console: ' + m.text()); });

@@ -17,9 +17,13 @@ export const VISION = {
   chaser: {half: 62 * DEG, range: 340},   // rushers are twitchy: wide but short
   brute: {half: 56 * DEG, range: 360},
 };
+// BLACKOUT (frequencies.js) shrinks every cone. The scale lives here so the brain that senses and the renderer that draws
+// the cone read the same numbers (what you see is what they see).
+export const CONE_SCALE = {range: 1, half: 1};
+export const setConeScale = ({range = 1, half = 1} = {}) => { CONE_SCALE.range = range; CONE_SCALE.half = half; };
 export const visionFor = (type, def = {}) => {
   const base = VISION[type] ?? VISION.default;
-  return {half: base.half, range: def.sightRange ?? base.range};
+  return {half: base.half * CONE_SCALE.half, range: (def.sightRange ?? base.range) * CONE_SCALE.range};
 };
 
 const angleOf = v => Math.atan2(v.y, v.x);

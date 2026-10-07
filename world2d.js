@@ -16,7 +16,7 @@ const isOpen = (k) => k === 0 || k === 3; // floor, or floor under a piece of ha
 
 export const ROLE_TINT = {
   entry: ['#4fd1a8', 0.10], extraction: ['#d8e060', 0.11], elite: ['#ff4a4a', 0.17], hazard: ['#ffb020', 0.14],
-  clinic: ['#7fe8e0', 0.14], armory: ['#6a8cff', 0.14], merchant: ['#ffb04a', 0.17], cache: ['#f4c66d', 0.14],
+  clinic: ['#7fe8e0', 0.14], armory: ['#6a8cff', 0.14], cache: ['#f4c66d', 0.14],
 };
 const COMBAT_TINTS = ['#ff5367', '#eaaa66', '#79d6ae', '#a888e8'];
 // combat rooms wash their floor with their own accent (not just an index colour) so each reads as a place at 1x
@@ -300,11 +300,6 @@ export class WorldLayer {
     } else if (role === 'clinic' && near(80)) {
       g.fillStyle = 'rgba(235,255,250,0.2)'; g.fillRect(cx - 7, cy - 22, 14, 44); g.fillRect(cx - 22, cy - 7, 44, 14);
       g.fillStyle = 'rgba(255,90,100,0.18)'; g.fillRect(cx - 4, cy - 19, 8, 38); g.fillRect(cx - 19, cy - 4, 38, 8);
-    } else if (role === 'merchant' && near(150)) {
-      g.fillStyle = 'rgba(110,22,28,0.5)'; g.fillRect(cx - 100, cy - 66, 200, 132);
-      g.strokeStyle = 'rgba(255,196,110,0.5)'; g.lineWidth = 3; g.strokeRect(cx - 94, cy - 60, 188, 120);
-      g.strokeStyle = 'rgba(255,196,110,0.25)'; g.lineWidth = 1; g.strokeRect(cx - 86, cy - 52, 172, 104);
-      g.strokeStyle = 'rgba(255,196,110,0.18)'; g.beginPath(); for (let i = -80; i <= 80; i += 20) { g.moveTo(cx + i, cy - 50); g.lineTo(cx + i + 14, cy + 50); } g.stroke();
     } else if (role === 'cache' && near(100)) {
       g.strokeStyle = 'rgba(244,198,109,0.3)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 44, 0, TAU); g.stroke();
       g.beginPath(); g.arc(cx, cy, 36, 0, TAU); g.setLineDash([3, 6]); g.stroke(); g.setLineDash([]);

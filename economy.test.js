@@ -23,14 +23,15 @@ test('supplyDrop respects need and source', () => {
   const calm = {health: 5, maxHealth: 5, ammoLow: false, armorUseful: false};
   assert.equal(supplyDrop(0.99, 'kill', calm), null);
   assert.equal(supplyDrop(0.05, 'kill', calm), 'ammo');
-  assert.equal(supplyDrop(0.15, 'kill', calm), null);
+  assert.equal(supplyDrop(0.2, 'kill', calm), null);
   assert.equal(supplyDrop(0.15, 'crate', calm), 'ammo');
   const hurt = {health: 1, maxHealth: 5, ammoLow: true, armorUseful: true};
-  assert.equal(supplyDrop(0.27, 'kill', hurt), 'heal');
+  assert.equal(supplyDrop(0.27, 'kill', hurt), 'ammo', 'low on ammo, kills drop ammo about 45% of the time');
+  assert.equal(supplyDrop(0.5, 'kill', hurt), 'heal');
   assert.equal(supplyDrop(0.5, 'crate', hurt), 'ammo');
   assert.equal(supplyDrop(0.99, 'crate', calm), null);
-  assert.equal(supplyDrop(0.16, 'kill', {...calm, armorUseful: true}), null);
-  assert.equal(supplyDrop(0.14, 'kill', {...calm, armorUseful: true}), 'armor');
+  assert.equal(supplyDrop(0.21, 'kill', {...calm, armorUseful: true}), null);
+  assert.equal(supplyDrop(0.19, 'kill', {...calm, armorUseful: true}), 'armor');
 });
 test('clearHealAmount only helps at half health or below', () => {
   assert.equal(clearHealAmount({health: 5, maxHealth: 5}), 0);
