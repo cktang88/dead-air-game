@@ -175,8 +175,9 @@ export function ambienceSync(state,dt=1/60){
   const p=state.player;if(!p)return;
   const now=A.ctx.currentTime;
   for(const [id,v] of [...A.chat])if(v.end<now){A.chat.delete(id);}
+  if(A.cool.size>64){const ids=new Set((state.enemies||[]).map(e=>e.id));for(const id of A.cool.keys())if(!ids.has(id))A.cool.delete(id);}
   for(const e of state.enemies||[]){
-    if(!e.alive){if(A.chat.has(e.id))ambienceCutChatter(e.id);continue;}
+    if(!e.alive){if(A.chat.has(e.id))ambienceCutChatter(e.id);A.cool.delete(e.id);continue;}
     const d=Math.hypot(e.x-p.x,e.y-p.y);if(d>CHATTER_RANGE)continue;
     const live=A.chat.get(e.id);
     if(live){live.pan=(e.x-p.x)/480;continue;}
