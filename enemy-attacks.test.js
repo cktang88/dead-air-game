@@ -45,3 +45,31 @@ test('a Brute cancels its swing when it chooses to dodge an incoming bullet',()=
   assert.equal(interrupted.strike,false);
   assert.equal(interrupted.started,false);
 });
+
+import {shieldBlocks, turnShield} from './enemy-attacks.js';
+
+test('riot shield blocks rounds from the front arc only',()=>{
+  const facing={x:1,y:0};
+  assert.equal(shieldBlocks({facing,bulletVx:-300,bulletVy:0}),true);
+  assert.equal(shieldBlocks({facing,bulletVx:-300,bulletVy:200}),true,'oblique front hit is still blocked');
+  assert.equal(shieldBlocks({facing,bulletVx:300,bulletVy:0}),false,'a shot from behind goes through');
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:300}),false,'a shot from the flank goes through');
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:-300}),false);
+});
+
+test('a stunned, dead or degenerate shield blocks nothing',()=>{
+  const facing={x:0,y:1};
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:-300}),true);
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:-300,stun:1.5}),false,'flashed: shield is down');
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:-300,stun:.1}),true,'a bullet stagger does not drop it');
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:-300,alive:false}),false);
+  assert.equal(shieldBlocks({facing:{x:0,y:0},bulletVx:0,bulletVy:-300}),false);
+  assert.equal(shieldBlocks({facing,bulletVx:0,bulletVy:0}),false);
+});
+
+test('the shield turns at a capped rate so it can be out-flanked',()=>{
+  const a=turnShield(0,Math.PI,.1,1.5);
+  assert.ok(Math.abs(a-.15)<1e-9);
+  assert.equal(turnShield(0,.05,.1,1.5),.05);
+  assert.ok(turnShield(3,-3,.1,1.5)>3,'wraps through +/-PI by the short way');
+});

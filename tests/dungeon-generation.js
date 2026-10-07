@@ -58,7 +58,7 @@ try {
     if(dungeon.rooms.some((room,index)=>room.branch&&chooseRewardDoor(dungeon.cells,dungeon.doors,dungeon.rooms.map(candidate=>({...candidate,secret:candidate.branch})),index)))floorsWithGateableBranch++;
     if(bypassable.size&&!bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} did not place its cache on an optional branch room`);
     if(cache.secret!==bypassable.has(dungeon.rooms.indexOf(cache)))throw new Error(`Seed ${seed} secret status does not match the cache branch`);
-    if(cache.secret&&(cache.name!=='UNMARKED ROOM'||cache.revealedName!=='SIDE CACHE'))throw new Error(`Seed ${seed} did not hide and name its secret cache consistently`);
+    if(cache.secret&&(cache.name!=='UNMARKED ROOM'||cache.revealedName!=='SIDE SUPPLY'))throw new Error(`Seed ${seed} did not hide and name its secret cache consistently`);
     if(dungeon.lockedDoors.length>1)throw new Error(`Seed ${seed} generated more than one reward gate`);
     if(dungeon.lockedDoors.length){
       floorsWithRewardDoors++;

@@ -4,7 +4,7 @@ const direction = (from, to) => {
   return {x: (to.x - from.x) / length, y: (to.y - from.y) / length};
 };
 
-function incomingThreats(actor, projectiles) {
+export function incomingThreats(actor, projectiles) {
   return projectiles.map(shot => {
     const speedSquared = shot.vx * shot.vx + shot.vy * shot.vy;
     if (!Number.isFinite(speedSquared) || speedSquared < 1) return null;

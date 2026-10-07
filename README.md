@@ -10,7 +10,7 @@ Then open `http://localhost:8000`. The game loads Three.js, Rapier 2D, and ROT.j
 
 ## Controls
 
-- **WASD / arrows:** move at 1×. Firing blends slow and normal time (about 0.42× at the default idle rate), including while moving; stopping lets time settle to 0.18×.
+- **WASD / arrows + Shift:** world time follows your actual speed (not key-down): about 0.08x standing still, 0.35x walking, 1x at full sprint (STILL MIND lowers the still rate). Every shot lets a short beat of time through (heavier or slower guns cost more; an SMG spray costs a sliver), and sprinting is loud. Your movement, aim, fire rate, reload and i-frames run on the real clock; enemies, their bullets, telegraphs and the boss run on world time. Time is shown by the screen itself (colour drains, cold grain and vignette as it slows) plus a thin top-edge meter while it changes. Tunables live in `time-rule.js`.
 - **Mouse:** aim; hold the left button to fire.
 - **E:** use the entry loadout station or nearby pickup.
 - **Tab:** open the loadout screen anywhere.
@@ -28,8 +28,28 @@ Generated runs use ROT.js's Digger room and corridor generator. Walls are indest
 npm test
 ```
 
-Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement at 1×, blended firing tempo, rarity-tagged loot, bullet damage to a crate, reload, a common extended-magazine purchase, a frag throw and detonation, focus-loss and manual pause, the two-slot loadout, and safehouse upgrades surviving a reload. It also starts a run after buying Vital Reserve and confirms the added health is granted. The progression check restores the browser's original save afterward.
+Open `http://localhost:8000/tests/game-smoke.html` for the browser check. It launches seed 213838321 and verifies startup, movement and the speed-driven time rate, shot beats, rarity-tagged loot, bullet damage to a crate, reload, a common extended-magazine purchase, a frag throw and detonation, focus-loss and manual pause, the two-slot loadout, and safehouse upgrades surviving a reload. It also starts a run after buying Vital Reserve and confirms the added health is granted. The progression check restores the browser's original save afterward.
 
 For a seeded encounter check, open `http://localhost:8000/tests/full-floor-browser-harness.html`. It equips armor, clears the first combat room, checks a fresh ranged-shot dodge, tries an affordable scrap gate, then pauses the run and restores the original save. It is a focused probe, not a full-floor playthrough.
 
 Room Sense reveals nearby room outlines and enemy blips through walls at increasing ranges; Vital Reserve permanently adds up to three health and starts each run fully healed. Progress is saved in this browser, with a reset option in the Safehouse upgrades panel. See [GAME_SPEC.md](./GAME_SPEC.md) for the full design and implementation checklist. Remaining work is focused on full-floor playtesting, balance across seeds, and sustained performance checks.
+
+## Playtesting
+
+`tools/autoplay.mjs` is an autoplay balance harness. It launches headless Chromium, serves this folder on a free port, and plays whole runs with **real keyboard and mouse input** (`page.keyboard` / `page.mouse`). Game state (`window.__deadair`, enabled by `?debug`) is only *read* to make decisions; nothing is teleported or written.
+
+```sh
+node tools/autoplay.mjs --seeds 10 --skill 0.5            # seeds 7001..7010
+node tools/autoplay.mjs --seed 7003 --skill 0.9 --shots   # one seed, periodic screenshots
+node tools/autoplay.mjs --seeds 20 --skill 0.7 --workers 3 --speed 3 --out balance-out
+```
+
+Options: `--seeds N|a,b,c|a-b`, `--seed N`, `--seed-base N`, `--skill 0..1`, `--out DIR`, `--vendor DIR`, `--workers N`, `--speed X`, `--timeout SEC` (wall clock per seed), `--max-game-time SEC`, `--shots [SEC]`, `--width/--height`, `--verbose`. Run with `--help` for the list.
+
+- **Offline / CDN blocked:** `--vendor DIR` (or `$DEADAIR_VENDOR`) points at local bundles named `three.js`, `_dimforge_rapier2d-compat.js` and `rot-js.js`; matching `esm.sh` imports are answered from there. Without a vendor dir the real network is used. The shipped game code keeps its CDN imports.
+- **Skill knob:** controls aim error, reaction delay to newly seen enemies, how often the bot stands still to exploit slow time, bullet dodging and loot greed. The bot paths with A* over `solidMap` (crates and cover treated as blocked, inflated by the player radius), unsticks itself by backing off and sidestepping, clears the main route, picks up loot, opens gates and caches, buys at lockers and the Black Market, reloads behind cover, throws frags at clumps and swaps weapons when dry, then extracts.
+- **Speed:** `--speed 1` is real time; higher values add extra `advanceTime` steps between bot decisions (the bot's timers use the game's own run clock, so results are comparable).
+- **Output** (in `--out`, default `autoplay-out/<stamp>`): `results.json` (per-seed result, rooms cleared/visited, kills, damage by room role and by enemy type, cause of death, scrap earned/spent, ammo starvation, stuck events with coordinates and screenshots, console errors), `summary.txt` (table plus aggregates) and screenshots. Every run starts from a fresh save, so safehouse upgrades are not applied.
+- Stuck events that the bot cannot recover from are reported as `trapped` (a possible game softlock) rather than hidden.
+
+Art credits and icon licences (game-icons.net, CC BY 3.0) are in [CREDITS.md](./CREDITS.md).

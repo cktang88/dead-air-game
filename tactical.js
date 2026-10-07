@@ -18,11 +18,6 @@ export const THROWABLES = Object.freeze([
     fuse: 0.8, radius: 104, duration: 0.18, damage: 85,
     effect: 'blast', wallOccluded: true,
   }),
-  freezeItem({
-    id: 'incendiary', name: 'Incendiary', stack: 2, cost: 28, range: 155,
-    fuse: 0.7, radius: 78, duration: 4.2, damage: 12,
-    effect: 'burn', wallOccluded: true,
-  }),
 ]);
 
 const THROWABLE_BY_ID = new Map(THROWABLES.map(item => [item.id, item]));

@@ -1,21 +1,22 @@
-import {lootTier} from './loot.js';
+import {MOD_BY_ID, modFits} from './catalog.js';
 
-export function weaponStats(gun, mods) {
-  const compatible=new Set(gun.attachments||[]);
-  const tierFor=id=>{
-    if(!compatible.has(id))return null;
-    const tier=mods.get(id);
-    return tier?lootTier(tier):null;
-  };
-  const strength=id=>tierFor(id)?.strength||0;
+// A gun carries at most one mod (a mod id string, or null). Mods are behaviors, not stat tiers; a mod the gun
+// cannot take is ignored everywhere so stale state can never apply it.
+export const activeMod = (gun, modId) => (modId && modFits(gun, modId) ? MOD_BY_ID.get(modId) : null);
+
+export function weaponStats(gun, modId = null) {
+  const mod = activeMod(gun, modId);
   return {
-    magazine: Math.ceil(gun.mag * (1 + .5*strength('extended'))),
-    damage: gun.damage * (1 + .35*strength('hollow')),
-    fireRate: gun.rate * (.82 - .18*(strength('stabilizer')-1)),
+    magazine: Math.ceil(gun.mag * (mod?.magMult || 1)),
+    damage: gun.damage,
+    fireRate: gun.rate,
     projectileSpeed: gun.speed,
-    range: gun.range * (1 + .35*strength('longbarrel')),
-    spread: gun.spread * (1 - .3*strength('suppressor')),
-    compatibleAttachments: gun.attachments||[],
+    range: gun.range * (mod?.rangeMult || 1),
+    spread: gun.spread,
+    noise: (gun.noise ?? 1) * (mod?.noiseMult ?? 1),
+    bounces: mod?.bounces || 0,
+    burn: mod?.burn || null,
+    stun: gun.stun || 0,
   };
 }
 
@@ -28,10 +29,9 @@ export function shotgunShellStats(shell, gunStats) {
   };
 }
 
-export function weaponPenetration(gun, mods) {
-  const compatible=new Set(gun.attachments||[]),tier=compatible.has('longbarrel')&&mods.has('longbarrel')?lootTier(mods.get('longbarrel')):null;
+export function weaponPenetration(gun, modId = null) {
   const base=gun.penetration||{enemies:0,crates:0,walls:0};
-  return {...base,enemies:base.enemies+(tier?Math.ceil(tier.strength):0)};
+  return {...base,enemies:base.enemies+(activeMod(gun,modId)?.pierce||0)};
 }
 
 export function consumePenetration(budget, target) {
@@ -45,24 +45,15 @@ export function unlockRewardGate(gate,scrap) {
   return {status:'opened',scrap:scrap-gate.cost};
 }
 
-export function reloadSeconds(mods, gun, reloadMultiplier=1) {
-  let seconds=1.65;
-  const tierFor=id=>lootTier(mods.get(id));
-  if (!gun) {
-    if(mods.has('stabilizer'))seconds=1.25;
-    else if(mods.has('extended'))seconds=1.85;
-  } else {
-    const compatible=new Set(gun.attachments||[]);
-    if(mods.has('stabilizer')&&compatible.has('stabilizer'))seconds=1.25-(tierFor('stabilizer').strength-1)*.25;
-    else if(mods.has('extended')&&compatible.has('extended'))seconds=(gun.reload??1.65)*(1.22-(tierFor('extended').strength-1)*.12);
-    else seconds=gun.reload??1.65;
-  }
-  return seconds*reloadMultiplier;
+export function reloadSeconds(gun, modId = null, reloadMultiplier = 1) {
+  return (gun?.reload ?? 1.65) * (activeMod(gun, modId)?.reloadMult || 1) * reloadMultiplier;
 }
 
-export function compatibleAttachments(gun, attachments) {
-  const allowed=new Set(gun.attachments||[]);
-  return attachments.filter(attachment=>allowed.has(attachment.id));
+/** Seconds before a gun can fire after being switched to. QUICK-DRAW is instant; a third slot makes every swap slower. */
+export const THIRD_SLOT_SWAP_PENALTY = .4;
+export function swapSeconds(gun, modId = null, slotCount = 2) {
+  if (activeMod(gun, modId)?.instantSwap) return 0;
+  return (gun?.swap ?? .35) + (slotCount > 2 ? THIRD_SLOT_SWAP_PENALTY : 0);
 }
 
 export function damageDurability(current, damage) {
@@ -124,14 +115,26 @@ export function segmentCircleHitTime(start, end, center, radius) {
   return t>=0&&t<=1?t:null;
 }
 
+// Exact grid traversal (Amanatides-Woo): every tile the segment touches, in order, with the entry fraction t.
+// Unlike point sampling this cannot skip a tile corner at any projectile speed.
+// Tile 4 is glass: it blocks walking but not sight or bullets (signal-check.js, game.js).
+const solidTile=value=>value!==0&&value!==4;
 export function segmentBlockedTiles(start, end, tileMap, tileSize) {
-  const length=Math.hypot(end.x-start.x,end.y-start.y),steps=Math.max(1,Math.ceil(length/(tileSize/4)));
-  const hits=[],seen=new Set();
-  for(let i=1;i<=steps;i++){
-    const t=i/steps,x=Math.floor((start.x+(end.x-start.x)*t)/tileSize),y=Math.floor((start.y+(end.y-start.y)*t)/tileSize),key=`${x},${y}`;
-    if(seen.has(key))continue;
-    seen.add(key);
-    if(tileMap[y]?.[x]!==0)hits.push({x,y,t});
+  const hits=[];
+  const dx=end.x-start.x,dy=end.y-start.y;
+  let x=Math.floor(start.x/tileSize),y=Math.floor(start.y/tileSize);
+  const endX=Math.floor(end.x/tileSize),endY=Math.floor(end.y/tileSize);
+  const stepX=dx>0?1:-1,stepY=dy>0?1:-1;
+  const tDeltaX=dx===0?Infinity:Math.abs(tileSize/dx),tDeltaY=dy===0?Infinity:Math.abs(tileSize/dy);
+  let tMaxX=dx===0?Infinity:((dx>0?(x+1)*tileSize-start.x:start.x-x*tileSize)/Math.abs(dx));
+  let tMaxY=dy===0?Infinity:((dy>0?(y+1)*tileSize-start.y:start.y-y*tileSize)/Math.abs(dy));
+  let t=0;
+  const maxCells=Math.abs(endX-x)+Math.abs(endY-y)+2;
+  for(let i=0;i<maxCells;i++){
+    if(solidTile(tileMap[y]?.[x]))hits.push({x,y,t});
+    if(x===endX&&y===endY)break;
+    if(tMaxX<tMaxY){t=tMaxX;tMaxX+=tDeltaX;x+=stepX;}else{t=tMaxY;tMaxY+=tDeltaY;y+=stepY;}
+    if(t>1)break;
   }
   return hits;
 }
@@ -145,58 +148,54 @@ export function segmentWallRuns(start, end, tileMap, tileSize, startsInsideWall=
     previous=cell;
   }
   const x=Math.floor(end.x/tileSize),y=Math.floor(end.y/tileSize);
-  return {runs,endsInsideWall:tileMap[y]?.[x]!==0};
+  return {runs,endsInsideWall:solidTile(tileMap[y]?.[x])};
 }
 
-export function weaponLoadoutWeight(weapons, guns) {
-  return weapons.reduce((total, index) => total + guns[index].weight, 0);
+/**
+ * Picking a gun up with a free slot adds it; with full hands it swaps with the gun in your hand. Returns
+ * {slot, replaces} (replaces = the gun index that drops, or null), or null when you already carry that gun.
+ */
+export function gunPickupPlan(weapons, candidate, maxSlots, activeSlot) {
+  if (weapons.includes(candidate)) return null;
+  if (weapons.length < maxSlots) return {slot: weapons.length, replaces: null};
+  const slot = Math.min(Math.max(0, activeSlot), weapons.length - 1);
+  return {slot, replaces: weapons[slot]};
 }
 
-export function canCarryWeapons(weapons, guns, capacity) {
-  return weaponLoadoutWeight(weapons, guns) <= capacity;
+// The time rule lives in time-rule.js (continuous, speed-driven). Re-exported so older imports keep working.
+export {timeScale} from './time-rule.js';
+
+// Encounter recipes: each is an ordered squad list; a room of N enemies takes the first N, so every recipe
+// is a mix by construction (rusher pack + gunner support, brute + gunners, warden + rushers, ...).
+// `minDepth` (0..1 along the floor) gates the stop-and-go specialists: MARKSMAN and RIOT show up later.
+export const ENCOUNTER_RECIPES = [
+  {id:'rush-support', minDepth:0, squad:['chaser','gunner','chaser','gunner','chaser']},
+  {id:'brute-guns', minDepth:0, squad:['brute','gunner','guard','gunner','chaser']},
+  {id:'warden-rush', minDepth:0, squad:['guard','chaser','chaser','gunner','chaser']},
+  {id:'crossfire', minDepth:0, squad:['gunner','guard','chaser','gunner','guard']},
+  {id:'riot-guns', minDepth:.25, squad:['riot','gunner','gunner','guard','chaser']},
+  {id:'marksman-rush', minDepth:.4, squad:['sniper','chaser','chaser','gunner','chaser']},
+  {id:'brute-marksman', minDepth:.5, squad:['brute','sniper','gunner','chaser','guard']},
+  {id:'riot-marksman', minDepth:.6, squad:['riot','sniper','chaser','gunner','riot']},
+];
+export const SPECIALIST_TYPES = ['sniper','riot'];
+
+export function eligibleRecipes(depth) {
+  const d=Number.isFinite(depth)?depth:0;
+  return ENCOUNTER_RECIPES.filter(recipe=>d>=recipe.minDepth);
 }
 
-export function weaponReplacement(weapons, slot, candidate, guns, capacity, gearWeight = 0) {
-  const nextWeapons=weapons.slice();
-  nextWeapons[slot]=candidate;
-  const totalWeight=weaponLoadoutWeight(nextWeapons,guns)+gearWeight;
-  const alreadyEquipped=weapons.includes(candidate);
-  const hasDuplicate=nextWeapons.some((weapon,index)=>nextWeapons.indexOf(weapon)!==index);
-  return {weapons:nextWeapons,totalWeight,canCarry:!alreadyEquipped&&!hasDuplicate&&totalWeight<=capacity};
-}
-
-export function chooseWeaponReplacementSlot(weapons,candidate,maxSlots,activeSlot,guns,capacity,gearWeight=0){
-  const newSlot=weapons.length;
-  if(newSlot<maxSlots&&weaponReplacement(weapons,newSlot,candidate,guns,capacity,gearWeight).canCarry)return newSlot;
-  const preferred=maxSlots===2?[1,0]:[activeSlot,...weapons.map((_,index)=>index).filter(index=>index!==activeSlot)];
-  return preferred.find(slot=>slot<weapons.length&&weaponReplacement(weapons,slot,candidate,guns,capacity,gearWeight).canCarry);
-}
-
-export function timeScale({mode, paused, loadoutOpen, moving, idleScale = 0.18}) {
-  if (mode !== 'play' || paused || loadoutOpen) return 0;
-  if (moving) return 1;
-  return Math.max(0, Math.min(1, idleScale));
-}
-
-export function chooseEncounterTypes(count, seed) {
-  const types=['chaser','gunner','guard','brute'];
-  const rushers=new Set(['chaser','brute']);
-  let value=seed>>>0;
+export function chooseEncounterTypes(count, seed, depth=0) {
+  // Scramble first: consecutive seeds would otherwise draw near-identical first values from the LCG.
+  let value=Math.imul((seed>>>0)^0x9e3779b9,2654435761)>>>0;value^=value>>>15;value=Math.imul(value,2246822519)>>>0;value^=value>>>13;
   const random=()=>{value=(Math.imul(value,1664525)+1013904223)>>>0;return value/0x100000000;};
-  const result=[];
-  for(let i=0;i<count;i++)result.push(types[Math.floor(random()*types.length)]);
-  if(count>=3&&!result.includes('brute')&&seed%4===0)result[result.length-1]='brute';
-  if(count>=2){
-    let rushCount=result.filter(type=>rushers.has(type)).length;
-    let bruteCount=result.filter(type=>type==='brute').length;
-    const maxRushers=Math.floor(count/2);
-    for(let i=result.length-1;i>=0&&rushCount>maxRushers;i--){
-      if(!rushers.has(result[i]))continue;
-      if(result[i]==='brute'&&bruteCount<=1)continue;
-      if(result[i]==='brute')bruteCount--;
-      result[i]=random()<.5?'gunner':'guard';
-      rushCount--;
-    }
-  }
-  return result;
+  const recipes=eligibleRecipes(depth);
+  // Specialists are the headline of later rooms: weight them x2 once unlocked.
+  const weighted=recipes.flatMap(recipe=>recipe.squad.some(type=>SPECIALIST_TYPES.includes(type))?[recipe,recipe]:[recipe]);
+  const recipe=weighted[Math.floor(random()*weighted.length)];
+  const squad=recipe.squad.slice(0,Math.max(0,count));
+  while(squad.length<count)squad.push(recipe.squad[squad.length%recipe.squad.length]);
+  // Shuffle so the specialist is not always the first spawn.
+  for(let i=squad.length-1;i>0;i--){const k=Math.floor(random()*(i+1));[squad[i],squad[k]]=[squad[k],squad[i]];}
+  return squad;
 }

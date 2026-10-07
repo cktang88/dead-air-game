@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DEFAULT_KEY_BINDINGS,isBindableKey,keyLabel,loadKeyBindings,movementFromKeys,normalizeKey,parseKeyBindings,rebindKey,resolveMovementKey,saveKeyBindings,serializeKeyBindings,KEY_BINDINGS_KEY} from './keybindings.js';
 
 test('default bindings cover movement and all key-driven combat actions',()=>{
-  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'r',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c'});
+  assert.deepEqual(DEFAULT_KEY_BINDINGS,{moveUp:'w',moveDown:'s',moveLeft:'a',moveRight:'d',interact:'e',reload:'r',throwableCycle:'q',throwableUse:'g',weaponOne:'1',weaponTwo:'2',weaponThree:'3',shellCycle:'c',shove:'v'});
   assert.equal(normalizeKey('ArrowUp'),'arrowup');
   assert.equal(normalizeKey(' '),'space');
   assert.equal(keyLabel('arrowleft'),'←');

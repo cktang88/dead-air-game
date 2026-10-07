@@ -8,7 +8,7 @@ The game should run in a desktop browser with keyboard and mouse, load directly 
 
 ## Design pillars
 
-1. **Stillness is a tool.** Standing still slows the simulation to the current idle rate (0.18× by default). Movement runs at 1.00×. Firing does not change the rate, whether the player is standing still or moving.
+1. **Stillness is a tool; speed is time.** World time follows the player's actual speed: 0.08x standing still (STILL MIND lowers it), 0.35x walking, 1x at full sprint, eased. Each shot advances the world by a beat (about 0.12 s of world time at 1x, scaled by damage and fire interval, delivered as a burst of 1x flow). Sprinting makes footstep noise (radius 150) that enemies hear; walking does not. The player is outside time: movement, aim, fire rate, reload, i-frames and player bullets use the real clock (reload start also costs a small beat). All tunables: `time-rule.js`.
 2. **Rooms are decisions.** A doorway reveals enough to plan, but every room has different cover, enemy pressure, loot, and routes.
 3. **Weapons have jobs.** Primary and secondary slots support different ranges and tempos. Ammunition, reloads, recoil, damage, spread, and weight make the choice matter.
 4. **Hits feel physical.** Impacts use hit stop, knockback, particles, screen shake, and brief enemy collapse. Clear feedback should make each shot easy to read.
@@ -17,24 +17,41 @@ The game should run in a desktop browser with keyboard and mouse, load directly 
 
 ## Run loop
 
-1. Start in a safe entry room with a two-gun loadout and a workbench.
-2. Explore connected rooms and hallways. The minimap shows explored rooms and known threats; later scouting upgrades can reveal more.
-3. Choose when to open a door or enter a room. The player can retreat through cleared halls.
-4. Fight enemies, use cover, break crates, and collect ammunition, healing, attachments, and scrap.
-5. Clear the exit room, reach the extraction marker, and bank the run reward.
-6. At the between-run screen, review results and spend permanent coins.
-7. Start another run with a new layout and an updated build.
+A run is **three floors and a boss floor** (about 10–20 minutes). Floors reuse the run seed (`floorSeed(seed, n)`), so a seed always yields the same four floors; the daily seed is shared by every player on that date.
 
-A normal run should take about 8–15 minutes after tuning. The first room should teach movement, aiming, slow time, shooting, cover, and switching weapons in under two minutes.
+1. Pick a **starting kit** (title screen / safehouse) and enter FLOOR 01 with that loadout, a workbench and the run seed.
+2. Every room carries a **reward** that pays out when it is cleared. Each doorway out of a cleared room shows an icon for the reward beyond it: FREQUENCY, scrap, weapon, medkit, supply drop, or an ELITE skull. Choosing a door is choosing a build.
+3. Fight, use cover and the slow-time rule, pick up rewards, spend scrap at the workbench and Black Market.
+4. When the main route is clear, the exit opens. Reaching it shows the **greed choice**: **EXTRACT NOW** (bank every coin earned this run, end the run) or **DESCEND** (pick one FREQUENCY, get a little ammo and one health back, and enter the next floor). Dying keeps only 40% of the run's coins (25% with HIGH ROLLER).
+5. Floors escalate: floors 2 and 3 shift encounter depth (+0.30 / +0.55) so MARKSMAN and RIOT squads arrive early, add +1 enemy to ordinary rooms, convert 1 / 2 ordinary rooms to WARDEN rooms, and raise enemy health (+15% / +30%) and speed (+4% / +8%).
+6. FLOOR 04 is **THE CONDUCTOR**: a hunt through a few rooms into a generous arena, ending in the boss fight. Beating it is the true win.
+7. The run-end screen shows the payout, the **operator's** reaction (cause of death, depth, unlocks), goals completed, new unlocks, any recovered **tape**, and (for dailies) a shareable result line. After the first boss win, **INTERFERENCE** modifiers can be stacked for bonus coins.
+
+## The macro-loop numbers (tuning table)
+
+| Constant | Value | Notes |
+| --- | --- | --- |
+| Run coins | 5 base + 10 per cleared room + 3 per kill | per run, summed across floors |
+| Floor clear bonus | 40 / 70 / 110 | floors 1 / 2 / 3, paid on reaching that floor's exit |
+| Boss bonus | 250 | on killing THE CONDUCTOR |
+| Death keeps | 40% of the gross (25% with HIGH ROLLER) | extract and win keep 100% |
+| INTERFERENCE | +15% to +25% coins each | stacks, unlocked after the first win |
+| Typical first death on floor 1 | about 4 rooms, 8 kills: 69 gross, 27 kept | two early deaths buy the cheapest unlock |
+| Extract at the end of floor 1 | about 8 rooms, 20 kills: 185 gross, all kept | enough for a kit or two guns |
+| Full clear of all four floors | roughly 700 to 900 coins | plus goal rewards |
+
+Pacing target: the cheapest unlocks cost 35 to 60 coins, a typical run pays 30 to 120 coins, and goals pay 10 to 80 coins plus an unlock, so a new player buys or unlocks something after nearly every run for the first ten runs. The catalog totals about 1,400 coins of purchases plus 8 goal-only unlocks (roughly 25 to 30 runs of play); the first boss win is expected around runs 10 to 15.
+
+The first room should teach movement, aiming, slow time, shooting, cover, and switching weapons in under two minutes.
 
 ## Time and combat rules
 
-- Standing still: the current idle multiplier, including while firing.
+- Standing still: the idle multiplier (0.08x); walking 0.35x; sprinting 1x; each shot adds a beat.
 - Moving: 1.00× simulation speed, including while firing. Stop moving to slow the simulation immediately.
 - Menus and pause: simulation stopped.
 - The speed indicator always names the current state and shows its rate.
 - Bullets are physical projectiles with collision checks; walls block shots.
-- Player bullets damage enemies and crates. Enemy bullets damage the player.
+- Player bullets damage enemies and crates. Enemy bullets damage the player. Player bullets fly on world time with a floor of 0.45x real (see Player bullet clock).
 - Hits briefly interrupt time, push targets, and add restrained camera shake.
 - Enemy tells must remain readable at both slow and fast speeds. Use an aim cue or wind-up before ranged shots and a clear charge before heavy contact. Brutes now commit to a visible directional swing with a dodgeable wind-up and recovery.
 - Reloads consume time and ammunition. A reload may be interrupted by damage; whether ammo is retained on interruption is a balance choice to test.
@@ -48,7 +65,7 @@ A normal run should take about 8–15 minutes after tuning. The first room shoul
 - Rooms vary in width, height, outline, entrance position, and corridor connection. Hallways should create choices and avoid one long empty chain.
 - Enemies belong to their spawn encounter. A living enemy still blocks that room's clear reward if it chases beyond the original walls.
 - Keep a connected route from entry to extraction. Optional branches hold more risk, loot, or a secret.
-- Each room gets a deterministic role: combat, cache, armory, clinic, hazard, merchant, or extraction. Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
+- Each room gets a deterministic role: combat, cache, armory, clinic, hazard, or extraction (the merchant is gone: supply drops replace it). Caches have two defenders and a scrap/mod reward, clinics are safe recovery rooms, armories pair three defenders with a gun, hazards raise enemy count, and merchant rooms keep their shop behavior.
 - Keep entry and extraction roles reserved. Optional branches, a hidden cache, topology-validated scrap gates, FIELD CLINIC rest stops, and the Warden miniboss are implemented; a cache gate appears only when it will not block the extraction route.
 - Rooms are processed by shortest route from the entry. The first two ordinary combat rooms cap at three enemies; later ordinary rooms roll two to four. Cache, armory, hazard, and elite budgets keep their role-specific counts. A room may be small and dangerous or large with scattered guards.
 - Room footprints vary between rectangles and L, U, or C outlines. Keep the center and door approaches clear, and preserve a walkable route between all connected rooms.
@@ -156,42 +173,99 @@ Room compositions should use a threat budget rather than an unbounded random cou
 
 ## Meta progression
 
+Meta unlocks add **options** (guns, kits, throwables, frequencies, tradeoff upgrades), not only raw stats. Everything is data in `unlocks.js`, `frequencies.js`, `goals.js`, `progression.js`, `story.js`, `interference.js`, `door-rewards.js` and `run-loop.js`, with tests in `meta-loop.test.js` and `meta-world.test.js`.
+
 ### Currency and run summary
 
-- Award **coins** at the end of every run, including a failed run. Coins are separate from run scrap.
-- Show the payout breakdown: rooms cleared, enemies defeated, optional cache, extraction bonus, and first-clear / challenge bonus.
-- Current payout: 5 coins + 8 per cleared room + 2 per kill; extraction adds 50. Death still banks the base, room, and kill rewards.
-- Cap repeated farming rewards from the same room state; do not make intentional death more profitable than extraction.
-- Save coins and purchased upgrades locally. Validate loaded save data and provide a reset-save button behind a clear confirmation.
-- Keep seed, run result, and upgrade purchases visible in a compact between-run screen.
+- **Coins** are the only meta currency. Run scrap is separate and is lost when the run ends.
+- Coins are banked per the macro-loop table above: extract and win keep all, death keeps 40%.
+- The run-end screen shows banked vs lost coins, completed goals, unlocks, the operator's lines and a recovered tape.
+- Save format: `SAVE_VERSION = 2` under the existing key. v1 saves migrate keeping coins and upgrade levels; unknown versions and corrupt JSON fall back to a fresh profile. All storage access is wrapped in try/catch. A reset button remains behind a confirmation.
+- Persisted: coins, upgrade levels, `unlocked[]` (ids like `gun:smg_vector`, `kit:duelist`, `throw:frag`, `freq:homing`, `upg:adrenal`), chosen `kit`, run `stats` (runs, kills, deepest floor, extracts, wins, boss kills, fastest win and floor 1, bests), completed `goals`, collected `tapes`, active `interference`, and the `daily` record.
+
+### Starting kits and guns
+
+| Kit | Guns | Cost | Job |
+| --- | --- | --- | --- |
+| Standard Issue | Machine pistol + street sweeper | free | balanced |
+| Duelist | TALON .45 + MICA 9 | 45 | two sidearms, light |
+| Scout | ASH CARBINE + MICA 9 | 70 | range plus panic |
+| Breacher | CINDER .45 + street sweeper | 95 | close-quarters hammer |
+| Marksman | QUILL SCOUT + MICA 9 | 140 | pierce a lane |
+| Bruiser | BASTION 7.62 + MICA 9 | 180 | slow, punching |
+
+Guns join the loot, armory and Black Market pool when unlocked: Vector 9 (40), Kite Burst (50), Talon .45 (60), Hardline (70), Cinder .45 (80), Quill Scout (110), Bastion (120), Lynx (150); the Mule anti-materiel rifle is goal-only (beat the boss). Owning a kit also unlocks its guns. Starters are Machine Pistol, Street Sweeper, MICA 9, Ash Carbine. Throwables: smoke and flash from the start, frag (45, or the "reach floor 3" goal) and incendiary (60, or the "extract three times" goal). Unlocks are keyed to gun ids today; the focus pass that regroups guns by verb should re-key them by verb.
+
+### Frequencies (the in-run build system)
+
+Five stations, three or four upgrades each, three ranks. Every upgrade is a **behavior you can watch happen**, and a rank-up changes what it does: rank 2 adds a **twist**, rank 3 a **flourish** (the card text says which). Offers are pick-1-of-3 from FREQUENCY pickups (door rewards, ELITE rooms, supply drops) and after each floor you descend. Offers lean on your build so crossfades actually happen: when a crossfade completer is in reach it is on the table 60% of the time, at least one card comes from a station you hold, one card is a fresh voice so you can pivot, and no station fills more than two cards. Two stations at level 2 or more (total ranks) switch on a **crossfade**: a freeze-frame name card (near-frozen time for 1.5 s, a chord, a ring in both station colours) and a visible effect in play. Every card's one-line text is generated from the same numbers the game reads (`frequencies.js` ranks are `{fx, text}`; `frequencies.test.js` asserts the mapping), so no description can drift from the code.
+
+| Station | Play style | Upgrades (rank 1 / twist / flourish) |
+| --- | --- | --- |
+| STATIC | lightning, jams | **Arc Light**: hits arc a visible bolt to the nearest other enemy / jumps to a second enemy / arcs jam what they touch. **Jammer**: hits jam the target (it cannot shoot and its bullets in the air vanish) / the jam splashes 2 tiles / longer jam, 3-tile splash. **Distortion Field** (35): a drawn ring slows enemy bullets / bigger and slower / bullets close to you are zapped out of the air. **Dead Channel** (60): kills release a shockwave that jams enemies / it also erases enemy bullets / bigger and shoves enemies back |
+| DEADLINE | time as currency | **Borrowed Time** (the one merged refund): each kill refunds slow time (half speed while walking) / getting hit refunds some too / at 1 health you always walk in half time. **Hang Fire** (45): a kill while you stand still freezes the victim's bullets in mid-air / they hang until you move / the kill freezes every enemy bullet within 6 tiles. **Held Breath**: stand still 0.6 s (a ring pings), next shot +50% / the charged shot pierces everything in line / and is silent |
+| CARRIER | pierce, bank, seek | **Throughput**: rounds pierce 1 enemy / 2 and punch through crates / everything in line. **Multipath**: bullets bounce once / each bounce bends toward the nearest enemy / three bounces. **Lock-On** (55): bullets curve to targets near their path, tighter and farther per rank. **Shatter** (70): kills burst into seeking shards / shards pierce / shards ricochet |
+| NIGHT SHIFT | quiet play | **Dead Mic**: half-size noise ring / a shot that kills an unaware enemy makes no noise at all (the ring does not appear) / 75% quieter and silent sprinting. **Blindside**: +60% vs unaware / any hit on an unaware enemy kills it outright (brutes, riots, elites, boss excepted) / a quiet takedown refunds the round. **Smoke Bloom** (45): reload drops a smoke cloud, bigger and longer per rank. **Blackout** (55): enemy vision cones shrink (drawn smaller) / shorter and narrower / standing still hides you beyond 3 tiles |
+| FEEDBACK | power from risk | **Red Line**: +20% damage per missing health and your shots grow bigger and brighter / at 2 health shots pierce / at 1 health shots burst on impact. **Echo**: at 2 health or less every shot is followed 0.2 s later by a ghost round (50%) / 75% / two ghosts. **Kindling** (55): kills set nearby enemies on fire. **Backlash** (70): taking a hit sends a shockwave that jams enemies / and erases bullets / bigger and shoves enemies back |
+
+Removed as dominant or flat: Clean Slate (kills refilled the magazine: strictly best when ammo was tight), Cold Cash (+6 scrap), Feedback Loop (a fire-rate percentage), and the near-duplicate time refunds Adrenaline, Last Stand and Freeze Frame (all merged into Borrowed Time and Hang Fire).
+
+Crossfades (each fires a floater with its name when it triggers): SIGNAL BOOST (Static + Carrier: arcs jump one more enemy, every ricochet fires an arc), DEAD AIR (Static + Deadline: killing a jammed enemy refunds 1 s), HOLD YOUR BREATH (Deadline + Night Shift: held-breath bonus doubles and is silent), RED SHIFT (Carrier + Feedback: ricochets deal +60% and glow red), BORROWED PULSE (Deadline + Feedback: at 2 health or less every kill releases a jamming shockwave), DEAD DROP (Night Shift + Feedback: quiet kills heal at half health), WHITE NOISE (Static + Night Shift: jams last twice as long on unaware enemies). Nine upgrades are free from the start; the rest are bought in the safehouse for 35 to 70 coins (Backlash is unlocked by the pistol-boss goal).
+
+### Shove and the dry-ammo fallback
+
+Both guns at 0/0 with awake enemies must never be a dead end. **SHOVE** (default V, also right mouse; rebindable in controls, shown in the pause footer) is a short wide shoulder-barge (`shove.js`): small damage and a knock-back that **staggers** (a staggered enemy cannot shoot), enough to finish weakened enemies. From behind an enemy who has not noticed you, or a sleeper, it is a **SILENT TAKEDOWN**: a kill with no noise ring. Heavy enemies shrug it off: brutes barely move, riots block the front (shove them from the flank for double damage), the boss ignores it. The kill that follows running dry (shove or otherwise) **always drops an AMMO pickup** (placed so it can never land inside a wall), and the dry-click toast names the shove key.
+
+### Player bullet clock (decision)
+
+Question: player bullets used to fly on the real clock while enemies and their bullets run on world time, so standing still (0.08x) and shooting landed instantly on a frozen target. Options tested with `window.__deadair.PLAYER_BULLET_CLOCK` (`time-rule.js`):
+
+- (a) **real clock** (old): a shot lands the same frame regardless of the time rule. Standing still is both the safest and the fastest way to kill; the beat from the shot has nothing to advance, because the bullet is already there.
+- (b) **world time with a minimum effective speed** (`minRate` 0.45): the bullet flies on world time but never slower than 0.45x real. While you move or sprint (world 0.35x to 1x) it is essentially the old speed; while you stand still it visibly travels, and the shot's beat (0.03 to 0.2 s of 1x flow) advances time as it flies, so the shot "arrives as the beat advances time".
+
+Measured in a browser (aware gunner, standing still, one shot): about 0.25 s to land at 3 tiles in both modes, 0.40 s (a) vs 0.45 s (b) at 4.6 tiles; the gap grows roughly 0.05 s per tile (a 12-tile marksman shot takes about 0.6 s longer under (b)). **Chosen: (b).** Reasons: (1) it keeps the pillar honest, the world is not allowed to freeze around a bullet the player owns; (2) it is fair: dodging enemies get a real warning window to react to a shot they can see coming, instead of being hit before any reaction is possible; (3) stealth: a silent kill is a visible commitment (the bullet crosses the room before the unaware target drops) instead of a teleport, which makes the quiet-kill frequencies (Dead Mic, Blindside) something you watch; (4) marksman fights: shooting a sniper down a lane is now a decision (it gets a few extra frames to respond) rather than a free instant; (5) the boss: telegraphed lanes and the exposed window stay fair, because player shots cannot out-run the boss's pattern clock. The minimum rate keeps stationary play fluid: nobody waits for a bullet at 0.08x. Revisit the number (0.35 to 0.6) in balance passes; it is a single constant.
 
 ### Permanent upgrade tracks
 
-Prices and magnitudes are tuning targets, not final balance. Keep the first useful purchase reachable after one or two short runs.
+Seven flat tracks remain (Runner's Legs, Still Mind, Carry Rig, Salvager, Lucky Find, Room Sense, Vital Reserve; 20 to 130 coins per tier). Three **tradeoff** upgrades are unlocked by goals and then bought like any other: HIGH ROLLER (+25% coins, death keeps only 25%; 60), ADRENAL GLAND (+20% damage, minus 1 max health; 50), STOCKPILE (+40 starting scrap per tier, minus 6% move speed; 30 / 50).
 
-| Track | Example effect | Cost shape | Limits / tradeoff |
-| --- | --- | --- | --- |
-| Runner’s Legs | Increase move speed by 5% per tier | Low then rising | Cap near +20%; do not make aiming while moving trivial |
-| Still Mind | Idle simulation moves closer to 0.12× | Medium | Preserve fast/slow contrast; the player still has to choose actions |
-| Deep Breath | Increase grace after an action before time accelerates | Medium | Short, capped extension; should help planning, not remove pressure |
-| Lucky Find | Shift attachment drops toward better tiers: common/uncommon/rare/prototype odds move from 75/20/4.5/0.5% to 60/27.5/10.5/2% at level III | 30 / 60 / 90 coins | Affects quality, not the number of drops; rare loot remains a chance |
-| Carry Rig | Add +1 weight capacity per tier | Medium | Cap low enough that heavy loadouts still make choices |
-| Field Medic | Add one starting health buffer or improve a heal | High | Avoid stacking into careless play |
-| Room Sense | Reveal nearby room outlines and enemy blips through walls within 15 / 25 / 35 tiles | Medium | Reveal information only; shots still stop at walls |
-| Salvager | Improve scrap from crates and clear rewards | Low/medium | Does not multiply permanent coins |
-| Weapon Familiarity | Small reload or recoil improvement for a chosen class | Medium | One weapon class at a time; respec cost should be modest |
+### Goals and records
+
+Fifteen goals pay 10 to 300 coins and often an unlock; progress is shown in the safehouse. Examples: STILL LIFE (clear a room moving under 3 tiles; Vector 9), THREE IN ONE BREATH (3 kills in one slow-mo window; Kite Burst), GOING DOWN / DEEP CUT (reach floor 2 / 3; frag), UNTOUCHED (clear a floor without damage; Adrenal Gland), DEAD SPRINT (clear floor 1 under 4 minutes; Stockpile), THE LAST NOTE (beat the boss; Mule), SIDEARM SOLO (final blow on the boss with a pistol; High Roller and Last Stand). Records: deepest floor, most kills, fastest win, boss kills, total banked.
+
+### Daily seed
+
+One button on the title screen starts the date's seed. The best floor and kills for the day are recorded, and the run end shows a one-line result: `DEAD AIR DAILY 2026-10-06 · FLOOR 3/4 · 41 KILLS · +212 COINS · EXTRACTED · 12:34`.
+
+### Story: operator and tapes
+
+Every run end yields operator lines reacting to the cause of death, depth, unlocks and the first boss kill. Ten tapes unspool one at a time as thresholds are met (runs, kills, floors, deaths, extracts, boss kills) and slowly explain the station.
+
+### INTERFERENCE
+
+After the first boss kill: ARMORED SIGNAL (+30% enemy health), OVERDRIVE (+15% enemy speed), NO SAFE HARBOR (below 2 health, standing still only slows to 0.5x), SCARCE (-40% scrap), THIN AIR (no medkit drops), ENCORE (+40% boss health). Each adds its bonus to the run's coin payout.
+
+### THE CONDUCTOR (boss)
+
+700 health, three phases at 66% and 33% (supplies drop and the bullet field clears at each). The arena is **THE BROADCAST ROOM** (the last room of floor 4), lit by stage lights so the Conductor always stands in a spotlight, and the camera leans toward him while the fight is on so he is never at the screen edge. Each phase is tied to the time rule so the fight teaches it:
+
+1. **Phase I:** fan, ring (with a visible safe gap), sweep: ordinary world time. Every telegraph is 0.85 to 1.2 simulated seconds, about 5x longer in real time while you stand still.
+2. **Phase II, TEMPO:** *he conducts your time.* His pattern clock (spiral, summons, fan, ring, sweep) runs on how much you move (`tempoRate`: 10% when still, 100% at a walk), so his barrages only advance while you move. A ring clock around him shows it (bright when running, dim when frozen). Moving is how you pay for his attacks; the boss bar says PHASE II · TEMPO.
+3. **Phase III, BEATDROP:** a pattern locked to the music (`getMusicBeat()` in `music.js`, from the audible step clock; a world-time clock stands in with no music). A 4-beat cycle: on beat 1 he MARKS a straight line at you, beat 2 (the off-beat) is your dodge window (the line pulses white), beat 3 he FIRES a fan along the mark, beat 4 rests. Moving on the off-beat is the dodge. Charges and summons are mixed in; the charge leaves him exposed for 1.5 s (+100% damage).
+
+Death moment: hit-stop, near-frozen time for 2.4 s, a shatter of pink shards and a ring in each phase colour, the win sting, the banner THE CONDUCTOR FALLS, then the exit opens. Logic is the pure `boss.js` (`tempoRate`, beat stages); `boss-fight.js` applies it and builds the stage lights and camera shift; `boss2d.js` draws it and its telegraphs.
 
 ### Meta progression safeguards
 
-- Each upgrade must explain exactly what changes before purchase.
+- Each upgrade states exactly what changes before purchase; tradeoffs say what they cost.
 - Do not let permanent stats erase the core slow-time decision or the need to use cover.
-- Keep a meaningful default path for players who never grind. Avoid pay-to-win pacing or daily chores.
-- Store upgrades as a small validated versioned record. Derive totals from that record rather than saving duplicate derived stats.
-- Provide a reset option and test corrupt, missing, and older save records.
+- Keep a meaningful default path for players who never grind. Avoid daily chores.
+- Derive totals from the saved record; never save duplicate derived stats.
+- Provide a reset option and test corrupt, missing and older save records.
 
 ## Interface and accessibility
 
-- Keep health, current room, run timer, scrap, active weapon, ammo, and tempo visible during play.
+- Keep health, current room, run timer, scrap, active weapon and ammo visible during play. Time state is diegetic (grade, audio, edge meter), not a panel.
 - Show both weapon slots and carry load at the workbench.
 - Add remappable controls, separate aim/fire from movement, and support keyboard-only menu navigation.
 - Keep keyboard focus inside the workbench while it is open and return it to the game on close; verify keyboard access for every remaining modal.
@@ -224,7 +298,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 
 - Projectile impacts resolve in swept-contact order; test enemy, crate, wall, cover, and player stops against the same function used by the live collision loop.
 
-- Tempo is slow while idle, between slow and normal while firing (including when moving), 1.00× while moving without firing, and zero in menus.
+- World time follows player speed continuously: 0.08× still, 0.35× walking, 1× sprinting (eased); each shot adds a beat of world time; zero in menus.
 - Every attachment changes only the intended weapon values.
 - Carry weight sums correctly; an overweight swap is rejected; a valid replacement preserves the two-slot invariant.
 - Crate health decreases by actual damage, clamps at zero, and cannot become negative.
@@ -235,7 +309,7 @@ Prices and magnitudes are tuning targets, not final balance. Keep the first usef
 ### Browser / integration checks
 
 - Start a run and confirm the room layout, HUD, and entry station appear.
-- Move, stop, and fire to verify the tempo indicator changes at runtime.
+- Move, stop, and fire to verify the world grade, audio muffle and edge meter change with speed.
 - Switch both weapon slots and reload each one; verify ammo is independent.
 - Swap to a heavier gun, observe the load meter, and confirm overweight choices cannot be equipped.
 - Shoot a crate until it breaks, confirm its collider disappears, and verify walls remain indestructible.

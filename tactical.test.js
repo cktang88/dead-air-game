@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {THROWABLES, consumeThrowable, isWithinThrowableRadius, throwableAffectsTarget, throwableById} from './tactical.js';
 
-test('throwables expose four distinct, bounded tactical profiles', () => {
-  assert.deepEqual(THROWABLES.map(item => item.id), ['smoke', 'flash', 'frag', 'incendiary']);
-  assert.equal(new Set(THROWABLES.map(item => item.effect)).size, 4);
+test('throwables expose three distinct, bounded tactical profiles', () => {
+  assert.deepEqual(THROWABLES.map(item => item.id), ['smoke', 'flash', 'frag']);
+  assert.equal(new Set(THROWABLES.map(item => item.effect)).size, 3);
   for (const item of THROWABLES) {
     for (const field of ['stack', 'cost', 'range', 'fuse', 'radius', 'duration']) {
       assert.ok(Number.isFinite(item[field]) && item[field] > 0, `${item.id} needs positive ${field}`);
@@ -51,7 +51,7 @@ test('area effects include the radius edge and reject invalid distances', () => 
 
 test('walls block direct damage and flash while smoke still fills its area', () => {
   assert.equal(throwableAffectsTarget('frag', { distance: 20, blockedByWall: true }), false);
-  assert.equal(throwableAffectsTarget('incendiary', { distance: 20, blockedByWall: true }), false);
+  assert.equal(throwableById('incendiary'), undefined, 'incendiary is a mod now');
   assert.equal(throwableAffectsTarget('flash', { distance: 20, blockedByWall: true }), false);
   assert.equal(throwableAffectsTarget('smoke', { distance: 20, blockedByWall: true }), true);
   assert.equal(throwableAffectsTarget('frag', { distance: 20 }), true);
