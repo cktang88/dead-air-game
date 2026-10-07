@@ -619,7 +619,7 @@ function fitMod(modId){
 }
 // Loot magnet: scrap, ammo and usable heals/armor within reach glide to the player so nobody has to scrub the floor for them.
 const MAGNET_KINDS=new Set(['scrap','ammo','heal','armor']),MAGNET_RANGE=120;
-function wantsLoot(pk){if(pk.kind==='heal')return state.health<state.maxHealth;if(pk.kind==='armor')return !(state.maxArmor>0&&state.armor>=state.maxArmor);return true;}
+function wantsLoot(pk){if(pk.kind==='heal')return state.health<state.maxHealth;if(pk.kind==='armor')return !(state.maxArmor>0&&state.armor>=state.maxArmor);if(pk.kind==='ammo')return state.weaponSlots.some(i=>state.reserveAmmo[i]<GUNS[i].reserve);return true;}
 function pullLoot(p){const dt=state.frameDt||1/60;for(const pk of state.pickups){if(!pk.available||!MAGNET_KINDS.has(pk.kind)||!wantsLoot(pk))continue;const dx=p.x-pk.x,dy=p.y-pk.y,d=Math.hypot(dx,dy);if(d>MAGNET_RANGE||d<1||lineBlocked(pk.x,pk.y,p.x,p.y))continue;const step=Math.min(d,(160+(MAGNET_RANGE-d)*6)*dt);pk.x+=dx/d*step;pk.y+=dy/d*step;}}
 function collect(pickup,manual=false){if(!pickup.available)return false;const d=distance(state.player,pickup);if(!manual&&d>28)return false;
   if(pickup.kind==='supply'){if(manual&&!pickup.claimed)openSupply(pickup);return false;}
