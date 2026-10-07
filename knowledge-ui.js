@@ -12,16 +12,24 @@ const esc = text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&
 const cardQueue = [];
 let cardBusy = false;
 export const CARD_MS = 2000;
+const STALE_MS = 3200;
+/** Drop every waiting card (the one on screen finishes). Used when a new room's card should show right away. */
+export function flushNameCards() { cardQueue.length = 0; }
 
 /** Queue a name card ({title, line}); cards play one after another, never blocking input. */
 export function showNameCard(card) {
   const el = $('name-card');
   if (!el || !card) return;
-  cardQueue.push(card);
+  cardQueue.push({card, at: performance.now()});
   if (!cardBusy) playNextCard();
 }
 function playNextCard() {
-  const el = $('name-card'), card = cardQueue.shift();
+  const el = $('name-card');
+  // A card that waited behind others for more than STALE_MS describes something the player has long since left behind
+  // (fast teleports, sprints through rooms): drop it instead of showing a stale enemy name.
+  let entry = cardQueue.shift();
+  while (entry && performance.now() - entry.at > STALE_MS) entry = cardQueue.shift();
+  const card = entry?.card;
   if (!el || !card) { cardBusy = false; return; }
   cardBusy = true;
   el.innerHTML = `<small>NEW</small><strong>${esc(card.title)}</strong><span>${esc(card.line)}</span>`;

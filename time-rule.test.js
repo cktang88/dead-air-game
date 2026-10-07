@@ -87,3 +87,11 @@ test('player bullets ride world time but never slower than the minimum visible f
   assert.equal(PLAYER_BULLET_CLOCK.mode, 'world');
   assert.ok(PLAYER_BULLET_CLOCK.minRate > 0.2 && PLAYER_BULLET_CLOCK.minRate < 1);
 });
+
+import {creditScale} from './time-rule.js';
+test('creditScale halves the world rate (walk and sprint), never raises or zeroes it', () => {
+  assert.equal(creditScale(1), 0.5);
+  near(creditScale(0.35), 0.175);
+  assert.ok(creditScale(0.08) <= 0.08 && creditScale(0.08) >= TIME_RULE.stillFloor);
+  assert.equal(creditScale(0), 0);
+});

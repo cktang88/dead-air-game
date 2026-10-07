@@ -12,6 +12,7 @@ export const TIME_RULE = {
   walkScale: 0.35,       // world rate at a normal walk
   sprintScale: 1,        // world rate at full sprint
   sprintRatio: 1.4,      // speed ratio at which the world reaches full rate (sprint is 1.45x walk; velocity eases up to ~1.43x)
+  creditMult: 0.5,       // BORROWED TIME: world rate multiplier while time credit lasts (floored at stillFloor)
   deadSpeed: 0.04,       // speed ratio below this counts as standing still (coast tail, wall pushing)
   // Each shot lets a "beat" of world time through (seconds of world time, delivered at 1x).
   beat: {base: 0.12, min: 0.03, max: 0.2, refDamage: 30, interval: {ref: 0.25, exp: 0.5}, reload: 0.1, cap: 0.45},
@@ -87,4 +88,11 @@ export const PLAYER_BULLET_CLOCK = {mode: 'world', minRate: 0.45};
 export function playerBulletDt(worldDt, realDt, clock = PLAYER_BULLET_CLOCK) {
   if (clock.mode === 'real') return realDt;
   return Math.max(worldDt, realDt * clock.minRate);
+}
+
+// BORROWED TIME / last stand: the world runs at creditMult of whatever rate the player's speed asked for (never below
+// the still floor, never above the base). Walking 0.35x -> 0.175x, sprinting 1x -> 0.5x.
+export function creditScale(base, rule = TIME_RULE) {
+  if (!(base > 0)) return 0;
+  return Math.min(base, Math.max(rule.stillFloor, base * rule.creditMult));
 }
