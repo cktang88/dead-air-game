@@ -521,7 +521,7 @@ function updateSurvival(dt){
   const st=ammoStatus({mag:state.weaponAmmo[gi],reserve:state.reserveAmmo[gi],magSize:magSize(g)});
   if(st==='last'&&!state.lastMagWarn[gi]){state.lastMagWarn[gi]=true;playLowAmmo();pushFeed(`LAST MAG · ${g.name}`,'warn');}
   else if(st==='ok')state.lastMagWarn[gi]=false;
-  state.objTimer-=dt;if(state.objTimer<=0){state.objTimer=.2;if(!signalOn())checkExtractionOpen();updateObjective();state.doorMarkers=signalOn()?signalMarkers():doorPreviews({rooms:state.rooms,doors:state.doors,links:state.doorLinks,currentRoom:state.currentRoom}).map(m=>({...m,info:m.info}));}
+  state.objTimer-=dt;if(state.objTimer<=0){state.objTimer=.2;{const r=$('scrap')?.getBoundingClientRect?.();if(r&&r.width)view.fx.scrapTarget={x:r.left+r.width/2,y:r.top+r.height/2};}if(!signalOn())checkExtractionOpen();updateObjective();state.doorMarkers=signalOn()?signalMarkers():doorPreviews({rooms:state.rooms,doors:state.doors,links:state.doorLinks,currentRoom:state.currentRoom}).map(m=>({...m,info:m.info}));}
 }
 function updateObjective(){
   const el=$('objective');if(!el||!state.player)return;
@@ -628,7 +628,7 @@ function collect(pickup,manual=false){if(!pickup.available)return false;const d=
   switch(pickup.kind){
     case'ammo':{const gi=state.weaponSlots[ammoSlot],g=GUNS[gi],add=Math.min(g.reserve-state.reserveAmmo[gi],ammoPickupRounds(g.reserve,pickup.value||.2));state.reserveAmmo[gi]+=add;view.fx.floater(pickup.x,pickup.y-8,collectPopup('ammo',add),'#8fe0ff',14,1.1);toast(`+${add} AMMO · ${g.name}`);break;}
     case'armor':{const plate=GEAR.find(item=>item.id==='armor');if(state.maxArmor===0){state.gear='armor';state.maxArmor=plate.armorDurability;state.armor=plate.armorDurability;view.fx.floater(pickup.x,pickup.y-8,'ARMOR PLATE','#75cfe0',14,1.1);toast(`ARMOR PLATE · ABSORBS ${plate.armorDurability} DAMAGE`);}else{state.armor=Math.min(state.maxArmor,state.armor+1);view.fx.floater(pickup.x,pickup.y-8,'+1 PLATE','#75cfe0',14,1.1);toast('ARMOR PLATE PATCHED · +1');}break;}
-    case'scrap':state.scrap+=scrapGain(pickup.value||12);view.fx.floater(pickup.x,pickup.y-8,collectPopup('scrap',pickup.value||12),'#ffd27a',13,1);toast(`+${pickup.value||12} SCRAP`);break;
+    case'scrap':{const got=scrapGain(pickup.value||12);state.scrap+=got;view.fx.scrapPop(pickup.x,pickup.y-8,got);toast(`+${pickup.value||12} SCRAP`);break;}
     case'heal':{const amt=pickup.value||2,got=Math.min(amt,state.maxHealth-state.health);state.health+=got;view.fx.floater(pickup.x,pickup.y-8,collectPopup('heal',got),'#74dfab',15,1.1);toast(`PATCHED UP · +${got} VITALS`);break;}
     case'freq':openFreqPick(pickup.elite?'elite':'door');break;
     case'exit':if(!exitOpenNow()){toast('EXIT LOCKED · CLEAR THE EXIT ROOM, LOSE ANYONE HUNTING YOU');pickup.available=true;return false;}reachExit();break;
