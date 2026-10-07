@@ -3,7 +3,7 @@
 // The arms, grips and gun placement come from rig2d.humanoidPose; everything here is data fed into it (gunRot, gunDx,
 // handDx/handDy, lunge, kick, hurt, sprint) plus offsets applied to parts afterwards.
 import {STACK_CONFIG, STACK_TILT} from './stack2d.js';
-import {humanoidPose, newRigOut, drawRig, registerIdleFidget, sortItems, fidgetAt, RIG, DEAD_VARIANT} from './rig2d.js';
+import {humanoidPose, newRigOut, drawRig, registerIdleFidget, sortItems, fidgetAt, reloadPose, RIG, DEAD_VARIANT} from './rig2d.js';
 import {heavyKit, heavyGun, riotBaton, riotShield, riotShieldFlat, HEAVY_TYPES} from './heavy-models2d.js';
 import {clamp, lerp, outCubic, TAU, angDiff, smoothstep} from './anim.js';
 import {ACTOR_LOOK, corpseOverrides, corpseSprite, glowSprite, makeCanvas} from './sprites2d.js';
@@ -71,6 +71,8 @@ function noteShot(v, t) { const k = v.kick || 0; if (k > (v.hvK || 0) + 0.2 || (
 const seq = (x, a, b) => clamp((x - a) / (b - a));
 
 /** Everything drawHeavy derives from the enemy / its vis state. Pure; exported for the sheet and tests. */
+const type0 = (e) => e.type;
+const _rp = {};
 export function heavyState(e, v, t) {
   const aimP = e.aimTimer > 0 ? clamp(1 - e.aimTimer / (v.aimMax || 0.5)) : 0;
   const windP = e.meleeWindup > 0 ? clamp(1 - e.meleeWindup / 0.48) : 0;
@@ -78,15 +80,16 @@ export function heavyState(e, v, t) {
   return {
     aimP, windP, windup: e.meleeWindup > 0, alertK: alertAge < 0.32 ? Math.sin(alertAge / 0.32 * Math.PI) : 0, alertAge,
     ang: v.ang || 0, mvAng: v.mvAng ?? (v.ang || 0), amp: v.mv || 0, phase: v.phase || 0, kick: v.kick || 0, lunge: v.lunge || 0, brace: v.brace || 0,
-    hurt: Math.max(v.punch || 0, (v.flash || 0) * 0.7), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: v.idleT || 0, raise: v.raise || 0, rel: v.rel || 0,
+    hurt: Math.max(v.punch || 0, (v.flash || 0) * 0.7), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: e.aware ? 0 : v.idleT || 0, raise: v.raise || 0, rel: v.rel || 0,
     speed: v.speed || 0, shotT: t - (v.hvShotAt ?? -9), t,
+    reloadFrac: e.reloadTimer > 0 ? clamp(1 - e.reloadTimer / (type0(e) === 'guard' ? 2.05 : 2.8), 0.001, 1) : 0,
   };
 }
 
 function setBase(inp, e, s, kit) {
   inp.id = e.id || 0; inp.t = s.t; inp.kind = e.type; inp.bodyYaw = s.ang; inp.moveYaw = s.mvAng; inp.amp = s.amp; inp.phase = s.phase;
   inp.hurt = s.hurt; inp.flash = s.flash; inp.idleT = s.idleT; inp.sprint = 0; inp.kick = s.kick; inp.lunge = 0; inp.magModel = null; inp.mag = 0;
-  inp.gunRot = 0; inp.gunDx = 0; inp.gunLift = 0; inp.handDx = 0; inp.handDy = 0; inp.antennaX = 0; inp.antennaY = 0; inp.dead = null; void kit;
+  inp.gunRot = 0; inp.reloadFrac = 0; inp.oneHand = 0; inp.gunDx = 0; inp.gunLift = 0; inp.handDx = 0; inp.handDy = 0; inp.antennaX = 0; inp.antennaY = 0; inp.dead = null; void kit;
 }
 
 /** Fills `out` with this frame's parts for the heavy enemy `e`; returns {gun, lens} extras for the renderer. */
@@ -101,6 +104,8 @@ export function heavyPose(e, v, t, out, info = {}) {
   let dz = 0, dx = 0, dy = 0, legSpread = 0, legFwd = 0;
   const gunDef = type === 'riot' ? riotBaton(elite) : heavyGun(type, elite);
   info.gun = gunDef; info.lensK = 0; info.pumpS = 0;
+  const rp = s.reloadFrac > 0 && type !== 'riot' ? reloadPose(s.reloadFrac, _rp) : null;
+  inp.reloadFrac = rp ? s.reloadFrac : 0;
   const walkSway = Math.sin(s.phase * TAU) * s.amp;
   const tremble = s.aimP > 0.3 ? Math.sin(t * 46 + (e.id || 0) * 9) * 0.012 * s.aimP : 0;
 
@@ -108,25 +113,24 @@ export function heavyPose(e, v, t, out, info = {}) {
     // heavy: weight shifts onto the planted foot with every step; braces (crouch, feet wide, lean in) while the aim tell fills
     const brace = s.aimP;
     inp.amp = s.amp * 0.9;
-    inp.gunRot = (1 - s.raise) * 0.3 * (e.side || 1) + s.rel * 1.0 + tremble - s.kick * 0.05;
+    inp.gunRot = (1 - s.raise) * 0.3 * (e.side || 1) + tremble - s.kick * 0.05 + (rp ? rp.tilt * (e.side || 1) : 0);
     inp.gunDx = 0.1 - (1 - s.raise) * 1.2 - brace * 0.6;
     inp.lunge = brace * 0.28 + s.alertK * 0.1;
     const pump = s.shotT > 0.16 && s.shotT < 0.62 ? (s.shotT < 0.34 ? outCubic(seq(s.shotT, 0.16, 0.34)) : s.shotT < 0.42 ? 1 : 1 - smoothstep(seq(s.shotT, 0.42, 0.6))) : 0;
     info.pumpS = pump;
-    inp.handDx = -s.rel * 5 - pump * 4.2; inp.handDy = s.rel * 3.5;
+    inp.handDx = -pump * 4.2; inp.handDy = 0;
     inp.gunModel = gunDef.body; inp.gunGeo = gunDef.geo;
     dx = -sb * walkSway * 0.95; dy = cb * walkSway * 0.95; dz = -brace * 1.1 - 0.35 * Math.abs(Math.sin(s.phase * TAU * 1)) * s.amp + s.alertK * 0.7 - stagger * 0.5;
     legSpread = brace * 1.1; legFwd = brace * 0.8;
   } else if (type === 'sniper') {
     const brace = s.aimP, sprint = clamp((s.speed - 55) / 55);
     inp.sprint = sprint;
-    inp.gunRot = (1 - s.raise) * 0.4 * (e.side || 1) + s.rel * 1.1 + tremble * (1 - brace * 0.7) - s.kick * 0.05 + sprint * 0.5;
+    inp.gunRot = (1 - s.raise) * 0.4 * (e.side || 1) + tremble * (1 - brace * 0.7) - s.kick * 0.05 + sprint * 0.5 + (rp ? rp.tilt * (e.side || 1) : 0);
     inp.gunDx = 0.1 - (1 - s.raise) * 1.4 - brace * 0.8;
     inp.lunge = brace * 0.55 + s.alertK * 0.05;
-    inp.handDx = -s.rel * 5; inp.handDy = s.rel * 3.5;
     inp.gunModel = gunDef.body; inp.gunGeo = gunDef.geo;
     dz = -brace * 2.0 + s.alertK * 0.3; legSpread = brace * 1.5; legFwd = brace * 1.3;
-    info.lensK = clamp(brace * brace * 1.1 + (e.locked ? 0.6 : 0) + s.alertK * 0.8);
+    info.lensK = clamp(brace * brace * 1.1 + (e.locked ? 0.6 : 0) + s.alertK * 0.35);
   } else {
     // riot: squat; the baton is the "gun" in the right fist, the shield is its own part braced out front
     const wind = s.windup ? s.windP : 0, strike = s.lunge;
@@ -172,7 +176,7 @@ export function heavyPose(e, v, t, out, info = {}) {
   if (type === 'sniper' && g && gunDef.aux) {
     const b = s.shotT, lift = b > 0.25 && b < 0.95 ? (b < 0.4 ? smoothstep(seq(b, 0.25, 0.4)) : b < 0.8 ? 1 : 1 - smoothstep(seq(b, 0.8, 0.95))) : 0;
     const back = b > 0.4 && b < 0.82 ? (b < 0.58 ? smoothstep(seq(b, 0.4, 0.58)) : b < 0.66 ? 1 : 1 - smoothstep(seq(b, 0.66, 0.82))) : 0;
-    const ca = Math.cos(g.yaw), sa2 = Math.sin(g.yaw), ox = gunDef.L * 0.17 - back * 3.4;
+    const ca = Math.cos(g.yaw), sa2 = Math.sin(g.yaw), ox = gunDef.L * 0.2 - back * 3.4;
     addItem(out, gunDef.aux, g.x + ca * ox, g.y + sa2 * ox, g.z + gunDef.auxZ + lift * 0.9, g.yaw + lift * 0.0, 1, 1, s.flash, 0.06);
     info.boltK = Math.max(lift, back);
   }
@@ -253,7 +257,7 @@ export function drawHeavy(ctx, e, v, t, variant) {
       const idle = Math.max(0, Math.sin(t * 2.1 + (e.id || 0) * 17)) ** 8, flick = 0.65 + 0.35 * Math.sin(t * 34);
       const a = info.lensK > 0 ? (0.25 + info.lensK) * flick : idle * 0.9;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.28 + (info.lensK > 0 ? 0.5 * info.lensK : 0.12); ctx.drawImage(glowSprite('#7ff8ee'), lx - 5, ly - 5, 10, 10); ctx.restore();
-      if (a > 0.05) glint(ctx, lx, ly, 2 + a * 5, a);
+      if (a > 0.05) glint(ctx, lx, ly, 1.5 + a * 3.6, a);
     } else if (e.type === 'guard') {
       const lx = head.x + hc * 4.9, ly = head.y + hs * 4.9 - (head.z + 3.6 - az) * STACK_TILT, pulse = 0.5 + 0.5 * Math.sin(t * 2.6 + (e.id || 0));
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.16 + 0.1 * pulse + s.aimP * 0.45; ctx.drawImage(glowSprite(s.aimP > 0.4 ? '#ff6a5a' : '#6fe9f2'), lx - 6, ly - 4, 12, 8); ctx.restore();

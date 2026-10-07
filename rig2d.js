@@ -20,6 +20,23 @@ export const RIG = {
   legY: 2.5,
 };
 
+// ------------------------------------------------------------------ grip profiles (see docs/art/HANDLING.md)
+// blade: torso yaw added to the aim (right shoulder back = positive), v: how far right of the aim line the gun sits (units),
+// lean: how far the torso leans into the gun. Pistols are squared up and extended (isosceles); long guns are bladed with the
+// stock in the right shoulder pocket and the muzzle crossed back onto the aim line.
+export const GRIPS = {
+  pistol: {blade: 0.0, v: 0, lean: 0.2, hip: 0},
+  smg: {blade: 0.28, v: 2.2, lean: 1.0},
+  rifle: {blade: 0.5, v: 3.2, lean: 1.8},
+  shotgun: {blade: 0.45, v: 3.0, lean: 1.5},
+  sniper: {blade: 0.6, v: 3.4, lean: 2.2},
+  amr: {blade: 0.7, v: 3.6, lean: 2.2},
+  launcher: {blade: 0.65, v: 4.0, lean: 1.4},
+};
+export const gripFor = (cls) => GRIPS[cls] || GRIPS.rifle;
+const sstep = (t) => { t = clamp(t); return t * t * (3 - 2 * t); };
+const mixp = (o, a, b, t) => { o.x = a.x + (b.x - a.x) * t; o.y = a.y + (b.y - a.y) * t; o.z = a.z + (b.z - a.z) * t; return o; };
+
 const POOL = 30;
 export function newRigOut() {
   const items = [];
@@ -45,15 +62,34 @@ export const IDLE_FIDGETS = [
   {id: 'stretch', from: 10, dur: 1.8, apply(p, u) { const h = Math.sin(u * Math.PI); p.leanX -= 1.1 * h; p.headZ += 0.5 * h; p.torsoYaw -= 0.1 * h; }},
 ];
 export function registerIdleFidget(f) { IDLE_FIDGETS.push(f); }
+// Easter-egg fidgets: a quick over-the-shoulder look, tuning the radio (the renderer draws the static bubble when
+// out.fidget === 'radio'), spinning the gun once, and a rare one that only plays once after a full minute of stillness.
+const sm = (u) => u * u * (3 - 2 * u);
+registerIdleFidget({id: 'shoulder', from: 6, dur: 2.2, apply(p, u) { const h = Math.sin(u * Math.PI), k = h < 0.5 ? sm(h * 2) : 1; p.headYaw += 1.15 * k; p.torsoYaw += 0.38 * k; p.headZ += 0.3 * k; }});
+registerIdleFidget({id: 'radio', from: 12, dur: 3.4, apply(p, u) {
+  const h = Math.sin(u * Math.PI), tap = u > 0.18 && u < 0.7 ? Math.sin((u - 0.18) * TAU * 4.2) : 0;
+  p.antenna += Math.sin(u * TAU * 5) * h * 2.4; p.headYaw += 0.55 * sm(Math.min(1, h * 2.2)); p.headZ -= 0.35 * h + 0.15 * Math.abs(tap); p.torsoZ -= 0.15 * h; p.shrug = 0.5 * h;
+}});
+registerIdleFidget({id: 'spin', from: 16, dur: 1.5, apply(p, u) { p.gunRot += TAU * (1 - (1 - u) ** 3); p.torsoZ += Math.sin(u * Math.PI) * 0.25; p.headYaw += 0.2 * Math.sin(u * Math.PI); }});
+registerIdleFidget({id: 'tune', from: 60, dur: 7, once: true, apply(p, u) {
+  const h = Math.sin(u * Math.PI), tilt = Math.sin(u * TAU * 1.5);
+  p.antenna += Math.sin(u * TAU * 7) * h * 2.8; p.headYaw += 0.45 * tilt * h; p.headZ -= 0.5 * h; p.leanX += 0.4 * h; p.shrug = 0.3 * h;
+}});
+/** Presentation switches set by game modes (easter eggs); the pose reads them. */
+export const RIG_FX = {headScale: 1};
 const SLOT = 6.5;   // seconds between fidgets once still
-const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0};
-/** Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure. */
+const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0, gunRot: 0};
+/**
+ * Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure.
+ * A fidget with `once: true` plays a single time, starting at its own `from` (the rare one-minute idle); the others rotate,
+ * one per slot, among those whose `from` has passed.
+ */
 export function fidgetAt(idleT, seed = 0, kind = '') {
   const first = IDLE_FIDGETS[0].from;
   if (!(idleT > first)) return null;
+  for (const f of IDLE_FIDGETS) if (f.once && idleT >= f.from && idleT - f.from <= f.dur) return {fidget: f, u: (idleT - f.from) / f.dur};
   const slot = Math.floor((idleT - first) / SLOT), within = (idleT - first) - slot * SLOT;
-  // fidgets may be limited to some actor kinds with `only: [...]`
-  const pool = kind ? IDLE_FIDGETS.filter((q) => !q.only || q.only.includes(kind)) : IDLE_FIDGETS;
+  const pool = IDLE_FIDGETS.filter((f) => !f.once && (f.from ?? 0) <= idleT && (!f.only || !kind || f.only.includes(kind)));
   const f = pool[(slot + (seed | 0)) % pool.length];
   if (within > f.dur) return null;
   return {fidget: f, u: within / f.dur};
@@ -69,7 +105,7 @@ export function fidgetAt(idleT, seed = 0, kind = '') {
  *   dead (null, or 0..1 fall progress) with fallYaw, antennaX/antennaY (world sway of the antenna tip)
  */
 const _wp = {a: 0, b: 0, liftA: 0, liftB: 0, bob: 0};
-const _e1 = {x: 0, y: 0};
+const _e1 = {x: 0, y: 0}, _hT = {x: 0, y: 0, z: 0}, _hS = {x: 0, y: 0, z: 0}, _hA = {x: 0, y: 0, z: 0}, _hB = {x: 0, y: 0, z: 0}, _hC = {x: 0, y: 0, z: 0}, _hP = {x: 0, y: 0, z: 0};
 export function humanoidPose(kit, inp, out) {
   out.n = 0;
   const t = inp.t || 0, seed = (inp.id || 0) * 1.7, amp = clamp(inp.amp || 0), sprint = clamp(inp.sprint || 0), kick = inp.kick || 0, hurt = inp.hurt || 0;
@@ -80,7 +116,7 @@ export function humanoidPose(kit, inp, out) {
   walkPose(inp.phase || 0, _wp);
   const cb = Math.cos(bodyYaw), sb = Math.sin(bodyYaw), cm = Math.cos(moveYaw), sm = Math.sin(moveYaw), cl = Math.cos(legYaw), sl = Math.sin(legYaw), ca = Math.cos(aimYaw), sa = Math.sin(aimYaw);
   // idle fidgets
-  _fp.headYaw = _fp.headZ = _fp.torsoZ = _fp.torsoYaw = _fp.leanX = _fp.antenna = _fp.shrug = 0;
+  _fp.headYaw = _fp.headZ = _fp.torsoZ = _fp.torsoYaw = _fp.leanX = _fp.antenna = _fp.shrug = _fp.gunRot = 0;
   out.fidget = '';
   if (dead === null && amp < 0.05 && (inp.idleT || 0) > 0) {
     const f = fidgetAt(inp.idleT, inp.id || 0, inp.kind || '');
@@ -92,12 +128,17 @@ export function humanoidPose(kit, inp, out) {
   const breath = Math.sin(t * 2.4 + seed) * (1 - amp);
   const twist = Math.sin((inp.phase || 0) * TAU) * 0.1 * amp;
   const torsoZ = RIG.torsoZ + 0.5 * bob + 0.12 * breath + _fp.torsoZ - hurt * 0.4;
-  const torsoYaw = bodyYaw + twist + _fp.torsoYaw;
+  const geo = inp.gunGeo || null, hasGun = !!(inp.gunModel && geo), prof = gripFor(geo && geo.cls);
+  const stance = hasGun ? 1 - sprint * 0.85 : 0, blade = prof.blade * stance;
+  const baseYaw = bodyYaw + blade;
+  const torsoYaw = baseYaw + twist + _fp.torsoYaw;
   const lx = cm * lean + cb * (_fp.leanX - kick * 0.8), ly = sm * lean + sb * (_fp.leanX - kick * 0.8);
   let tx = lx, ty = ly, hx = lx * 1.45 - ca * kick * 0.5, hy = ly * 1.45 - sa * kick * 0.5;
   let tz = torsoZ, hz = RIG.headZ - RIG.torsoZ + torsoZ + 0.12 * Math.sin(t * 2.4 + 0.7 + seed) * (1 - amp) + 0.35 * bob + _fp.headZ + hurt * 0.55;
-  let headYaw = bodyYaw + clamp(angDiff(bodyYaw, aimYaw), -0.55, 0.55) * 0.8 + _fp.headYaw - hurt * 0.38;
+  let headYaw = baseYaw + clamp(angDiff(baseYaw, aimYaw), -0.9, 0.9) * 0.9 + _fp.headYaw - hurt * 0.38;
   const squashX = 1 + hurt * 0.1, squashY = 1 - hurt * 0.08;
+  const gtx = tx, gty = ty;   // the gun does not take the lean into the shoulder
+  { const la = prof.lean * stance, rv = prof.v * stance * 0.45; tx += ca * la - sa * 0; ty += sa * la; hx += ca * la * 1.1 - sa * rv; hy += sa * la * 1.1 + ca * rv; }
   const variant = out.variant;
   void variant;
 
@@ -128,7 +169,7 @@ export function humanoidPose(kit, inp, out) {
 
   // ---------------- torso, head
   add(out, kit.torso, tx, ty, tz, torsoYaw, squashX, squashY, fl);
-  add(out, kit.head, hx, hy, hz, headYaw, 1, 1, fl);
+  add(out, kit.head, hx, hy, hz, headYaw, RIG_FX.headScale, RIG_FX.headScale, fl);
 
   // ---------------- antenna (custom item: a springy rod, pack-mounted)
   {
@@ -140,39 +181,75 @@ export function humanoidPose(kit, inp, out) {
     it.flash = fl;
   }
 
-  // ---------------- gun
-  const gunYaw = aimYaw + (inp.gunRot || 0);
-  const gox = RIG.reach - kick * 3.2 + (inp.gunDx || 0) - sprint * 1.5, gcs = Math.cos(aimYaw), gsn = Math.sin(aimYaw);
-  const gx = tx * 0.35 + gcs * gox, gy = ty * 0.35 + gsn * gox;
-  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5;
-  const gsc = inp.gunScale ?? 1;
-  if (inp.gunModel) {
-    const g = add(out, inp.gunModel, gx, gy, gz, gunYaw, gsc, gsc, fl);
-    g.key = gy + gz * 0.03 + 0.05;
+  // ---------------- gun: root at the shoulder pocket (long guns) / extended at arm's length (pistols), muzzle pinned on the aim line
+  const gunYaw0 = aimYaw + (inp.gunRot || 0) + _fp.gunRot;
+  const gsc = inp.gunScale ?? 1, gL = geo ? geo.L : 0;
+  const gv = prof.v * stance;                                       // lateral offset of the gun root, to the shooter's right
+  const cross = gL > 1 ? Math.asin(clamp(gv / gL, -0.5, 0.5)) : 0;  // barrel crosses back onto the aim line so the muzzle stays on gunMuzzle
+  const gunYaw = gunYaw0 - cross;
+  const gcs = Math.cos(aimYaw), gsn = Math.sin(aimYaw), gdx = Math.cos(gunYaw), gdy = Math.sin(gunYaw);
+  const kb = kick * (hasGun && geo.cls === 'pistol' ? 2.6 : 3.2);
+  const oxA = RIG.reach + gL * (1 - Math.cos(cross)) + (inp.gunDx || 0) - sprint * (geo && geo.cls === 'pistol' ? 3 : 1.5);
+  const gx = gtx * 0.35 + gcs * oxA - gsn * gv - gdx * kb, gy = gty * 0.35 + gsn * oxA + gcs * gv - gdy * kb;
+  const longGun = hasGun && geo.cls !== 'pistol' && geo.cls !== 'smg';
+  const gz = RIG.gunBaseZ + kick * 0.9 + (inp.gunLift || 0) + 0.18 * bob + (tz - torsoZ) * 0.5 + (longGun ? 1.0 * stance : 0);
+  const gunKey = Math.max(gy + gz * 0.03 + 0.05, ty + tz * 0.03 + 0.1);
+  if (inp.gunModel) { const g = add(out, inp.gunModel, gx, gy, gz, gunYaw, gsc, gsc, fl); g.key = gunKey; }
+  out.muzzleX = gx + gdx * gL * gsc; out.muzzleY = gy + gdy * gL * gsc;
+  const gpt = (p, o, dx = 0, dy = 0) => { const px = (p.x + dx) * gsc, py = (p.y + dy) * gsc; o.x = gx + gdx * px - gdy * py; o.y = gy + gdy * px + gdx * py; o.z = gz + 1.5; return o; };
+  const G = geo || {trig: {x: 4, y: 0}, sup: {x: 12, y: 0}, mag: {x: 7, y: 0}, bolt: {x: 7, y: 0.5}, cls: 'rifle'};
+  const hT = _hT, hS = _hS;
+  gpt(G.trig, hT);
+  const rf = inp.reloadFrac || 0, bolt = G.cls === 'sniper' || G.cls === 'amr';
+  // support hand: handguard / pump / grip wrap, then the reload and pump choreography
+  if (G.pump && !rf && kick < 0.999) gpt(G.sup, hS, -4.2 * Math.sin(Math.PI * clamp(1 - kick)) * (kick > 0.001 ? 1 : 0));   // racking the pump after a shot
+  else gpt(G.sup, hS);
+  hS.x += 0; 
+  if (rf > 0) {
+    gpt(G.sup, _hA); gpt(G.mag, _hB, 0, 0.4); _hB.z -= 0.8;
+    // vest / belt pouch: front-left of the torso
+    const px = tx + Math.cos(torsoYaw) * 2.2 + Math.sin(torsoYaw) * 4.2, py = ty + Math.sin(torsoYaw) * 2.2 - Math.cos(torsoYaw) * 4.2;
+    _hP.x = px; _hP.y = py; _hP.z = tz + 5.5;
+    if (rf < 0.2) mixp(hS, _hA, _hB, sstep(rf / 0.2));
+    else if (rf < 0.62) { const u = (rf - 0.2) / 0.42; mixp(hS, _hB, _hP, sstep(u * 1.7)); if (u > 0.6) mixp(hS, _hP, _hP, 0); }
+    else if (rf < 0.82) mixp(hS, _hP, _hB, sstep((rf - 0.62) / 0.2));
+    else {
+      const u = (rf - 0.82) / 0.18;
+      mixp(hS, _hB, _hA, sstep(u * 1.3));
+      if (bolt) { gpt(G.bolt, _hC, -3.2 * Math.sin(Math.PI * clamp(u * 1.4)), 0); mixp(hT, hT, _hC, Math.sin(Math.PI * clamp(u * 1.2)) ** 0.5); }
+      else if (G.pump) hS.x += 0;
+    }
+  } else if (!inp.reloadFrac && (inp.handDx || inp.handDy)) {
+    gpt(G.sup, hS, inp.handDx || 0, inp.handDy || 0);
   }
-  out.muzzleX = gx + Math.cos(gunYaw) * (inp.gunGeo ? inp.gunGeo.L * gsc : 0); out.muzzleY = gy + Math.sin(gunYaw) * (inp.gunGeo ? inp.gunGeo.L * gsc : 0);
-  const gyc = Math.cos(gunYaw), gys = Math.sin(gunYaw);
-  const geo = inp.gunGeo || {rear: 4, front: 12};
-  const hrx = gx + gyc * geo.rear * gsc, hry = gy + gys * geo.rear * gsc;
-  const fr = Math.min(geo.front, 8) + (inp.handDx || 0), fy2 = inp.handDy || 0;
-  const hlx = gx + (gyc * fr - gys * fy2) * gsc, hly = gy + (gys * fr + gyc * fy2) * gsc;
-  out.handR.x = hrx; out.handR.y = hry; out.handL.x = hlx; out.handL.y = hly;
-  const handZ = gz + 1.5;
+  // sidearm sprint / one-hand: the free hand tucks to the chest (or hangs at the hip when the other hand holds a shield)
+  const tuck = inp.oneHand ? 1 : (G.cls === 'pistol' ? sstep((sprint - 0.35) / 0.4) : 0);
+  if (tuck > 0) {
+    const bx = tx + Math.cos(torsoYaw) * 3.0 + Math.sin(torsoYaw) * 4.6, by = ty + Math.sin(torsoYaw) * 3.0 - Math.cos(torsoYaw) * 4.6;
+    _hP.x = bx; _hP.y = by; _hP.z = tz + 4.5; mixp(hS, hS, _hP, tuck);
+  }
+  out.handR.x = hT.x; out.handR.y = hT.y; out.handL.x = hS.x; out.handL.y = hS.y;
 
-  // ---------------- arms: shoulders ride the torso, hands ride the gun, elbows flare out
+  // ---------------- arms: shoulders ride the torso, two-bone IK to the trigger / support hands, elbows flare outward
+  const tcs = Math.cos(torsoYaw - twist - _fp.torsoYaw), tsn = Math.sin(torsoYaw - twist - _fp.torsoYaw), tk = ty + tz * 0.03;
   for (const side of [1, -1]) {
-    const shx = tx + cb * RIG.shoulder.x - sb * RIG.shoulder.y * side, shy = ty + sb * RIG.shoulder.x + cb * RIG.shoulder.y * side;
-    const hxw = side > 0 ? hrx : hlx, hyw = side > 0 ? hry : hly;
+    const shx = tx + tcs * RIG.shoulder.x - tsn * RIG.shoulder.y * side, shy = ty + tsn * RIG.shoulder.x + tcs * RIG.shoulder.y * side;
+    const H = side > 0 ? hT : hS, hxw = H.x, hyw = H.y, hz = H.z;
     const dx = hxw - shx, dy = hyw - shy, d = Math.hypot(dx, dy);
-    const L = Math.max(RIG.armBone, d / 1.92);
-    solveElbow(shx, shy, hxw, hyw, L, side, bodyYaw, _e1);
-    const z0 = RIG.shoulder.z + (tz - RIG.torsoZ) - 1.0, z1 = handZ - 0.4;
+    // pistols are held at near full extension (isosceles): bones shorten instead of folding the elbows out
+    const L = (G.cls === 'pistol' && !rf && tuck < 0.5) ? Math.max(3.2, d / 1.8) : Math.max(RIG.armBone, d / 1.92);
+    solveElbow(shx, shy, hxw, hyw, L, side, torsoYaw, _e1);
+    const z0 = RIG.shoulder.z + (tz - RIG.torsoZ) - 1.0, z1 = hz - 0.4;
     const zm = (z0 + (z0 + z1) / 2) / 2 - 1.5, zn = ((z0 + z1) / 2 + z1) / 2 - 1.5;
-    add(out, kit.arm, shx, shy, zm, Math.atan2(_e1.y - shy, _e1.x - shx), Math.hypot(_e1.x - shx, _e1.y - shy) / RIG.armBone, 1, fl);
-    add(out, kit.arm, _e1.x, _e1.y, zn, Math.atan2(hyw - _e1.y, hxw - _e1.x), Math.hypot(hxw - _e1.x, hyw - _e1.y) / RIG.armBone, 1, fl);
-    add(out, side > 0 ? kit.gloveR : kit.gloveL, hxw, hyw, handZ - 1.4, gunYaw, 1, 1, fl);
+    const up = add(out, kit.arm, shx, shy, zm, Math.atan2(_e1.y - shy, _e1.x - shx), Math.hypot(_e1.x - shx, _e1.y - shy) / RIG.armBone, 1, fl);
+    up.key = Math.max(up.key, tk + 0.12);
+    const lo = add(out, kit.arm, _e1.x, _e1.y, zn, Math.atan2(hyw - _e1.y, hxw - _e1.x), Math.hypot(hxw - _e1.x, hyw - _e1.y) / RIG.armBone, 1, fl);
+    lo.key = Math.max(lo.key, up.key + 0.01, (rf > 0 ? tk : gunKey) + 0.04);
+    const gl = add(out, side > 0 ? kit.gloveR : kit.gloveL, hxw, hyw, hz - 1.4, Math.atan2(hyw - _e1.y, hxw - _e1.x) * 0.35 + gunYaw * 0.65, 1, 1, fl);
+    gl.key = Math.max(gl.key, lo.key + 0.02);
   }
-  if ((inp.mag || 0) > 0.02 && inp.magModel) add(out, inp.magModel, hlx + gyc * 1.6, hly + gys * 1.6, handZ + 1.2, gunYaw + 0.4, 1, 1, 0);
+  const hlx = hS.x, hly = hS.y, handZ = hS.z, gyc = gdx, gys = gdy;
+  if ((inp.mag || 0) > 0.02 && inp.magModel) { const m = add(out, inp.magModel, hlx + gyc * 1.2, hly + gys * 1.2, handZ + 0.4, gunYaw + 0.4, 1, 1, 0); m.key = out.items[out.n - 2].key + 0.05; }
   out.shadowX = 0; out.shadowY = 0;
   sortItems(out);
   return out;

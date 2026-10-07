@@ -34,3 +34,20 @@ export function sceneBullets() {
   for (let i = 0; i < 22; i++) out.push({kind: i % 3 ? 'brass' : 'glass', col: '#fff', x: -110 + rnd() * 270, y: -90 + rnd() * 200, ang: rnd() * 6.28, len: 3 + rnd() * 4, spin: rnd() * 6.28, drift: 0.5, lurch: 1.2});
   return out;
 }
+
+/** Where a hanging round is drawn at time t (world units), given the tick phase `ph` from tickPhase(t). Matches title-scene.js. */
+export function bulletPos(b, t, ph) {
+  const adv = b.drift * 9 * Math.sin(t * 0.11) + ph.lurch * b.lurch;
+  return {x: b.x + Math.cos(b.ang) * adv, y: b.y + Math.sin(b.ang) * adv};
+}
+/** Index of the hanging round (kind 'bullet', not in `popped`) nearest to point `pt` within `radius`, or -1. Easter egg: shoot them. */
+export function hitBullet(bullets, t, ph, pt, popped = new Map(), radius = 11) {
+  let best = -1, bd = radius;
+  bullets.forEach((b, i) => {
+    if (b.kind !== 'bullet' || popped.has(i)) return;
+    const q = bulletPos(b, t, ph), d = Math.hypot(q.x - pt.x, q.y - pt.y);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+export const countBullets = (bullets) => bullets.filter((b) => b.kind === 'bullet').length;

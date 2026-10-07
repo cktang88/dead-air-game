@@ -3,7 +3,7 @@
 // the extra parts only these types have: guns with separate moving parts (pump, bolt), the riot shield (4 crack
 // levels, upright and flat), the baton, the marksman's ghillie strips. Authoring guide: docs/art/STACKING.md.
 import {VoxelGrid} from './stack2d.js';
-import {humanoidKit, BODY_UNIT as U, GUN_UNIT} from './models2d.js';
+import {humanoidKit, gunGeometry, BODY_UNIT as U, GUN_UNIT} from './models2d.js';
 
 export const HEAVY_TYPES = ['guard', 'sniper', 'riot'];
 
@@ -300,6 +300,10 @@ export function heavyKit(type, elite = false) {
 
 // ---------------------------------------------------------------- guns with separate moving parts
 // Model x = 0 is the gun origin (the rig's `reach` ahead of the body); the muzzle ends exactly at +L like gunStack's.
+const GUN_DESC = {
+  guard: {category: 'SHOTGUN', visual: {length: 27, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
+  sniper: {category: 'SNIPER', visual: {length: 52, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
+};
 const GUN_L = {guard: 27 * 0.7, sniper: 52 * 0.7};
 const gunCache = new Map();
 function gunPal(elite, accent) {
@@ -367,7 +371,8 @@ export function heavyGun(type, elite = false) {
     aux = {id: id + '.bolt', unit: u, layerH: u, pivot: {x: 0, y: 3}, palette: pal2, grid: bg, buckets: 64};
   }
   m = {key, L, body: {id, unit: u, layerH: u, pivot: {x: padC, y: cy}, palette: pal2, grid: g, buckets: 64}, aux, auxX: type === 'guard' ? 0.5 * Lc * u : 0.24 * Lc * u, auxZ: type === 'guard' ? 0.9 : 2.7 * u};
-  m.geo = {L, rear: L * 0.18, front: L * (type === 'sniper' ? 0.5 : 0.58)};
+  // grip data (class, trigger / support / bolt points) comes from GUN_ART via gunGeometry; the pump is animated here, so the rig's own rack is off
+  m.geo = {...gunGeometry(GUN_DESC[type]), pump: false};
   gunCache.set(key, m);
   return m;
 }
@@ -386,7 +391,7 @@ export function riotBaton(elite = false) {
   g.topCoat('x', 'a');
   const L = (Lc - 0) * u;
   m = {key, L, body: {id: 'heavygun.' + key, unit: u, layerH: u, pivot: {x: padC, y: cy}, palette: {x: '#2b2530', a: '#4b4358', S: '#15131a', k: '#555a63', y: '#ffd36e', A: '#ff8a3a'}, grid: g, buckets: 48}, aux: null};
-  m.geo = {L, rear: 1.2, front: 4};
+  m.geo = {L, rear: 1.2, front: 4, cls: 'pistol', trig: {x: 1.2, y: 0}, sup: {x: 4, y: 0}, mag: {x: 3, y: 0}, bolt: {x: 3, y: 0.5}, pump: false};
   gunCache.set(key, m);
   return m;
 }
