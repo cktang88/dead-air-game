@@ -1058,6 +1058,9 @@ function updateEnemies(dt){
   const wp=world.player;wp.x=player.x;wp.y=player.y;wp.vx=pv.x;wp.vy=pv.y;
   world.smoke.length=0;for(const effect of state.effects)if(effect.id==='smoke'&&effect.remaining>0)world.smoke.push({x:effect.x,y:effect.y,radius:effect.item.radius});
   world.projectiles.length=0;for(const b of state.bullets)if(b.owner==='player')world.projectiles.push(b);
+  // Instincts (enemy-instinct.js): the crosshair is a fire lane, a lit frag is a place to leave, a reload/low HP is an opening.
+  world.playerAim=state.aim;world.playerReloading=state.reloadTimer>0;world.playerHpFrac=state.maxHealth>0?state.health/state.maxHealth:1;
+  world.hazards??=[];world.hazards.length=0;for(const t of state.thrown)if(t.id==='frag'||t.id==='incendiary')world.hazards.push({x:t.x,y:t.y,radius:t.item.radius,fuse:t.fuse});for(const ef of state.effects)if(ef.id==='incendiary'&&ef.remaining>0)world.hazards.push({x:ef.x,y:ef.y,radius:ef.item.radius});
   for(const e of state.enemies){if(!e.alive)continue;if(e.type==='boss'){updateBossEnemy(bossApi,e,dt);continue;}const dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;e.stun=Math.max(0,e.stun-dt);if(e.reloadTimer>0){e.reloadTimer=Math.max(0,e.reloadTimer-dt);if(e.reloadTimer===0)e.ammo=e.mag;}
     let out;
     if(e.fixed){// Signal Check warden: a teaching turret on its own (floored) clock, aimed at the player, hidden by cover
@@ -1066,7 +1069,7 @@ function updateEnemies(dt){
     }else out=stepEnemyBrain(e,world,dt,random);
     const canSee=out.sees;
     if(e.burn){burnStep(e,out,dt);if(!e.alive)continue;}
-    e.intent=out.intent;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;e.suspicion=out.suspicion||0;e.spotted=!!out.spotted;e.dodging=!!out.dodging;if(out.dodging)e.dodgeDir=e.ai?.dodge;
+    e.intent=out.intent;e.stance=out.stance||null;e.face={x:out.aimX,y:out.aimY};e.aware=out.aware;e.role=out.role;e.navGoal=out.goal;e.suspicion=out.suspicion||0;e.spotted=!!out.spotted;e.dodging=!!out.dodging;if(out.dodging)e.dodgeDir=e.ai?.dodge;
     if(out.aiming&&!e.wasAiming)playEnemyTell();e.wasAiming=out.aiming;
     if(out.locked&&!e.locked&&e.type==='sniper')playSniperLock({distance:d,pan:(e.x-player.x)/480});e.locked=!!out.locked;
     if(e.def.shield){if(!e.shieldInit){e.shieldInit=true;e.shieldAng=Math.atan2(ny,nx);}e.shieldAng=turnShield(e.shieldAng,Math.atan2(out.aimY,out.aimX),dt,RIOT_SHIELD_TURN);e.shieldFacing={x:Math.cos(e.shieldAng),y:Math.sin(e.shieldAng)};e.shieldFlash=Math.max(0,e.shieldFlash-(state.frameDt||dt));}

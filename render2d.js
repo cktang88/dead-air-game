@@ -15,6 +15,7 @@ import {drawBoss, drawBossTelegraph} from './boss2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
 import {createStealthLayer, sightDistance} from './stealth2d.js';
 import {createDoorLayer} from './doors2d.js';
+import {drawStanceGlyph} from './stance-glyphs2d.js';
 import {ageHitIndicators, drawDamageArcs, drawOffscreenThreats} from './threat-indicators.js';
 
 // Gradients are in the caller's local (translated) space and depend only on their stops, so each distinct one is built once.
@@ -791,7 +792,7 @@ export function createRenderer(container, state) {
       ctx.restore();
     } else if (e.intent === 'search' && !(e.aimTimer > 0 || windup)) {
       ctx.save(); ctx.translate(e.x, e.y - look.r - 9 + Math.sin(vis.time * 4 + (e.id || 0) * 20) * 0.8); ctx.rotate(Math.sin(vis.time * 3 + (e.id || 0) * 9) * 0.18); ctx.globalAlpha = 0.85; ctx.font = `900 10px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(14,10,20,0.95)'; ctx.fillStyle = '#9fd0ff'; ctx.strokeText('?', 0, 0); ctx.fillText('?', 0, 0); ctx.restore();
-    }
+    } else if (e.aware && e.stance && !(e.aimTimer > 0 || windup)) drawStanceGlyph(ctx, e, look.r + (e.elite ? 3 : 0), vis.time);
     if (aimP > 0 || windup) {
       // alert tick above the head
       const p = windup ? windP : aimP;
