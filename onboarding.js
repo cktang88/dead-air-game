@@ -78,7 +78,7 @@ export const MANUAL = Object.freeze([
   {id: 'swap', section: 'COMBAT', title: 'AUTO SWAP', line: 'With no reserve left you swap to a loaded gun automatically.'},
   {id: 'pierce', section: 'COMBAT', title: 'PIERCING', line: 'Marksman rounds punch through enemies and crates. Anti-materiel also goes through one wall.'},
   {id: 'crate', section: 'COMBAT', title: 'CRATES', line: 'Crates stop bullets, yours and theirs, until they break.'},
-  {id: 'noise', section: 'COMBAT', title: 'NOISE RINGS', line: 'Shots, kicked doors and sprinting ring outward. Walls trim the ring; anything inside it can hear you.'},
+  {id: 'noise', section: 'COMBAT', title: 'NOISE RINGS', line: 'Shots and kicked doors ring outward. Sprinting is loud too: a sound-wave mark shows who hears your steps.'},
   {id: 'silent', section: 'COMBAT', title: 'SILENT', line: 'Hit a sleeper, or an unaware enemy from behind, for double damage.'},
   {id: 'throw', section: 'COMBAT', title: 'THROWABLES', line: 'Flash stuns what sees it, frag kills (and hurts you). Walls stop both.'},
   {id: 'glass', section: 'COMBAT', title: 'GLASS', line: 'Windows stop walking but not sight or bullets.'},
@@ -106,7 +106,7 @@ export const MANUAL = Object.freeze([
   {id: 'freq', section: 'ECONOMY', title: 'FREQUENCIES', line: 'Frequencies are in-run upgrades from radio stations. They stack, and pairs crossfade.'},
   {id: 'extract', section: 'ECONOMY', title: 'EXTRACT OR DESCEND', line: 'When the route is clear, leave with your coins or go deeper for more.'},
   // ROOMS
-  {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'E opens a door (quietly; at a sprint it is loud). Hold E to peek in frozen time.'},
+  {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'Doors stay shut until you act: tap E to open one, hold E to peek in frozen time.'},
   {id: 'clear', section: 'ROOMS', title: 'CLEARING', line: 'Clearing a room pays scrap and drops a medkit when you are hurt.'},
   {id: 'rewards', section: 'ROOMS', title: 'REWARD DOORS', line: 'The icon over a doorway shows what the room beyond pays.'},
   {id: 'minimap', section: 'ROOMS', title: 'MINIMAP', line: 'Dots are enemies in rooms you have seen.'},
