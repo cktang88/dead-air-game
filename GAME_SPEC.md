@@ -44,6 +44,31 @@ Pacing target: the cheapest unlocks cost 35 to 60 coins, a typical run pays 30 t
 
 The first room should teach movement, aiming, slow time, shooting, cover, and switching weapons in under two minutes.
 
+## Pressure: stillness is for reading, not a free win
+
+Playtest finding: standing still at 0.08x and firing bursts killed single enemies in 1 to 4 s and squads of 5 to 7 in 8 to 24 s with zero hits, because enemy wind-ups (0.28 to 0.36 s world) took 3.5 to 4.5 s real. Fix in `time-rule.js` (`PRESSURE`), wired in `game.js`:
+
+- While an **aware, armed enemy has line of sight to you inside its reach** (ranged: max(300, 1.1 x range) up to 560 px; melee: 240 px; stunned, unaware, fixed turrets and the boss do not count) the world rate never drops below **0.22x**. Walking (0.35x) is still faster, so moving still pays; breaking line of sight, flashing or killing the watchers lets time freeze again.
+- Those same enemies **think and move at no less than 0.4x real time** (wind-up, aim lock, fire gap, duck, reload-free brain clock, and their walking speed, capped at 2.5x the world step), and **hostile bullets fly at no less than 0.35x** (the boss keeps its own 0.35 floor). So a 0.3 s wind-up is about 0.75 s on a clock you can read, and a bullet is a slow, visible thing you must leave.
+- Freeze frames (STILL MIND flourish) switch the floor off; BORROWED TIME and last stand halve it.
+- Legibility: the top time-edge meter reflects the floored rate and turns **amber** while pressure is on; a manual entry (TIME PUSHES BACK) unlocks the first time it happens.
+
+Duel harness (`tools/duel.mjs`, aware enemies at ~210 px in open ground, scripted players, 5 trials before / 8 after; "would die" = 3 or more HP lost; spray = hold fire, burst = 0.35 s bursts once a second, read = stand and fire but sidestep on any telegraph or incoming bullet):
+
+| Squad / policy | Before (hits avg, would die, clear time) | After |
+| --- | --- | --- |
+| 5-squad, spray | 0.2 hits, 0/5, 11 s | 1.1 hits, 1/8, 18 s |
+| 5-squad, burst | 0 hits, 0/5, 24 s | 0.8 hits, 0/8, 27 s |
+| 5-squad, read | 0 hits, 0/5 | 0.3 hits, 0/8 |
+| 7-squad, spray | 2.0 hits, 2/5 | 1.4 hits, 1/8 |
+| 7-squad, burst | 0.4 hits, 0/5 (1/5 cleared) | 3.1 hits, 5/8 (1/8 cleared) |
+| 7-squad, read | 0 hits, 0/5 | 0.1 hits, 0/8 |
+| single gunner / warden / marksman / rusher / brute | free, 0 hits | still free (a lone enemy dies in 1 to 3 s) |
+
+Reading: careful stand-still shooting against a big squad is now punished (5 of 8 would die); a player who reads and sidesteps still wins almost cleanly. Lone enemies remain fodder by design.
+
+Other fixes from the same playtest: the RIOT is a **floor 2+** enemy (no recipe or elite room rolls it on floor 1; shield hits flinch it and print BLOCKED; its name card reads FLANK IT, SHOVE OR FLASH BREAKS ITS GUARD). Enemy counts scale per floor (`countMult` 0.42 / 0.8 / 1 / 0.9: floor 1 now has about 10 to 19 hostiles, mean 15.7, was 22 to 41, mean 33). The objective line says SIDE ROOMS OPTIONAL, and a room clear drops ammo when any gun is dry or the combined reserve is under half. Music holds `combat` only while an aware enemy has line of sight (or you are shooting); hunters without sight fall to `tension` after the hold. The Conductor's adds are capped at 2 (1 per summon, 2 in phase III).
+
 ## In-run economy and difficulty numbers (balance pass)
 
 One in-run currency, **scrap**, now buys decisions instead of piling up. All numbers live in `economy.js` (`SCRAP`), `supply.js` (`PRICES`), `run-loop.js` (`FLOORS`) and `enemy-brain.js` / `catalog.js` (enemy timing).
