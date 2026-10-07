@@ -51,7 +51,7 @@ import {registerHitIndicator} from './threat-indicators.js';
 import {trapDialogTab} from './dialog-focus.js';
 import {KNOCK_DECAY,ENEMY_KNOCK_DECAY,MOVE_TUNING,PRESS_BUFFER,addRecoil,approach,clipBlockedVelocity,effectiveSpeedRatio,smoothActualSpeed,cornerNudge,easeTimeScale,effectiveSpread,enemyKnockback,fanAngles,gunFeel,hitstopFor,muzzlePoint,newBloom,nextFireTime,playerHitKnock,pushEvent,registerShot,reloadTime,stepBloom,stepRecoil,stepVelocity}from './feel.js';
 import {advanceWeaponBurst,beginWeaponBurst} from './weapon-burst.js';
-import {planDoors,createDoor,openDoor,closeDoor,stepDoorAnim,bumpOpens,enemyOpens,peekFocus,createPeekMachine,isClosed,doorCenterPx,PEEK_HOLD,DOOR_RANGE} from './doors.js';
+import {planDoors,createDoor,openDoor,closeDoor,stepDoorAnim,enemyOpens,peekFocus,createPeekMachine,isClosed,doorCenterPx,PEEK_HOLD,DOOR_RANGE} from './doors.js';
 import {buildSignalLayout,createSignalProgress,zoneOf,goalMet,idleHint,resetPlan,alcoveAt,roomStartPx,REWARD_INFO,SCRIPT as SIGNAL_SCRIPT} from './signal-check.js';
 import {loadOnboarding,saveOnboarding,clearOnboarding,emptyOnboarding,shouldRunSignalCheck,nextCard,enemyCardId,manualTriggers,unlockManual,NAME_CARDS,SIGNAL_CARD_IDS} from './onboarding.js';
 import {showNameCard,nameCardBusy,flushNameCards,showManualChip,showSigHint,showSigCause,showSigComplete,setPeekChrome,renderManual,setPauseTab,wirePauseTabs} from './knowledge-ui.js';
@@ -617,6 +617,10 @@ function fitMod(modId){
   if(old)dropNearPlayer('mod',{modId:old});
   toast(`${mod.name} FITTED · ${gun.name}${old?` · ${MOD_BY_ID.get(old).name} DROPPED`:''}`);hud();return true;
 }
+// Loot magnet: scrap, ammo and usable heals/armor within reach glide to the player so nobody has to scrub the floor for them.
+const MAGNET_KINDS=new Set(['scrap','ammo','heal','armor']),MAGNET_RANGE=120;
+function wantsLoot(pk){if(pk.kind==='heal')return state.health<state.maxHealth;if(pk.kind==='armor')return !(state.maxArmor>0&&state.armor>=state.maxArmor);return true;}
+function pullLoot(p){const dt=state.frameDt||1/60;for(const pk of state.pickups){if(!pk.available||!MAGNET_KINDS.has(pk.kind)||!wantsLoot(pk))continue;const dx=p.x-pk.x,dy=p.y-pk.y,d=Math.hypot(dx,dy);if(d>MAGNET_RANGE||d<1||lineBlocked(pk.x,pk.y,p.x,p.y))continue;const step=Math.min(d,(160+(MAGNET_RANGE-d)*6)*dt);pk.x+=dx/d*step;pk.y+=dy/d*step;}}
 function collect(pickup,manual=false){if(!pickup.available)return false;const d=distance(state.player,pickup);if(!manual&&d>28)return false;
   if(pickup.kind==='supply'){if(manual&&!pickup.claimed)openSupply(pickup);return false;}
   if(pickup.kind==='gun'){return manual?takeGunPickup(pickup):false;}
@@ -1016,6 +1020,7 @@ function updatePlayer(dt){
   if(state.reloadTimer>0){state.reloadTimer-=rd0;if(state.reloadTimer<=0){const gun=GUNS[state.weaponIndex],needed=magSize(gun)-state.weaponAmmo[state.weaponIndex],take=Math.min(needed,state.reserveAmmo[state.weaponIndex]);state.weaponAmmo[state.weaponIndex]+=take;state.reserveAmmo[state.weaponIndex]-=take;playReloadEnd();hud();emit('reloadEnd',p.x,p.y,{gun:gun.id,cancelled:false});}}
   if(input.firing&&!state.wasFiring)state.pressUntil=state.realElapsed+PRESS_BUFFER;state.wasFiring=input.firing;if(input.firing||state.realElapsed<state.pressUntil)playerShoot();updateWeaponBurst();if(input.interact){input.interact=false;interact();}
   for(const pickup of state.pickups){if(state.supplyOpen||state.runModal)break;if(pickup.available&&distance(p,pickup)<19)collect(pickup);}
+  pullLoot(p);
   {const blocked=state.loadoutOpen||state.supplyOpen||!!state.runModal,bossLive=!!(state.boss?.alive&&state.boss.boss?.active),targets=blocked?[]:interactTargets().filter(t=>!(bossLive&&t.kind==='exit'&&!t.enabled));state.interact={targets,active:activeInteraction(targets),ambient:state.boss?.alive&&state.boss.boss?.active?null:ambientPrompt(targets),key:keyLabel(binding('interact'))};}
   updateTutorHint(p);
   updateRoom();
@@ -1367,11 +1372,7 @@ function updateDoors(dt){
     if(door.state==='closed'&&!door.gate)for(const e of state.enemies)if(enemyOpens(door,e)){openDoorProp(door,'enemy');break;}
   }
   const p=state.player;if(!p||state.peek)return;
-  const {x:vx,y:vy}=movementFromKeys(input.keys,controls.bindings);
-  if(vx!==0||vy!==0){
-    const sprint=input.keys.has('shift'),speed=(state.walkTop||112)*(sprint?SPRINT_MULTIPLIER:1),vel={x:vx*speed,y:vy*speed};
-    for(const door of state.doorProps){if(door.gate||!isClosed(door))continue;const how=bumpOpens(door,p,vel,{speedRatio:sprint?SPRINT_MULTIPLIER:1});if(how)openDoorProp(door,how);}
-  }
+  // Doors never open on contact: tap E to open, hold E to peek (updateDoorInput).
 }
 
 // ---------------------------------------------------------------------------------------- Signal Check
