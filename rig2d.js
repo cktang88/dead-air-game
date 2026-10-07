@@ -48,11 +48,21 @@ export function registerIdleFidget(f) { IDLE_FIDGETS.push(f); }
 const SLOT = 6.5;   // seconds between fidgets once still
 const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0, shrug: 0};
 /** Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure. */
-export function fidgetAt(idleT, seed = 0) {
-  const first = IDLE_FIDGETS[0].from;
+const _pools = new Map();
+/** Fidgets for one body plan: `only` is '' for the humanoid kit, or the `only` tag a registered fidget carries ('rusher', 'brute'). */
+function fidgetPool(only) {
+  let c = _pools.get(only);
+  if (!c || c.n !== IDLE_FIDGETS.length) { c = {n: IDLE_FIDGETS.length, list: IDLE_FIDGETS.filter((f) => (f.only || '') === only)}; _pools.set(only, c); }
+  return c.list;
+}
+/** Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure. */
+export function fidgetAt(idleT, seed = 0, only = '') {
+  const pool = fidgetPool(only);
+  if (!pool.length) return null;
+  const first = pool[0].from;
   if (!(idleT > first)) return null;
   const slot = Math.floor((idleT - first) / SLOT), within = (idleT - first) - slot * SLOT;
-  const f = IDLE_FIDGETS[(slot + (seed | 0)) % IDLE_FIDGETS.length];
+  const f = pool[(slot + (seed | 0)) % pool.length];
   if (within > f.dur) return null;
   return {fidget: f, u: within / f.dur};
 }

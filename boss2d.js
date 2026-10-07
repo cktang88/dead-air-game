@@ -3,6 +3,10 @@
 // Everything is drawn in world units, facing the player; no sprite sheets.
 import {ACTOR_LOOK} from './sprites2d.js';
 import {BOSS} from './boss.js';
+import {drawConductor} from './conductor2d.js';
+import {getMusicBeat} from './music.js';
+
+const getBeat = () => { try { return getMusicBeat(); } catch { return null; } };
 
 const TAU = Math.PI * 2;
 const INK = '#120d1a';
@@ -24,41 +28,13 @@ export function drawBoss(ctx, e, now) {
   v.bossAng = v.bossAng === undefined ? face : v.bossAng + Math.atan2(Math.sin(face - v.bossAng), Math.cos(face - v.bossAng)) * 0.12;
   const ang = v.bossAng, winding = b.telegraph ? b.telegraph.progress : 0, charging = b.mode === 'charge';
   ctx.save(); ctx.translate(e.x, e.y);
-  if (dead) {
-    const k = Math.max(0, Math.min(1, (e.corpseTimer ?? 3.5) / 3.5));
-    ctx.globalAlpha = 0.25 + 0.6 * k; ctx.scale(1 + (1 - k) * 0.25, 1 - (1 - k) * 0.4);
-  }
+  if (dead) ctx.globalAlpha = Math.max(0, Math.min(1, (e.corpseTimer ?? 0) / 0.6));   // the death animation plays out (conductor2d.js); only the last moments fade
   // soft aura keyed to phase
   const aura = ctx.createRadialGradient(0, 0, 8, 0, 0, 52);
-  aura.addColorStop(0, col + (dead ? '22' : '66')); aura.addColorStop(1, col + '00');
+  aura.addColorStop(0, col + (dead ? '11' : '66')); aura.addColorStop(1, col + '00');
   ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(0, 0, 52, 0, TAU); ctx.fill();
-  ctx.rotate(ang);
-  // coat tails
-  ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(-6, -15); ctx.lineTo(-34 - Math.sin(t * 3) * 3 - (charging ? 8 : 0), -9); ctx.lineTo(-24, 0); ctx.lineTo(-34 - Math.cos(t * 3) * 3 - (charging ? 8 : 0), 9); ctx.lineTo(-6, 15); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#2a1230'; ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(-30, -8); ctx.lineTo(-22, 0); ctx.lineTo(-30, 8); ctx.lineTo(-6, 13); ctx.closePath(); ctx.fill();
-  // shoulders / body
-  ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(0, 0, 21, 25, 0, 0, TAU); ctx.fill();
-  const g = ctx.createLinearGradient(-14, -18, 14, 18); g.addColorStop(0, '#3b1a45'); g.addColorStop(0.5, col); g.addColorStop(1, '#2a1230');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 19.5, 23, 0, 0, TAU); ctx.fill();
-  // gold braid across the chest
-  ctx.strokeStyle = '#e8c58c'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-4, -20); ctx.lineTo(6, 0); ctx.lineTo(-4, 20); ctx.stroke();
-  for (const s of [-1, 1]) { ctx.fillStyle = '#e8c58c'; ctx.beginPath(); ctx.arc(2, s * 8, 1.8, 0, TAU); ctx.fill(); }
-  // head: pale mask with a glowing slit
-  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(4, 0, 9.5, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#e9dfe8'; ctx.beginPath(); ctx.arc(4.5, 0, 8, 0, TAU); ctx.fill();
-  ctx.fillStyle = INK; ctx.fillRect(7.5, -1.2, 5, 2.4);
-  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = e.alive ? (winding > 0.6 ? '#ffffff' : '#ff4a8a') : '#552233'; ctx.globalAlpha = dead ? 0.3 : 0.9;
-  ctx.fillRect(8, -0.8, 4.4, 1.6); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  // baton arm: raised and trembling during a wind-up, beating time otherwise
-  const beat = charging ? 0 : Math.sin(t * (phase === 3 ? 9 : 5)) * 0.35;
-  const raise = winding > 0 ? -0.9 - winding * 0.5 + Math.sin(t * 40) * 0.04 * winding : beat;
-  ctx.save(); ctx.translate(6, 14); ctx.rotate(raise + 0.4);
-  ctx.strokeStyle = INK; ctx.lineWidth = 4.4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 0); ctx.stroke();
-  ctx.strokeStyle = '#f4ead2'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 0); ctx.stroke();
-  ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.arc(30, 0, 2.6, 0, TAU); ctx.fill();
-  ctx.restore();
-  ctx.fillStyle = '#e8c58c'; ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(8, 14, 3.4, 0, TAU); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(8, -14, 3.4, 0, TAU); ctx.fill(); ctx.stroke();
-  ctx.rotate(-ang);
+  // the body: a stacked model (tailcoat, broadcast mast, CRT head, baton) with its own conducting animation
+  drawConductor(ctx, e, v, t, ang, getBeat());
   if (e.alive && phase === 2 && b.mode !== 'intro' && b.mode !== 'shift') {
     // TEMPO: a clock ring around him whose hand sweeps only as fast as you move; bright = running, dim = frozen.
     const k = b.tempo ?? 1; v.tempoAng = (v.tempoAng || 0) + k * 0.06;
@@ -79,7 +55,6 @@ export function drawBoss(ctx, e, now) {
     ctx.globalAlpha = 1;
     if (b.invuln) { ctx.strokeStyle = '#8fe8ff'; ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 12); ctx.lineWidth = 2; ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.arc(0, 0, 30, t, t + TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
     if (b.exposed > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + 0.2 * Math.sin(t * 18); ctx.fillStyle = '#ffe9a0'; ctx.beginPath(); ctx.arc(0, 0, 26, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
-    if (v.flash > 0) { ctx.globalAlpha = Math.min(1, v.flash); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 21, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
   }
   ctx.restore();
 }
