@@ -42,7 +42,7 @@ export const PROFILES = {
   chaser: {dodge: 0.55, react: [0.05, 0.1], alertRadius: 240},
   gunner: {dodge: 0.5, react: [0.05, 0.1], windup: 0.28, fireGap: [0.5, 1.0], duck: [0.8, 1.7], burst: [1, 2], aimMul: 1, alertRadius: 280},
   guard: {dodge: 0.3, react: [0.08, 0.15], windup: 0.36, fireGap: [0.9, 1.6], duck: [1.2, 2.4], burst: [1, 1], aimMul: 0.85, alertRadius: 280},
-  sniper: {dodge: 0.35, react: [0.12, 0.2], windup: 0.9, lockTime: 0.3, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
+  sniper: {dodge: 0.35, react: [0.2, 0.4], windup: 1.3, lockTime: 0.4, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
   riot: {dodge: 0.02, react: [0.08, 0.15], alertRadius: 240},
   brute: {dodge: 0.08, react: [0.08, 0.15], alertRadius: 220, chargeWindup: 0.36, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.6, 2.6], recover: 0.9},
 };
