@@ -583,9 +583,9 @@ class Bot {
     }
     if (['ammo', 'heal', 'armor', 'scrap', 'mod', 'gun'].includes(this.task.kind) && hyp(this.task.x - S.px, this.task.y - S.py) < 22) {
       if (!this.arrive || this.arrive.key !== this.task.key) this.arrive = {key: this.task.key, t: S.t};
-      else if (S.t - this.arrive.t > 1.2) { this.unreachable.set(this.task.key, S.t + 150); this.task.done = true; this.arrive = null; }
+      else if (S.t - this.arrive.t > 1.2) { this.unreachable.set(this.task.key, S.t + 500); this.task.done = true; this.arrive = null; }
     }
-    if (['ammo', 'heal', 'armor', 'scrap', 'mod', 'gun', 'cache', 'locker', 'gate', 'market', 'clear'].includes(this.task.kind) && S.t - this.task.since > 14) { this.unreachable.set(this.task.key, S.t + 150); if (this.task.room != null && this.task.kind === 'clear') this.badRooms.set(this.task.room, S.t + 150); this.task.done = true; res.taskTimeouts = (res.taskTimeouts || 0) + 1; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] task timeout ${this.task.key}`); }
+    if (['ammo', 'heal', 'armor', 'scrap', 'mod', 'gun', 'cache', 'locker', 'gate', 'market', 'clear'].includes(this.task.kind) && S.t - this.task.since > 14) { this.unreachable.set(this.task.key, S.t + 500); if (this.task.room != null && this.task.kind === 'clear') this.badRooms.set(this.task.room, S.t + 150); this.task.done = true; res.taskTimeouts = (res.taskTimeouts || 0) + 1; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] task timeout ${this.task.key}`); }
     this.stats.taskTicks[this.task.kind] = (this.stats.taskTicks[this.task.kind] || 0) + 1;
     const task = this.task, P = {x: S.px, y: S.py}, gun = GUNS[S.wi];
 
@@ -634,7 +634,7 @@ class Bot {
       if (!steer) this.stalkT = -99;
     } else
     if (!inCombat || !target || target.d > Math.min(gun.range * 0.8, 260)) {
-      const tgt = (inCombat && target && target.d > Math.min(gun.range * .8, 260)) ? this.steerTo(S, {x: target.x, y: target.y}, Math.min(gun.range * 0.7, 220)) : toTask();
+      const tgt = (inCombat && target && target.d > Math.min(gun.range * .8, 260)) ? this.steerTo(S, {x: target.x, y: target.y}, S.slots.every(gi => S.ammo[gi] + S.reserve[gi] === 0) ? 22 : Math.min(gun.range * 0.7, 220)) : toTask();
       steer = tgt; if (steer) goalDir = steer.dir;
       if (!steer) { this.unreachable.set(task.key, S.t + 12); if (task.room != null) this.badRooms.set(task.room, S.t + 90); this.task.done = true; if (this.o.verbose) this.log(`[${S.t.toFixed(1)}] unreachable ${task.key}`); res.unreachable = (res.unreachable || 0) + 1; }
     }
@@ -712,6 +712,20 @@ class Bot {
     if (!firing && this.recover?.shoot && ammoNow > 0 && !S.reloading) { await this.aimWorld(S, this.recover.shoot.x, this.recover.shoot.y); firing = true; }
     await this.setFire(firing); if (firing) this.stats.shotsFired++; this.firingNow = firing; this.calmFight = inCombat || !!stalk;
 
+    // shove (V): melee fallback when every gun is dry, silent takedown of an unaware enemy from behind, shield-breaker on a riot's front
+    {
+      const allDry = S.slots.every(gi => S.ammo[gi] + S.reserve[gi] === 0), actDry = ammoNow === 0 && S.reserve[S.wi] === 0;
+      const adj = en.filter(e => e.d < 40 && e.los && e.type !== 'boss').sort((a, b) => a.d - b.d)[0];
+      if (adj && S.t - (this.lastShove ?? -9) > 0.85) {
+        const behind = adj.face ? ((adj.face.x * (adj.x - P.x) + adj.face.y * (adj.y - P.y)) / (adj.d || 1)) > 0.25 : false;
+        const takedown = !adj.aware && (adj.posture === 'sleep' || behind) && !['riot', 'brute'].includes(adj.type);
+        const breakShield = adj.type === 'riot' && adj.shielded;
+        if (allDry || (actDry && adj.melee) || takedown || breakShield) {
+          await this.setFire(false); await this.aimWorld(S, adj.x, adj.y); await this.press('KeyV'); this.lastShove = S.t;
+          this.stats.shoves = (this.stats.shoves || 0) + 1; if (takedown) this.stats.takedowns = (this.stats.takedowns || 0) + 1;
+        }
+      }
+    }
     // reload (behind cover / when nothing ranged can see us) / swap guns before the active one runs dry
     if (!S.reloading && S.t - this.lastReload > 0.8) {
       const magMax = GUNS[S.wi].mag, low = ammoNow <= Math.max(1, Math.floor(magMax * 0.3)) || ammoNow < magMax && !inCombat && ammoNow < magMax * .6;
