@@ -788,9 +788,13 @@ class Bot {
     for (const c of S.crates) { const d = hyp(c.x - S.px, c.y - S.py); if (d < 60 && ((c.x - S.px) * move.x + (c.y - S.py) * move.y) / (d || 1) > 0.5) shoot = {x: c.x, y: c.y}; }
     const og = S.gates.find(g => g.opened && hyp(g.x - S.px, g.y - S.py) < 48);
     if (og && !this.permBlocks.some(b => b.gate === og.x + ',' + og.y)) {
-      // GAME BUG: an opened gate whose physics collider survived (see README). Treat it as a wall from now on.
-      this.permBlocks.push({x: og.x, y: og.y, r: 30, gate: og.x + ',' + og.y, soft: true}); this.gateTraps.push({x: og.x, y: og.y, t: +S.t.toFixed(1), room: og.room});
-      ev.openGateCollider = true;
+      // Only call it a game bug if a physics collider really overlaps the paid gate's tiles (checked in the page); otherwise it is just a bot snag.
+      const survivors = await this.page.evaluate(({gx, gy}) => { const s = window.__deadair?.state; if (!s) return -1; const g = s.lockedDoors.find(d => Math.abs((d.x + .5) * 32 - gx) < 1 && Math.abs((d.y + .5) * 32 - gy) < 1); if (!g) return -1; let n = 0; for (const c of s.colliders) { const t = c.body.translation(); for (let i = 0; i < c.body.numColliders(); i++) { const he = c.body.collider(i).halfExtents?.(); if (!he) continue; for (const cell of g.cells) if (t.x + he.x > cell.x * 32 + 4 && t.x - he.x < cell.x * 32 + 28 && t.y + he.y > cell.y * 32 + 4 && t.y - he.y < cell.y * 32 + 28) n++; } } return n; }, {gx: og.x, gy: og.y}).catch(() => -1);
+      ev.gateColliderHits = survivors;
+      if (survivors > 0) {
+        this.permBlocks.push({x: og.x, y: og.y, r: 30, gate: og.x + ',' + og.y, soft: true}); this.gateTraps.push({x: og.x, y: og.y, t: +S.t.toFixed(1), room: og.room});
+        ev.openGateCollider = true;
+      }
     }
     ev.crateAhead = !!shoot; ev.dir = [+move.x.toFixed(2), +move.y.toFixed(2)]; ev.vel = [Math.round(S.vx), Math.round(S.vy)]; ev.wallDist = +this.nav.wallDist(S.px, S.py, 30).toFixed(1); ev.planNext = (this.plan?.pts || []).slice(this.plan?.i || 0, (this.plan?.i || 0) + 3).map(q => [q.x, q.y]); ev.keys = [...this.keys]; ev.nearCover = this.nav.obstacles.filter(o => hyp(o.x - S.px, o.y - S.py) < o.r + 30).map(o => [Math.round(o.x), Math.round(o.y), o.r]);
     if (this.stuckEvents.length < 6) { ev.shot = await this.shot(S, `stuck${this.stuckCount}`); ev.around = this.around(S); }

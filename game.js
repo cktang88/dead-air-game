@@ -34,7 +34,7 @@ import {choosePostures, damageModifier, deathCause, setConeScale, shotNoiseRadiu
 import {noiseRayLengths} from './stealth2d.js';
 import {ammoStatus,nextLoadedSlot,ammoPickupRounds,supplyDrop,clearHealAmount,clearAmmoDrop,cooldownReady,objectiveText} from './economy.js';
 import {supplyOffers,offerStatus,offerCard,SUPPLY_MEDKIT_HP} from './supply.js';
-import {hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {extractionStatus, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 import {MAX_RUN_SEED, parseRunSeed} from './seeds.js';
 import {flashOverlayOpacity,loadVisualSettings,saveVisualSettings,scaledCameraShake} from './visual-settings.js';
 import {particleBurstBudget} from './particles.js';
@@ -520,14 +520,14 @@ function updateSurvival(dt){
   const st=ammoStatus({mag:state.weaponAmmo[gi],reserve:state.reserveAmmo[gi],magSize:magSize(g)});
   if(st==='last'&&!state.lastMagWarn[gi]){state.lastMagWarn[gi]=true;playLowAmmo();pushFeed(`LAST MAG · ${g.name}`,'warn');}
   else if(st==='ok')state.lastMagWarn[gi]=false;
-  state.objTimer-=dt;if(state.objTimer<=0){state.objTimer=.2;updateObjective();state.doorMarkers=signalOn()?signalMarkers():doorPreviews({rooms:state.rooms,doors:state.doors,links:state.doorLinks,currentRoom:state.currentRoom}).map(m=>({...m,info:m.info}));}
+  state.objTimer-=dt;if(state.objTimer<=0){state.objTimer=.2;if(!signalOn())checkExtractionOpen();updateObjective();state.doorMarkers=signalOn()?signalMarkers():doorPreviews({rooms:state.rooms,doors:state.doors,links:state.doorLinks,currentRoom:state.currentRoom}).map(m=>({...m,info:m.info}));}
 }
 function updateObjective(){
   const el=$('objective');if(!el||!state.player)return;
   if(signalOn()){const t=`SIGNAL CHECK · ${state.signal.room+1} / 5`;if(el.textContent!==t)el.textContent=t;el.dataset.tone='seek';return;}
   const route=state.rooms.filter((r,i)=>r.branch!==true&&roomHasLivingEnemies(i,state.enemies));
   const exit=state.pickups.find(p=>p.kind==='exit'&&p.available),routeHostiles=state.enemies.filter(e=>e.alive&&state.rooms[e.roomIndex]?.branch!==true).length;
-  const o=objectiveText({routeRoomsLeft:route.length,routeHostiles,here:state.enemies.filter(e=>e.alive&&e.roomIndex===state.currentRoom).length,exitReady:routeHostiles===0,exitMeters:exit?distance(state.player,exit)/TILE:null});
+  const ex=extractionStatus(state.rooms,state.enemies),o=objectiveText({routeRoomsLeft:route.length,routeHostiles,here:state.enemies.filter(e=>e.alive&&e.roomIndex===state.currentRoom).length,exitReady:state.extractionOpen||ex.open,awareLeft:ex.aware,exitRoomHostiles:ex.inExitRoom,unawareLeft:ex.unaware,exitMeters:exit?distance(state.player,exit)/TILE:null});
   if(el.textContent!==o.text){const had=el.textContent;el.textContent=o.text;if(had)flashEl(el);}if(el.dataset.tone!==o.tone)el.dataset.tone=o.tone;
 }
 function updateWeaponBurst(){
@@ -630,7 +630,7 @@ function collect(pickup,manual=false){if(!pickup.available)return false;const d=
     case'scrap':state.scrap+=scrapGain(pickup.value||12);view.fx.floater(pickup.x,pickup.y-8,collectPopup('scrap',pickup.value||12),'#ffd27a',13,1);toast(`+${pickup.value||12} SCRAP`);break;
     case'heal':{const amt=pickup.value||2,got=Math.min(amt,state.maxHealth-state.health);state.health+=got;view.fx.floater(pickup.x,pickup.y-8,collectPopup('heal',got),'#74dfab',15,1.1);toast(`PATCHED UP · +${got} VITALS`);break;}
     case'freq':openFreqPick(pickup.elite?'elite':'door');break;
-    case'exit':if(hasUnclearedRouteEnemies(state.rooms,state.enemies)){toast('CLEAR THE MAIN ROUTE FIRST');pickup.available=true;return false;}reachExit();break;
+    case'exit':if(!exitOpenNow()){toast('EXIT LOCKED · CLEAR THE EXIT ROOM, LOSE ANYONE HUNTING YOU');pickup.available=true;return false;}reachExit();break;
   }if(!pickup.available){if(pickup.kind!=='exit')playPickup(pickup.kind);}hud();return true;
 }
 /* ---------- SUPPLY DROP: one pickup, three visible options, take one (replaces merchant, locker and cache) */
@@ -951,10 +951,11 @@ function roomClearSupplies(room){
   if(heal>0&&!interferenceStats(state.progress).noHeals){dropPickup('heal',...freeRoomPoint(room),heal);pushFeed('MEDKIT DROPPED · YOU ARE HURT','good');}
   if(room.role!=='entry'&&clearAmmoDrop({ammoLow:supplyCtx().ammoLow})){dropPickup('ammo',...freeRoomPoint(room),.35,room.index);pushFeed('AMMO DROPPED · YOU ARE RUNNING DRY','good');}
 }
+function exitOpenNow(){return state.extractionOpen||extractionStatus(state.rooms,state.enemies).open;}   // once open it stays open: waking a sleeper later never re-locks the exit
 function checkExtractionOpen(){
   if(state.extractionOpen||state.mode!=='play')return;
-  if(hasUnclearedRouteEnemies(state.rooms,state.enemies))return;
-  state.extractionOpen=true;if(state.bossKilled)showBanner('THE CONDUCTOR FALLS','EXTRACTION OPEN · FOLLOW THE ARROW','clear');else showBanner('EXTRACTION OPEN','FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
+  const ex=extractionStatus(state.rooms,state.enemies);if(!ex.open)return;
+  state.extractionOpen=true;if(state.bossKilled)showBanner('THE CONDUCTOR FALLS','EXTRACTION OPEN · FOLLOW THE ARROW','clear');else showBanner('EXTRACTION OPEN',ex.unaware>0?`${ex.unaware} UNAWARE LEFT BEHIND · SNEAK OUT OR CLEAR THEM`:'FOLLOW THE ARROW TO THE EXIT','clear');pushFeed('EXTRACTION OPEN · REACH THE EXIT','good');playExtraction();
 }
 function updateRoom(){
   const px=state.player.x/TILE,py=state.player.y/TILE;let found=state.rooms.findIndex(r=>px>=r.x1-1&&px<=r.x2+1&&py>=r.y1-1&&py<=r.y2+1);
@@ -962,7 +963,7 @@ function updateRoom(){
   if(found!==state.currentRoom){state.currentRoom=found;state.roomMove=0;const room=state.rooms[found],discoveredSecret=room.secret&&!room.visited;room.visited=true;if(discoveredSecret)room.name=room.revealedName;if(signalOn())state.roomToast='';else{state.roomToast=discoveredSecret?'SECRET ROOM FOUND':`FLOOR ${String(state.floor).padStart(2,'0')} · ${room.name}`;state.toastTimer=1100;roomBanner(room.name,state.enemies.filter(e=>e.alive&&e.roomIndex===found).length,discoveredSecret);}checkRoomClear();hud();}
   if(state.roomToast&&state.toastTimer<=0)state.roomToast='';
 }
-function interactTargets(){return collectInteractables({doorProps:state.doorProps,peeking:!!state.peek,ammo:{reserve:state.reserveAmmo[state.weaponIndex],maxReserve:GUNS[state.weaponIndex].reserve},player:state.player,scrap:state.scrap,gates:state.lockedDoors,pickups:state.pickups,rooms:state.rooms,enemies:state.enemies,guns:GUNS,hand:{gun:GUNS[state.weaponIndex],modId:modOf(GUNS[state.weaponIndex]),weapons:state.weaponSlots,maxSlots:maxWeaponSlots(),activeSlot:state.activeSlot},tile:TILE});}
+function interactTargets(){return collectInteractables({extractionOpen:state.extractionOpen,doorProps:state.doorProps,peeking:!!state.peek,ammo:{reserve:state.reserveAmmo[state.weaponIndex],maxReserve:GUNS[state.weaponIndex].reserve},player:state.player,scrap:state.scrap,gates:state.lockedDoors,pickups:state.pickups,rooms:state.rooms,enemies:state.enemies,guns:GUNS,hand:{gun:GUNS[state.weaponIndex],modId:modOf(GUNS[state.weaponIndex]),weapons:state.weaponSlots,maxSlots:maxWeaponSlots(),activeSlot:state.activeSlot},tile:TILE});}
 function interact(){
   const target=activeInteraction(interactTargets());
   if(!target)return;
@@ -970,7 +971,7 @@ function interact(){
   if(target.kind==='gate'){const gate=target.ref,purchase=unlockRewardGate(gate,state.scrap);if(purchase.status==='insufficient'){toast(`VAULT LOCK · NEED ${purchase.missing} MORE SCRAP`);return;}if(purchase.status!=='opened')return;state.scrap=purchase.scrap;gate.opened=true;gate.openedAt=state.elapsed;for(const {x,y} of gate.cells){state.solidMap[y][x]=0;state.nav?.setSolid(x,y,0);}if(gate.body){physics.removeRigidBody(gate.body);state.colliders=state.colliders.filter(item=>item.body!==gate.body);gate.body=null;}view.fx.pickup((gate.x+.5)*TILE,(gate.y+.5)*TILE,'#ffb04a');view.fx.floater((gate.x+.5)*TILE,(gate.y+.5)*TILE-18,`GATE OPEN · -${gate.cost} SCRAP`,'#ffd27a',13,1.6);playGateUnlock();toast(`CACHE GATE OPEN · -${gate.cost} SCRAP`);hud();return;}
   if(target.kind==='supply'||target.kind==='mod'){collect(target.ref,true);return;}
   if(target.kind==='gun'){collect(target.ref,true);return;}
-  if(target.kind==='exit'){if(hasUnclearedRouteEnemies(state.rooms,state.enemies)){toast('CLEAR THE MAIN ROUTE FIRST');return;}reachExit();return;}
+  if(target.kind==='exit'){if(!exitOpenNow()){toast('EXIT LOCKED · CLEAR THE EXIT ROOM, LOSE ANYONE HUNTING YOU');return;}reachExit();return;}
 }
 function selectedThrowable(){return THROWABLES[state.throwableIndex];}
 function throwThrowable(){const item=selectedThrowable(),inventory=consumeThrowable(state.throwables,item.id);if(!inventory.consumed){const n=THROWABLES.length;for(let k=1;k<n;k++){const j=(state.throwableIndex+k)%n;if((state.throwables[THROWABLES[j].id]||0)>0){state.throwableIndex=j;updateThrowableHud();markAction();return;}}toast('OUT OF GRENADES',800);return;}const p=state.player,body=makeBody({x:p.x+state.aim.x*12,y:p.y+state.aim.y*12},3,false);body.enableCcd(true);body.setLinearDamping(0);body.setGravityScale(0,true);const speed=item.range/(item.fuse+.28);body.setLinvel({x:state.aim.x*speed,y:state.aim.y*speed},true);state.thrown.push({id:item.id,item,body,fuse:item.fuse,x:p.x,y:p.y});state.throwables=inventory.inventory;markAction();updateThrowableHud();toast(`${item.name.toUpperCase()} OUT`,700);}
@@ -1187,7 +1188,7 @@ function drawMinimap(){
     for(const r of rooms){if(!seen(r))continue;const x=(r.cx+.5)*sx,y=(r.cy+.5)*sy;if(r.role==='clinic')mark('pickup-heal',x,y,'#74dfab');}
     for(const p of state.pickups){if(!p.available)continue;if(p.kind==='supply'&&!p.claimed){const r=rooms[p.roomIndex];if(r&&seen(r)&&!(r.secret&&!r.visited))mark('station-cache',p.x/TILE*sx,p.y/TILE*sy,'#f4c66d');}}
     for(const g of state.lockedDoors)if(!g.opened&&anySeen)mark('lock-locked',(g.x+.5)*sx,(g.y+.5)*sy,'#ffb04a');
-    for(const p of state.pickups)if(p.available&&p.kind==='exit'){const ready=!hasUnclearedRouteEnemies(rooms,state.enemies);mark('exit-extraction',p.x/TILE*sx,p.y/TILE*sy,ready?'#6dffb0':'#ff6a78');}}
+    for(const p of state.pickups)if(p.available&&p.kind==='exit'){const ready=exitOpenNow();mark('exit-extraction',p.x/TILE*sx,p.y/TILE*sy,ready?'#6dffb0':'#ff6a78');}}
   if(state.player){ctx.fillStyle='#70e5b2';ctx.beginPath();ctx.arc(state.player.x/TILE*sx,state.player.y/TILE*sy,3,0,TAU);ctx.fill();}
 }
 function newRun(opts={}){
@@ -1200,7 +1201,7 @@ function render(dt=1/60){
   const p=state.player,gun=GUNS[state.weaponIndex];
   const events=state.events.splice(0);
   view.consume(events);
-  view.render({dt,timeScale:state.timeScaleSmoothed,worldRate:state.worldRate??state.timeScaleSmoothed,beatPulse:state.beatPulse||0,band:timeBand(playerSpeedRatio()),idleScale:runStats().idleScale,motion:visualSettings.shake,flash:visualSettings.flash,shake:scaledCameraShake(state.shake,visualSettings.shake),mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:!hasUnclearedRouteEnemies(state.rooms,state.enemies),bloom:state.bloom?.value||0,gun});
+  view.render({dt,timeScale:state.timeScaleSmoothed,worldRate:state.worldRate??state.timeScaleSmoothed,beatPulse:state.beatPulse||0,band:timeBand(playerSpeedRatio()),idleScale:runStats().idleScale,motion:visualSettings.shake,flash:visualSettings.flash,shake:scaledCameraShake(state.shake,visualSettings.shake),mouseX:input.mouseX,mouseY:input.mouseY,reloadFrac:state.reloadTimer>0&&state.reloadTotal>0?clamp(1-state.reloadTimer/state.reloadTotal,0,1):0,exitReady:exitOpenNow(),bloom:state.bloom?.value||0,gun});
   {const el=timeEdgeEl||(timeEdgeEl=$('time-edge'));if(el&&view.timeFx){const ev=edgeView(view.timeFx.meter.rate,view.timeFx.meter.activity);el.style.opacity=ev.opacity.toFixed(2);if(ev.opacity>.02){el.style.setProperty('--edge-c',ev.color);const bar=el.firstElementChild;bar.style.width=ev.width.toFixed(1)+'%';el.children[1].style.left=(50-ev.walk/2).toFixed(1)+'%';el.children[2].style.left=(50+ev.walk/2).toFixed(1)+'%';}}}
   void p;
 }

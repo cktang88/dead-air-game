@@ -61,6 +61,26 @@ export function hasUnclearedRouteEnemies(rooms,enemies){
   return enemies.some(enemy=>enemy.alive&&rooms[enemy.roomIndex]?.branch!==true);
 }
 
+/**
+ * Extraction rule (stealth friendly): the exit opens when the extraction room (the last room) holds no living
+ * enemy and nobody on the main route is AWARE of the player. Enemies that are still asleep, guarding or
+ * patrolling unaware may be left behind - sneaking past is a valid way through - but room-clear rewards still
+ * need the clear. Optional branch rooms never count. An enemy with an unknown room still blocks.
+ * @returns {{open:boolean, exitRoom:number, inExitRoom:number, aware:number, unaware:number}}
+ */
+export function extractionStatus(rooms,enemies){
+  const exitRoom=rooms.length-1;let inExitRoom=0,aware=0,unaware=0;
+  for(const enemy of enemies){
+    if(!enemy.alive)continue;
+    const room=rooms[enemy.roomIndex];
+    if(room?.branch===true)continue;
+    if(enemy.roomIndex===exitRoom)inExitRoom++;
+    else if(room&&enemy.aware===false)unaware++;
+    else aware++;
+  }
+  return {open:inExitRoom===0&&aware===0,exitRoom,inExitRoom,aware,unaware};
+}
+
 export function roomHasEncounter(room){
   return room.index>0&&room.hadEncounter===true;
 }

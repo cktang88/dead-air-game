@@ -55,13 +55,20 @@ export function cooldownReady(map, key, now, gap) {
 }
 
 /**
- * One-line "what do I do next" text for the HUD.
- * @param {{routeRoomsLeft:number, routeHostiles:number, here:number, exitReady:boolean, exitMeters:number|null}} s
+ * One-line "what do I do next" text for the HUD. Extraction opens once the exit room is clear and nobody on the route is
+ * aware of you (see room-roles.js `extractionStatus`): sleepers and unaware guards may be left behind.
+ * @param {{routeRoomsLeft:number, routeHostiles:number, here:number, exitReady:boolean, exitMeters:number|null, awareLeft?:number, exitRoomHostiles?:number, unawareLeft?:number}} s
  */
-export function objectiveText({routeRoomsLeft, routeHostiles, here = 0, exitReady, exitMeters = null}) {
-  if (exitReady) return {tone: 'go', text: exitMeters == null ? 'REACH EXTRACTION' : `REACH EXTRACTION · ${Math.max(1, Math.round(exitMeters))} M`};
+export function objectiveText({routeRoomsLeft, routeHostiles, here = 0, exitReady, exitMeters = null, awareLeft = 0, exitRoomHostiles = 0, unawareLeft = 0}) {
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 'S'}`;
+  if (exitReady) {
+    const base = exitMeters == null ? 'REACH EXTRACTION' : `REACH EXTRACTION · ${Math.max(1, Math.round(exitMeters))} M`;
+    return {tone: 'go', text: unawareLeft > 0 ? `${base} · ${unawareLeft} UNAWARE LEFT BEHIND` : base};
+  }
   const rooms = `${routeRoomsLeft} ROOM${routeRoomsLeft === 1 ? '' : 'S'} LEFT`;
-  if (here > 0) return {tone: 'fight', text: `CLEAR THIS ROOM · ${here} HOSTILE${here === 1 ? '' : 'S'} · ${rooms}`};
+  if (awareLeft > 0) return {tone: 'fight', text: `${awareLeft} HOSTILE${awareLeft === 1 ? '' : 'S'} HUNTING YOU · KILL OR LOSE THEM`};
+  if (here > 0 && exitRoomHostiles === 0) return {tone: 'fight', text: `CLEAR THIS ROOM · ${plural(here, 'HOSTILE')} · ${rooms}`};
+  if (exitRoomHostiles > 0) return {tone: 'seek', text: `CLEAR THE EXTRACTION ROOM · ${plural(exitRoomHostiles, 'HOSTILE')}`};
   if (routeHostiles > 0) return {tone: 'seek', text: `CLEAR THE ROUTE · ${rooms}`};
   return {tone: 'go', text: 'REACH EXTRACTION'};
 }

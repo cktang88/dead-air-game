@@ -1,7 +1,7 @@
 // Single source of truth for "what can the player interact with right now?".
 // Both the in-world prompt renderer (affordances2d.js) and game.js interact() read this list so the
 // prompt shown on screen and the thing that happens when E is pressed can never disagree.
-import {roomHasLivingEnemies} from './room-roles.js';
+import {roomHasLivingEnemies, extractionStatus} from './room-roles.js';
 import {GUNS, MOD_BY_ID, modFits} from './catalog.js';
 import {gunPickupPlan} from './rules.js';
 import {DOOR_RANGE, isClosed} from './doors.js';
@@ -23,7 +23,6 @@ export const hostilesText = n => plural(n, 'HOSTILE');
 export const needScrapText = (cost, have) => `NEED ${cost} SCRAP · HAVE ${Math.max(0, Math.floor(have))}`;
 
 function livingIn(roomIndex, enemies) { return enemies.filter(e => e.alive && e.roomIndex === roomIndex).length; }
-function livingOnRoute(rooms, enemies) { return enemies.filter(e => e.alive && rooms[e.roomIndex]?.branch !== true).length; }
 
 const GUN_ICON = {'PISTOL': 'gun-pistol', 'SMG': 'gun-smg', 'SHOTGUN': 'gun-shotgun', 'ASSAULT RIFLE': 'gun-rifle', 'SNIPER': 'gun-sniper', 'ANTI-MATERIEL': 'gun-antimateriel', 'LAUNCHER': 'gun-launcher'};
 export const gunIconId = gun => GUN_ICON[gun?.category] || 'gun-rifle';
@@ -83,9 +82,10 @@ export function collectInteractables(s) {
         verb: swaps ? 'SWAP' : 'TAKE', subject: gun?.name || 'WEAPON', enabled: plan !== null || !hand.weapons, note: gun?.short,
         reason: swaps ? `${gun?.verb || ''} · REPLACES ${swaps.name}`.replace(/^ · /, '') : gun?.verb || '', color: pk.color || '#74c9ed'});
     } else if (pk.kind === 'exit') {
-      const n = livingOnRoute(rooms, enemies), ok = n === 0;
+      const ex = extractionStatus(rooms, enemies), n = ex.inExitRoom + ex.aware, ok = ex.open || !!s.extractionOpen;
+      const why = ex.aware > 0 ? `LOCKED · ${ex.aware} AWARE HOSTILE${ex.aware === 1 ? '' : 'S'} · KILL OR LOSE THEM` : `LOCKED · CLEAR THE EXIT ROOM · ${hostilesText(ex.inExitRoom)}`;
       add({id: 'exit', kind: 'exit', ref: pk, ...at, range: RANGE.exit, keyed: ok, icon: 'exit-extraction', verb: 'EXTRACT', subject: '',
-        enabled: ok, reason: ok ? 'PRESS E OR WALK IN' : `LOCKED · ${hostilesText(n)} LEFT ON THE ROUTE`, color: ok ? '#6dffb0' : '#ff5969', hostiles: n});
+        enabled: ok, reason: ok ? (ex.unaware > 0 ? `PRESS E OR WALK IN · ${ex.unaware} UNAWARE LEFT BEHIND` : 'PRESS E OR WALK IN') : why, color: ok ? '#6dffb0' : '#ff5969', hostiles: n});
     } else {
       add({id: `${pk.kind}:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'pickup', pickupKind: pk.kind, ref: pk, ...at, range: 0, keyed: false,
         icon: pickupIconId(pk), verb: 'AUTO', subject: pickupName(pk), enabled: true, reason: '', color: pk.color || '#f4c66d', rarity: pk.rarity || null});
@@ -122,15 +122,17 @@ export function collectPopup(kind, amount) {
   return amount ? `+${amount} ${String(kind).toUpperCase()}` : String(kind).toUpperCase();
 }
 
-/** Nearest main-route room that still has living enemies, for the "go clear this" arrow. */
+/** Nearest main-route room holding a living enemy that keeps the exit locked (exit-room enemies or aware ones), for the "go clear this" arrow. */
 export function nearestHostileRoom(s) {
-  const p = s.player, T = s.tile || TILE_PX;
+  const p = s.player, T = s.tile || TILE_PX, last = (s.rooms || []).length - 1;
   if (!p) return null;
   let best = null;
   for (const [i, r] of (s.rooms || []).entries()) {
-    if (r.branch === true || !roomHasLivingEnemies(i, s.enemies || [])) continue;
+    if (r.branch === true) continue;
+    const n = (s.enemies || []).filter(e => e.alive && e.roomIndex === i && (i === last || e.aware !== false)).length;
+    if (!n) continue;
     const x = (r.cx + .5) * T, y = (r.cy + .5) * T, d = Math.hypot(p.x - x, p.y - y);
-    if (!best || d < best.distance) best = {index: i, x, y, distance: d, hostiles: livingIn(i, s.enemies)};
+    if (!best || d < best.distance) best = {index: i, x, y, distance: d, hostiles: n};
   }
   return best;
 }

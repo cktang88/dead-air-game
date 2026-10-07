@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assignRoomRoles, hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
+import {assignRoomRoles, extractionStatus, hasUnclearedRouteEnemies, roomEnemyCount, roomEncounterTypes, roomHasEncounter, roomHasLivingEnemies, roomPickupKinds} from './room-roles.js';
 
 const rooms=Array.from({length:10},(_,index)=>({index,name:`ROOM ${index}`}));
 
@@ -104,4 +104,17 @@ test('only fought rooms earn the room-clear scrap reward',()=>{
   assert.equal(roomHasEncounter({index:1,role:'clinic'}),false,'an empty clinic or merchant gets no fight reward');
   assert.equal(roomHasEncounter({index:2,hadEncounter:true}),true,'a defeated encounter still earns its reward after enemy records are removed');
   assert.equal(roomHasEncounter({index:3,hadEncounter:true}),true,'room history exists while the encounter is still alive');
+});
+
+test('extraction opens past unaware route enemies but not past aware ones or the exit room',()=>{
+  const rooms=[{branch:false},{branch:false},{branch:true},{branch:false}];
+  const sleeper={alive:true,roomIndex:1,aware:false},hunter={alive:true,roomIndex:1,aware:true},guard={alive:true,roomIndex:3,aware:false};
+  assert.deepEqual(extractionStatus(rooms,[sleeper]),{open:true,exitRoom:3,inExitRoom:0,aware:0,unaware:1});
+  assert.equal(extractionStatus(rooms,[sleeper,hunter]).open,false);
+  assert.equal(extractionStatus(rooms,[sleeper,hunter]).aware,1);
+  assert.equal(extractionStatus(rooms,[guard]).open,false,'the extraction room itself must be clear');
+  assert.equal(extractionStatus(rooms,[{alive:true,roomIndex:2,aware:true}]).open,true,'branch rooms never block');
+  assert.equal(extractionStatus(rooms,[{...hunter,alive:false}]).open,true);
+  assert.equal(extractionStatus(rooms,[{alive:true,roomIndex:99,aware:false}]).aware,1,'unknown room fails closed');
+  assert.equal(extractionStatus(rooms,[{alive:true,roomIndex:1}]).open,false,'unknown awareness fails closed');
 });
