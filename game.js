@@ -1068,6 +1068,7 @@ const enemyAlerts=[];
 const enemyWorld={nav:null,player:{x:0,y:0,vx:0,vy:0,radius:8},los:(ax,ay,bx,by)=>!lineBlocked(ax,ay,bx,by),enemies:null,smoke:[],projectiles:[],noises:null,
   fireAllowed:e=>{const k=e.def.longSight?1.7:1;return withinWorldView(e,state.player,CAMERA_HALF_HEIGHT*innerWidth/innerHeight*k,CAMERA_HALF_HEIGHT*k);}};
 function updateEnemies(dt){
+  enemyWorld.aimMul=state.floorCfg?.aimMul??1;
   const player=state.player,nav=enemyNav(),pv=player.body.linvel(),world=enemyWorld;
   world.nav=nav;world.enemies=state.enemies;world.noises=state.noises;world.coverBudget=2;world.alerts=enemyAlerts;enemyAlerts.length=0;
   for(const n of state.noises){if(n.ring||!(n.radius>8))continue;n.ring=true;kn.noiseRing=true;(state.noiseRings??=[]).push({x:n.x,y:n.y,R:n.radius,kind:n.kind||'shot',age:0,radii:noiseRayLengths(state,n.x,n.y,n.radius)});}

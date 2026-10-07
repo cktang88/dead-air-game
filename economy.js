@@ -76,13 +76,13 @@ export function objectiveText({routeRoomsLeft, routeHostiles, here = 0, exitRead
 // ---------------------------------------------------------------------------------------------- scrap (one in-run currency)
 // Income is deliberately small so every pickup matters; prices (supply.js, GATE_COST) are set so a run affords roughly half of what it wants.
 export const SCRAP = {
-  kill: [2, 4],          // per kill (inclusive range)
-  crate: [4, 8],         // from a broken crate that rolls a drop
+  kill: [1, 3],          // per kill (inclusive range)
+  crate: [3, 6],         // from a broken crate that rolls a drop
   dropMin: 6, dropMax: 10, // enemy scrap/mod drop (20% of kills)
-  rewardPile: [20, 30],  // a scrap-role room's pile
-  roomPile: [6, 12],     // loose pile in every other room
-  rewardDoor: 4 * 6,     // "scrap" door reward: four piles
-  clearPile: 3,          // six small piles after a clear
+  rewardPile: [15, 25],  // a scrap-role room's pile
+  roomPile: [4, 8],     // loose pile in every other room
+  rewardDoor: 4 * 5,     // "scrap" door reward: four piles
+  clearPile: 1,          // six small piles after a clear
   gateCost: 40,          // vault gate
   cashRate: 5,           // scrap per coin when you EXTRACT (death loses it all)
 };
