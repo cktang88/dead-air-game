@@ -17,12 +17,21 @@ export const BOSS = {
   phaseThresholds: [.66, .33],
   contactDamage: 2,
   speed: 38,
-  chargeSpeed: 300,
-  chargeTime: .85,
+  chargeSpeed: 270,
+  chargeTime: .95,
+  chargeHitRadius: 28, // lane half-width: the drawn lane is exactly this wide
+  chargeLockAt: .65, // sim seconds before the charge starts when the line locks (the dodge window)
+  repositionSpeed: 120,
   exposedTime: 1.5,
   exposedDamageMult: 2,
   maxAdds: 4,
 };
+
+// LINE OF SIGHT: cover is for short breaks. After SIGHT_LOST_REPOSITION s (real time) without a clear line to you he walks
+// a path round the cover until he has one; if that still has not worked after LOB_AFTER s he lobs a telegraphed burst onto
+// your position (the shots radiate from the marked spot, so they reach round cover).
+export const SIGHT_LOST_REPOSITION = 4, LOB_AFTER = 7;
+export const sightAction = lostFor => lostFor >= LOB_AFTER ? 'lob' : lostFor >= SIGHT_LOST_REPOSITION ? 'reposition' : 'fight';
 
 export const INTRO_TIME = .9, SHIFT_TIME = 1.2; // real seconds
 export const BOSS_ROOM_NAME = 'THE BROADCAST ROOM';
@@ -41,7 +50,8 @@ export const PATTERN_SPECS = {
   sweep: {telegraph: .85, active: 1.05, recover: .8},
   spiral: {telegraph: .9, active: 2.4, recover: .8},
   summon: {telegraph: 1.2, active: 0, recover: .9},
-  charge: {telegraph: 1.15, active: 0, recover: .2},
+  charge: {telegraph: 1.45, active: 0, recover: .2},
+  lob: {telegraph: 1.3, active: 0, recover: .8},
   beat: {telegraph: .5, active: 0, recover: 1},
 };
 
@@ -84,7 +94,7 @@ export function createBoss() {
   return {
     active: false, phase: 1, mode: 'dormant', t: 0, patternIndex: 0, pattern: null, total: 0,
     angle: 0, locked: false, emit: 0, spin: 0, sweepDir: 1, fired: false, tempo: 1, beatCount: 0, beatSeen: null, beatClock: 0,
-    invuln: false, exposed: 0, hitWall: false, intro: 0,
+    sightLost: 0, seek: false, lobAt: null, invuln: false, exposed: 0, hitWall: false, intro: 0,
     telegraph: null, // {kind, progress 0..1, angle} for the renderer / HUD while winding up
   };
 }
@@ -114,10 +124,27 @@ function beginTelegraph(boss, kind, ctx) {
   boss.locked = false; boss.fired = false; boss.emit = 0;
   boss.angle = angleTo(ctx.boss, ctx.player);
   boss.gapSign = ctx.rng() < .5 ? -1 : 1;
+  if (kind === 'lob') boss.lobAt = {x: ctx.player.x, y: ctx.player.y};
+  if (kind === 'charge') boss.chargeTarget = {x: ctx.player.x, y: ctx.player.y};
+}
+
+// Where the charge lane ends: the locked aim, one full charge long.
+export const chargeLane = boss => ({length: BOSS.chargeSpeed * BOSS.chargeTime, halfWidth: BOSS.chargeHitRadius, angle: boss.angle});
+
+// The lob burst: LOB_COUNT spokes from the marked spot with a LOB_GAP-wide safe sector facing the boss (so the way out is toward him).
+export const LOB_COUNT = 12, LOB_GAP = 4;
+export function lobLayout(towardAngle) {
+  const step = Math.PI * 2 / LOB_COUNT, start = Math.round((towardAngle - (LOB_GAP - 1) / 2 * step) / step);
+  return {count: LOB_COUNT, step, gapStart: start, gap: LOB_GAP};
+}
+export function lobShots(towardAngle = 0) {
+  const {count, step, gapStart, gap} = lobLayout(towardAngle), shots = [];
+  for (let i = 0; i < count; i++) { const off = ((i - gapStart) % count + count) % count; if (off >= gap) shots.push({angle: i * step, speed: 130, damage: 1}); }
+  return shots;
 }
 
 export function ringLayout(boss) {
-  const count = boss.phase === 3 ? 20 : 16, step = Math.PI * 2 / count, width = boss.phase === 3 ? 2 : 3;
+  const count = boss.phase === 3 ? 20 : 16, step = Math.PI * 2 / count, width = boss.phase === 3 ? 3 : 4;
   // The gap sits a couple of slots off the locked aim so the player must shuffle to use it, not just stand there.
   const index = Math.round(boss.angle / step) + (boss.gapSign || 1) * 2;
   return {count, step, width, index, speed: boss.phase === 3 ? 135 : 120};
@@ -135,7 +162,7 @@ function ringShots(boss) {
 
 function fanShots(boss) {
   const count = boss.phase === 3 ? 7 : 5, arc = boss.phase === 3 ? 1.1 : .9, shots = [];
-  for (let i = 0; i < count; i++) shots.push({angle: boss.angle - arc / 2 + arc * i / (count - 1), speed: boss.phase === 1 ? 165 : 185, damage: 1});
+  for (let i = 0; i < count; i++) shots.push({angle: boss.angle - arc / 2 + arc * i / (count - 1), speed: boss.phase === 1 ? 150 : 175, damage: 1});
   return shots;
 }
 
@@ -163,6 +190,11 @@ export function stepBoss(boss, dt, ctx) {
   }
 
   boss.t -= step;
+  // Time without a clear line (real seconds when supplied: standing still must not stretch the wait).
+  if (step > 0) {
+    if (ctx.los === false && (boss.mode === 'idle' || boss.mode === 'recover')) boss.sightLost += ctx.realDt ?? step;
+    else if (ctx.los !== false) boss.sightLost = 0;
+  }
   switch (boss.mode) {
     case 'intro':
       boss.telegraph = null;
@@ -176,14 +208,25 @@ export function stepBoss(boss, dt, ctx) {
       const dx = ctx.player.x - ctx.boss.x, dy = ctx.player.y - ctx.boss.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
       const radial = d > 260 ? 1 : d < 160 ? -1 : 0, side = (boss.patternIndex % 2 ? 1 : -1) * .7;
       out.move.x = (nx * radial * .8 - ny * side) * BOSS.speed; out.move.y = (ny * radial * .8 + nx * side) * BOSS.speed;
-      if (boss.t <= 0) beginTelegraph(boss, nextPattern(boss), ctx);
+      const act = sightAction(boss.sightLost);
+      boss.seek = act !== 'fight';
+      if (boss.seek && ctx.seek) { // walk the path round the cover until he sees you again
+        const sx = ctx.seek.x - ctx.boss.x, sy = ctx.seek.y - ctx.boss.y, sd = Math.hypot(sx, sy) || 1;
+        out.move.x = sx / sd * BOSS.repositionSpeed; out.move.y = sy / sd * BOSS.repositionSpeed;
+      }
+      if (boss.t <= 0) {
+        if (act === 'lob') { boss.sightLost = SIGHT_LOST_REPOSITION; beginTelegraph(boss, 'lob', ctx); }
+        else if (act === 'fight') beginTelegraph(boss, nextPattern(boss), ctx);
+      }
       break;
     }
     case 'telegraph': {
       const spec = PATTERN_SPECS[boss.pattern];
       if (!boss.locked) boss.angle = angleTo(ctx.boss, ctx.player);
-      if (boss.t <= .3) boss.locked = true; // aim freezes for the last beat so the dodge is fair
-      boss.telegraph = {kind: boss.pattern, progress: Math.min(1, 1 - boss.t / boss.total), angle: boss.angle, locked: boss.locked, ring: boss.pattern === 'ring' ? ringLayout(boss) : null};
+      if (boss.pattern === 'lob') { boss.angle = angleTo(ctx.boss, boss.lobAt); if (boss.t > .55) boss.lobAt = {x: ctx.player.x, y: ctx.player.y}; }
+      if (boss.t <= (boss.pattern === 'charge' ? BOSS.chargeLockAt : boss.pattern === 'lob' ? .55 : .45)) boss.locked = true; // aim freezes for the last beat(s) so the dodge is fair
+      boss.telegraph = {kind: boss.pattern, progress: Math.min(1, 1 - boss.t / boss.total), angle: boss.angle, locked: boss.locked, ring: boss.pattern === 'ring' ? ringLayout(boss) : null,
+        target: boss.pattern === 'lob' ? {x: boss.lobAt.x, y: boss.lobAt.y, ...lobLayout(Math.atan2(ctx.boss.y - boss.lobAt.y, ctx.boss.x - boss.lobAt.x))} : boss.pattern === 'charge' ? {x: ctx.boss.x + Math.cos(boss.angle) * chargeLane(boss).length, y: ctx.boss.y + Math.sin(boss.angle) * chargeLane(boss).length} : null};
       if (boss.t <= 0) fire(boss, spec, ctx, out);
       break;
     }
@@ -201,7 +244,7 @@ export function stepBoss(boss, dt, ctx) {
         boss.emit -= step;
         while (boss.emit <= 0) {
           boss.emit += .35; boss.angle += boss.sweepDir * .45;
-          out.actions.push({type: 'bullets', shots: [-.16, 0, .16].map(o => ({angle: boss.angle + o, speed: 175, damage: 1}))});
+          out.actions.push({type: 'bullets', shots: [-.16, 0, .16].map(o => ({angle: boss.angle + o, speed: 155, damage: 1}))});
         }
       }
       if (boss.t <= 0) { boss.mode = 'recover'; boss.t = PATTERN_SPECS[boss.pattern].recover; }
@@ -249,6 +292,9 @@ function fire(boss, spec, ctx, out) {
   else if (kind === 'summon') {
     const room = Math.max(0, BOSS.maxAdds - (ctx.adds || 0)), count = Math.min(room, boss.phase === 3 ? 3 : 2);
     if (count > 0) out.actions.push({type: 'summon', count});
+    boss.mode = 'recover'; boss.t = spec.recover;
+  } else if (kind === 'lob') {
+    out.actions.push({type: 'bullets', shots: lobShots(Math.atan2(ctx.boss.y - boss.lobAt.y, ctx.boss.x - boss.lobAt.x)), from: {x: boss.lobAt.x, y: boss.lobAt.y}});
     boss.mode = 'recover'; boss.t = spec.recover;
   } else if (kind === 'beat') {
     boss.mode = 'beat'; boss.t = Infinity; boss.beatCount = 0; boss.beatSeen = null; boss.stage = 'rest';
