@@ -98,9 +98,9 @@ export const POSTURES = ['patrol', 'guard', 'sleep', 'gather'];
 export function choosePostures(types, {floor = 1, role = 'combat', rng = Math.random} = {}) {
   const n = types.length;
   const out = types.map(() => 'guard');
-  const gatherOk = n >= 2 && role !== 'elite' && rng() < 0.2;
-  const sleepP = clamp(0.18 - 0.05 * (floor - 1), 0.05, 0.18);
-  const patrolP = clamp(0.25 + 0.08 * (floor - 1), 0.25, 0.5);
+  const gatherOk = n >= 2 && role !== 'elite' && rng() < 0.3;
+  const sleepP = clamp(0.3 - 0.06 * (floor - 1), 0.1, 0.3);
+  const patrolP = clamp(0.2 + 0.07 * (floor - 1), 0.2, 0.45);
   types.forEach((type, i) => {
     if (type === 'sniper') { out[i] = 'guard'; return; }
     if (type === 'riot') { out[i] = rng() < 0.5 ? 'patrol' : 'guard'; return; }
