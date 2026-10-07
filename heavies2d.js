@@ -16,7 +16,7 @@ export const ELITE_SCALE = 1.2;   // drawn on top of the renderer's 0.9 elite sc
 // the stacked bodies stand taller than the legacy discs: lift the anchors for bars / glyphs a little
 if (STACK_CONFIG.enabled) { ACTOR_LOOK.sniper.r = 12; ACTOR_LOOK.guard.r = 14; ACTOR_LOOK.riot.r = 14; }
 
-const GUN_DESC = {guard: 27, sniper: 52};
+const GUN_DESC = {guard: 38, sniper: 64};
 /** Distance from the actor to the muzzle (the telegraph / laser origin): gunMuzzle(gun) scaled for elites. */
 export const heavyMuzzle = (e) => (5 + (GUN_DESC[e.type] || 0) * 0.7) * (e.elite ? 1.08 : 1);
 

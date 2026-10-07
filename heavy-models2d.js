@@ -301,10 +301,10 @@ export function heavyKit(type, elite = false) {
 // ---------------------------------------------------------------- guns with separate moving parts
 // Model x = 0 is the gun origin (the rig's `reach` ahead of the body); the muzzle ends exactly at +L like gunStack's.
 const GUN_DESC = {
-  guard: {category: 'SHOTGUN', visual: {length: 27, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
-  sniper: {category: 'SNIPER', visual: {length: 52, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
+  guard: {category: 'SHOTGUN', visual: {length: 38, width: 8.2, art: 'SHOTGUN'}, color: 0x58aeca},
+  sniper: {category: 'SNIPER', visual: {length: 64, width: 5.2, art: 'SNIPER'}, color: 0x4fd0c4},
 };
-const GUN_L = {guard: 27 * 0.7, sniper: 52 * 0.7};
+const GUN_L = {guard: GUN_DESC.guard.visual.length * 0.7, sniper: GUN_DESC.sniper.visual.length * 0.7};
 const gunCache = new Map();
 function gunPal(elite, accent) {
   return {b: '#3c3844', a: '#585165', m: '#aeacb6', k: '#555a63', x: '#2b2a33', o: '#17171d', w: '#6a4a34', A: accent, y: '#d3ac55', E: {c: '#ff5a4a', emit: true}, L: {c: '#7fe0ff', emit: true}, l: {c: '#ffffff', emit: true}, t: {c: '#fff', emit: true}};

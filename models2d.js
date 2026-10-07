@@ -16,7 +16,7 @@ export const PLAYER_SPEC = {
     pants: '#2e3b46', pantsHi: '#46586a', boot: '#2a2630', bootHi: '#4a4452', sole: '#16131b',
     belt: '#2a2320', buckle: '#d9b45a', pouch: '#4a4a3c', pouchHi: '#6a6a54',
     vest: '#36424e', plate: '#62788a', cloth: '#2f5c56', accent: '#62e1ad', accentDark: '#2f8f70', strap: '#1c222a',
-    glove: '#a9855c', gloveHi: '#d6b184', skin: '#c79574', helmet: '#4fb996', helmetHi: '#a6f0d2',
+    glove: '#3b3238', gloveHi: '#665c6c', skin: '#c79574', helmet: '#4fb996', helmetHi: '#a6f0d2',
     visor: '#0d242a', lens: '#7fe8ff', lensHi: '#ffffff', mic: '#8d8b92', pack: '#34404a', packDark: '#222a32', led: '#ff4a5e', brass: '#e8c978',
   },
 };
@@ -160,12 +160,11 @@ function armModel(spec) {
   return {id: `${spec.id}.arm`, unit: CELL, layerH: CELL, pivot: {x: 0.5, y: 2}, palette: palette(spec.c), grid: g, buckets: 48};
 }
 function gloveModel(spec, side) {
-  const g = new VoxelGrid(8, 8, 4);
-  g.ellipsoid(4, 4, 1.6, 3.1, 2.9, 1.6, 'g', 2.6);            // fist
-  g.ellipsoid(4.6, 4, 2.9, 2.2, 2.4, 0.9, 'G', 2.6);          // knuckle / back-of-hand highlight
-  g.ellipsoid(2.6, side > 0 ? 1.4 : 6.6, 1.7, 1.7, 1.0, 1.1, 'g');   // thumb
-  g.box(0, 2.6, 0.5, 1.6, 5.4, 3, 'u');                       // cuff
-  return {id: `${spec.id}.glove${side > 0 ? 'R' : 'L'}`, unit: CELL, layerH: CELL, pivot: {x: 4, y: 4}, palette: palette(spec.c), grid: g, buckets: 48};
+  const g = new VoxelGrid(6, 6, 3);                           // small dark glove (the living rig draws procedural hands; this one is for corpses and loose parts)
+  g.ellipsoid(3, 3, 1.2, 2.0, 1.9, 1.2, 'g', 2.6);            // fist
+  g.ellipsoid(3.4, 3, 2.1, 1.4, 1.5, 0.6, 'G', 2.6);          // knuckle highlight
+  g.ellipsoid(2.0, side > 0 ? 1.2 : 4.8, 1.3, 1.1, 0.8, 0.8, 'g');   // thumb
+  return {id: `${spec.id}.glove${side > 0 ? 'R' : 'L'}`, unit: CELL, layerH: CELL, pivot: {x: 3, y: 3}, palette: palette(spec.c), grid: g, buckets: 48};
 }
 function magModel() {
   const g = new VoxelGrid(7, 4, 3);
@@ -206,22 +205,22 @@ export function gunGeometry(gun) {
   const pt = (x, y = 0, dx = 0) => ({x: x * L + dx, y});
   const sup = art.sup || [0.55, 0, 0], magX = art.mag ? art.mag[0] + art.mag[1] / 2 : 0.3;
   // grip data (gun space: x along the barrel from the model origin, y to the shooter's right) read by humanoidPose
-  return {L, rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art, cls: art.cls || 'rifle',
+  return {L, reach: (art.cls === 'pistol' ? 11 : 5), rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art, cls: art.cls || 'rifle',
     trig: pt(art.trig ?? 0.2, 0, 0.5), sup: pt(sup[0], sup[1], sup[2]), mag: pt(magX, 0), bolt: pt(art.bolt ?? 0.34, 0.5), pump: !!art.pump};
 }
 /** World units from a gun model's layer 0 up to the centre of its receiver (rigs lift the model by anchorZ minus this). */
 export const GUN_RECEIVER_Z = 4.5 * GUN_UNIT;
 function buildGun(gun, enemy, noMag, key, only) {
   const u = GUN_UNIT, art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
-  const L = gun.visual.length * 0.7, W = Math.max(3.4, gun.visual.width * 0.84);
+  const L = gun.visual.length * 0.7, W = Math.max(2.2, Math.min(3.0, gun.visual.width * 0.42));
   const Lc = Math.round(L / u), padC = Math.ceil(0.24 * Lc) + 2, Wc = W / u;
   const d = Math.ceil(Wc * 1.5) + 6 | 1, h = 10, cy = d / 2;
   const g = new VoxelGrid(padC + Lc + 3, d, h);
   const xf = (f) => padC + f * Lc;
   const accent = '#' + (gun.color & 0xffffff).toString(16).padStart(6, '0');
   const pal = {
-    b: enemy ? '#564e62' : '#474c59', a: enemy ? '#766b84' : '#6f6a62', m: enemy ? '#d3d1da' : '#c3c6d0', A: accent, x: '#4e5360', w: '#7a5238',
-    o: '#1f2128', L: {c: '#7fe0ff', emit: true}, y: '#d3ac55', k: '#555a63', t: {c: '#fff', emit: true}, G: enemy ? '#6b6377' : '#4b4f59',
+    b: enemy ? '#675e75' : '#59606f', a: enemy ? '#85799a' : '#857f74', m: enemy ? '#e0dee8' : '#d4d8e2', A: accent, x: '#4e5360', w: '#7a5238',
+    o: '#1f2128', L: {c: '#7fe0ff', emit: true}, y: '#d3ac55', k: '#555a63', t: {c: '#fff', emit: true}, G: enemy ? '#9288a4' : '#8f97aa',
   };
   const Z0 = 2;   // receiver base layer
   if (only === 'pump') {
@@ -233,12 +232,12 @@ function buildGun(gun, enemy, noMag, key, only) {
     const kindCh = {b: 'b', a: 'a', m: 'm'};
     for (const [a, t, b, kind] of art.parts) {
       if (art.twin && kind === 'm') continue;
-      const x0 = xf(Math.min(a, b)), x1 = xf(Math.max(a, b)), th = Math.max(1.2, W * t / u);
+      const x0 = xf(Math.min(a, b)), x1 = xf(Math.max(a, b)), th = Math.max(1.6, W * t / u * (kind === 'a' ? 0.8 : 1));
       if (x1 - x0 < 0.5) continue;
       if (kind === 'm') {
-        g.ellipsoid((x0 + x1) / 2, cy, Z0 + 1.6, (x1 - x0) / 2, Math.min(th / 2, 2.2), Math.min(th / 2, 1.5), 'm', 2.2);  // barrel tube
+        g.ellipsoid((x0 + x1) / 2, cy, Z0 + 1.6, (x1 - x0) / 2, Math.max(0.9, Math.min(th / 2, 1.6)), Math.max(0.9, Math.min(th / 2, 1.2)), 'm', 2.2);  // barrel tube
       } else {
-        const hz = kind === 'b' ? 2.5 : 2.0;
+        const hz = kind === 'b' ? 2.2 : 1.7;
         g.ellipsoid((x0 + x1) / 2, cy, Z0 + hz, (x1 - x0) / 2, th / 2, hz, kindCh[kind], 3.4);
       }
     }

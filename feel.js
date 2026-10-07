@@ -144,7 +144,7 @@ export function fanAngles(aim, count, spread, jitter = 0) {
 
 // Where the round actually leaves the barrel. Bullets and tracers start here.
 export function muzzleDistance(gun) {
-  return 5 + 0.7 * (gun?.visual?.length ?? 20);
+  return (gun?.visual?.art === 'PISTOL' ? 11 : 5) + 0.7 * (gun?.visual?.length ?? 20);   // = sprites2d gunMuzzle(gun)
 }
 export function muzzlePoint(x, y, dx, dy, gun) {
   const d = muzzleDistance(gun);

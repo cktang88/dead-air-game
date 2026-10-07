@@ -78,3 +78,8 @@ All angles are relative to the aim. "Right of aim" = the shooter's right. Right-
 No CC0 8-direction top-down soldier sheet was reachable (Kenney's Top-down Shooter is not in the mirrored packs; the proxy only serves allow-listed repos), so the 2D comparison
 is not done. Reference proportions are real (arms 1.6x the shoulder width, rifle 2.8x) while ours are chibi (arms ~0.9x, rifle 1.4x), so only ratios and layering transfer.
 Pistol arms cannot fully extend because the muzzle is pinned at `gunMuzzle` (the body sits back instead). Brute hammer and riot baton are drawn by the legacy path, not the rig.
+
+## Update: procedural limbs, small gloves, long thin guns
+* Arms are single smooth tapered limbs drawn by `drawLimb` in `rig2d.js` (sleeve darker than the torso, elbow pad, bend follows the reach); hands are small dark gloves (`drawHand`) wrapped across the gun. Corpses still use the voxel arm/glove models.
+* Guns are longer (class factors on `visual.length`) and thinner, held at shoulder height; pistols are held at arm's length (`gunReach` 11, else 5) so the isosceles diamond shows at every facing. `gunMuzzle`, `feel.muzzleDistance`, `enemyMuzzle` (render2d, also enemy bullet spawn) agree; `rig-hold.test.js` pins it.
+* The weapon layer sorts over the legs too. Metric: `docs/art/handling-iou.md` (`tools/handling-iou.mjs`).
