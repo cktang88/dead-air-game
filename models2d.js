@@ -189,7 +189,11 @@ export function gunStack(gun, {enemy = false, noMag = false} = {}) {
 }
 export function gunGeometry(gun) {
   const L = gun.visual.length * 0.7, art = GUN_ART[gun.visual?.art] || GUN_ART[gun.category] || GUN_ART.SMG;
-  return {L, rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art};
+  const pt = (x, y = 0, dx = 0) => ({x: x * L + dx, y});
+  const sup = art.sup || [0.55, 0, 0], magX = art.mag ? art.mag[0] + art.mag[1] / 2 : 0.3;
+  // grip data (gun space: x along the barrel from the model origin, y to the shooter's right) read by humanoidPose
+  return {L, rear: L * 0.18, front: L * (art.scope ? 0.5 : 0.58), art, cls: art.cls || 'rifle',
+    trig: pt(art.trig ?? 0.2, 0, 0.5), sup: pt(sup[0], sup[1], sup[2]), mag: pt(magX, 0), bolt: pt(art.bolt ?? 0.34, 0.5), pump: !!art.pump};
 }
 /** World units from a gun model's layer 0 up to the centre of its receiver (rigs lift the model by anchorZ minus this). */
 export const GUN_RECEIVER_Z = 4.5 * GUN_UNIT;
