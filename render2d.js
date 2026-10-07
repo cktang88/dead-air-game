@@ -18,6 +18,8 @@ import {isHeavy, drawHeavy, drawHeavyCorpse, heavyMuzzle} from './heavies2d.js';
 import {drawIcon, MOD_ICON} from './icons.js';
 import {createAffordances} from './affordances2d.js';
 import {drawBoss, drawBossTelegraph} from './boss2d.js';
+import {isCreature, drawCreature, drawCreatureCorpse, updateCreature, creatureDrop} from './creature-glue.js';
+import {updateConductor} from './conductor2d.js';
 import {drawMetaWorld} from './meta-overlay2d.js';
 import {createStealthLayer, sightDistance} from './stealth2d.js';
 import {createDoorLayer} from './doors2d.js';
@@ -197,6 +199,7 @@ export function createRenderer(container, state) {
   const STRIDE = {player: 40, chaser: 30, gunner: 36, brute: 34, guard: 34, sniper: 36, riot: 34, elite: 38};
   const AUTO_PICK = new Set(['scrap', 'heal', 'ammo', 'armor']);
   const kindOf = (e) => (e.elite ? 'elite' : e.type);
+  const creatureEnv = {fx, player: null, shake: (m, a) => { vis.camX.x += Math.cos(a) * m * vis.motion; vis.camY.x += Math.sin(a) * m * vis.motion; }};   // rusher / brute hooks (creature-glue.js)
 
   function springXY(o, k, c, dt) {
     const h = Math.min(dt, 1 / 40);
@@ -298,7 +301,7 @@ export function createRenderer(container, state) {
   function update(step) {
     vis.time += step;
     fx.update(step);
-    for (const e of state.enemies) updateEnemy(e, step);
+    for (const e of state.enemies) { updateEnemy(e, step); if (isCreature(e)) { creatureEnv.player = state.player; updateCreature(e, e.vis, step, creatureEnv); } else if (e.type === 'boss' && e.vis) updateConductor(e, e.vis, step, creatureEnv); }
     const p = state.player;
     if (p) {
       if (vis.px !== null) {
@@ -406,7 +409,7 @@ export function createRenderer(container, state) {
     for (const e of state.enemies) {
       if (!inView(e, b, 40)) continue;
       const dying = !e.alive, look = ACTOR_LOOK[e.elite ? 'elite' : e.type] || BOSS_LOOK;
-      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (!dying && (isStacked(kindOf(e)) || isHeavy(e)) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
+      if (!dying || (e.vis?.deathT ?? 9) < 0.5) drawBlobShadow(ctx, e.x, e.y + (dying ? 0 : isCreature(e) || e.type === 'boss' ? creatureDrop(e) : isStacked(kindOf(e)) || isHeavy(e) ? feetDrop() : 0), look.r * 0.95, 1.5, dying ? 0.6 : 1);
     }
     const p = state.player;
     if (p) drawBlobShadow(ctx, p.x, p.y + (isStacked('player') ? feetDrop() : 0), 10, 1.5);
@@ -743,15 +746,16 @@ export function createRenderer(container, state) {
     if (windP > 0) { const rb = outCubic(windP) * 4.5; ctx.translate(-Math.cos(ang) * rb, -Math.sin(ang) * rb); }
     if (lunge > 0) { const l = outQuad(lunge) * 7; ctx.translate(Math.cos(ang) * l, Math.sin(ang) * l); }
     if (aimP > 0 && !e.elite) { ctx.translate(-Math.cos(ang) * aimP * 1.2, -Math.sin(ang) * aimP * 1.2); }
-    const hv = isHeavy(e), stk = isStacked(kind) || hv;
+    const cre = isCreature(e), hv = isHeavy(e), stk = cre || isStacked(kind) || hv;
     walkPose(v.phase || 0, _wp);
     if (!stk) drawFeet(mvAng, look.r * (e.elite ? 0.8 : 1), v.phase || 0, amp, shade(look.color, 0.5));
     // squash and stretch: along travel while running, bigger on the wind-up, a punch when hit, a hop when alerted
     const bob = 1 + 0.035 * amp * (_wp.bob * 2 - 1), breath = 1 + 0.017 * Math.sin(vis.time * 2.3 + (e.id || 0) * 31) * (1 - amp);
     const hop = alertAge < 0.2 ? 0.12 * Math.sin(alertAge / 0.2 * Math.PI) : 0;
     const wind = 1 + (windup ? 0.1 * outCubic(windP) : 0) + kick * 0.05 + punch * 0.13 + hop - brace * 0.04;
-    ctx.scale(scale * wind * bob * breath, scale * wind * bob * breath);
+    if (!cre) ctx.scale(scale * wind * bob * breath, scale * wind * bob * breath);
     actorGlow(look.r, look.color, 0.2);
+    if (cre) drawCreature(ctx, e, v, vis.time, floorStackVariant(state.floor, 0.06));
     if (!stk) {
       ctx.save(); ctx.rotate(mvAng); ctx.scale(1 + 0.08 * amp + lunge * 0.14, 1 - 0.05 * amp - lunge * 0.1); ctx.rotate(-mvAng);
       ctx.drawImage(spr.base, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -759,7 +763,7 @@ export function createRenderer(container, state) {
       actorRim(look.r, tint(look.color, 0.2), 0.42);
     }
     ctx.save(); ctx.rotate(ang);
-    if (hv) {
+    if (cre) { /* stacked body drawn above */ } else if (hv) {
       ctx.rotate(-ang); drawHeavy(ctx, e, v, vis.time, floorStackVariant(state.floor)); ctx.rotate(ang);
     } else if (e.type === 'chaser' && !e.elite) {
       ctx.drawImage(spr.detail, -spr.half, -spr.half, spr.half * 2, spr.half * 2);
@@ -838,7 +842,7 @@ export function createRenderer(container, state) {
       ctx.save(); ctx.rotate(ang); ctx.drawImage(spr.whiteDetail, -spr.half, -spr.half, spr.half * 2, spr.half * 2); ctx.restore();
       ctx.globalAlpha = 1;
     }
-    if (windup) {
+    if (windup && !cre) {
       ctx.globalAlpha = windP * 0.5; ctx.fillStyle = '#ff7a3a'; ctx.beginPath(); ctx.arc(0, 0, look.r + 2 + Math.sin(vis.time * 40) * windP, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -873,6 +877,7 @@ export function createRenderer(container, state) {
 
   // Death animation per type, then the body settles into the same pose the baked corpse decal uses (angle + spin*0.3, 0.94 x 0.9).
   function drawCorpse(e, v, kind, spr, look) {
+    if (isCreature(e)) { drawCreatureCorpse(ctx, e, v, (v.ang || 0) + (v.spin || 0) * 0.3, v.spin || 0, corpseSprite, kind); return; }
     if (isHeavy(e)) { drawHeavyCorpse(ctx, e, v, floorStackVariant(state.floor)); return; }
     const D = DEATH[kind] || DEATH.gunner, dt = v.deathT ?? 1, t = clamp(dt / D.dur), spin = v.spin || 0, ang0 = v.ang || 0, sgn = spin < 0 ? -1 : 1;
     const settle = outCubic(t), base = e.elite ? 0.9 : 1;

@@ -87,14 +87,25 @@ const _fp = {headYaw: 0, headZ: 0, torsoZ: 0, torsoYaw: 0, leanX: 0, antenna: 0,
 /**
  * Which fidget (if any) runs at `idleT` seconds of stillness for this character; returns {fidget, u} or null. Pure.
  * A fidget with `once: true` plays a single time, starting at its own `from` (the rare one-minute idle); the others rotate,
- * one per slot, among those whose `from` has passed.
+ * one per slot, among those whose `from` has passed. Non-humanoid bodies pass kind 'rusher' / 'brute' and get ONLY the fidgets
+ * tagged `body: <kind>`; humanoids never see those.
  */
+const _bodyPools = new Map();
+function bodyPool(kind) {
+  let c = _bodyPools.get(kind);
+  if (!c || c.n !== IDLE_FIDGETS.length) { c = {n: IDLE_FIDGETS.length, list: IDLE_FIDGETS.filter((f) => f.body === kind)}; _bodyPools.set(kind, c); }
+  return c.list;
+}
+const BODY_KINDS = new Set(['rusher', 'brute']);
 export function fidgetAt(idleT, seed = 0, kind = '') {
-  const first = IDLE_FIDGETS[0].from;
+  const body = BODY_KINDS.has(kind);
+  const pool0 = body ? bodyPool(kind) : null;
+  if (body && !pool0.length) return null;
+  const first = body ? pool0[0].from : IDLE_FIDGETS[0].from;
   if (!(idleT > first)) return null;
-  for (const f of IDLE_FIDGETS) if (f.once && idleT >= f.from && idleT - f.from <= f.dur) return {fidget: f, u: (idleT - f.from) / f.dur};
+  if (!body) for (const f of IDLE_FIDGETS) if (f.once && !f.body && idleT >= f.from && idleT - f.from <= f.dur) return {fidget: f, u: (idleT - f.from) / f.dur};
   const slot = Math.floor((idleT - first) / SLOT), within = (idleT - first) - slot * SLOT;
-  const pool = IDLE_FIDGETS.filter((f) => !f.once && (f.from ?? 0) <= idleT && (!f.only || !kind || f.only.includes(kind)));
+  const pool = body ? pool0 : IDLE_FIDGETS.filter((f) => !f.once && !f.body && (f.from ?? 0) <= idleT && (!f.only || !kind || f.only.includes(kind)));
   const f = pool[(slot + (seed | 0)) % pool.length];
   if (within > f.dur) return null;
   return {fidget: f, u: within / f.dur};
