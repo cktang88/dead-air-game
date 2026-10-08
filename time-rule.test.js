@@ -66,13 +66,17 @@ test('beat bank delivers world time at 1x without overshoot', () => {
   assert.equal(drainBeat(0.1, 1 / 60, 1).extra, 0);
 });
 
-test('sprint noise pings only at sprint speed, on an interval', () => {
+test('moving is loud: walking pings a mid ring, sprinting a big one, standing still is silent', () => {
   let t = 0, pings = 0;
-  for (let i = 0; i < 120; i++) { const r = sprintNoiseStep(t, 1 / 60, TIME_RULE.sprintRatio); t = r.timer; if (r.noise) { pings++; assert.equal(r.noise.radius, TIME_RULE.sprintNoise.radius); } }
-  assert.ok(pings >= 5 && pings <= 7, `pings=${pings}`);
+  for (let i = 0; i < 120; i++) { const r = sprintNoiseStep(t, 1 / 60, TIME_RULE.sprintRatio); t = r.timer; if (r.noise) { pings++; assert.equal(r.noise.radius, TIME_RULE.sprintNoise.radius); assert.equal(r.noise.kind, 'sprint'); } }
+  assert.ok(pings >= 5 && pings <= 8, `pings=${pings}`);
   t = 0; pings = 0;
-  for (let i = 0; i < 120; i++) { const r = sprintNoiseStep(t, 1 / 60, 1); t = r.timer; if (r.noise) pings++; }
-  assert.equal(pings, 0, 'walking is quiet');
+  for (let i = 0; i < 120; i++) { const r = sprintNoiseStep(t, 1 / 60, 1); t = r.timer; if (r.noise) { pings++; assert.equal(r.noise.radius, TIME_RULE.walkNoise.radius); assert.equal(r.noise.kind, 'step'); } }
+  assert.ok(pings >= 6, `walk pings=${pings}`);
+  assert.ok(TIME_RULE.walkNoise.radius >= 220 && TIME_RULE.walkNoise.radius <= 260 && TIME_RULE.sprintNoise.radius > TIME_RULE.walkNoise.radius);
+  t = 0; pings = 0;
+  for (let i = 0; i < 120; i++) { const r = sprintNoiseStep(t, 1 / 60, 0); t = r.timer; if (r.noise) pings++; }
+  assert.equal(pings, 0, 'standing still is silent');
 });
 
 test('rateLabel', () => { assert.equal(rateLabel(0.08), '0.08×'); assert.equal(rateLabel(1), '1.00×'); });
@@ -106,7 +110,8 @@ test('pressure: an aware armed enemy in sight raises the world floor; nothing el
   near(pressureScale(0.35, true), 0.35, 1e-9);       // walking is already above the floor
   near(pressureScale(0, true), 0, 1e-9);             // paused stays paused
   assert.ok(pressureThreat([armed()], {x: 0, y: 0}));
-  assert.ok(!pressureThreat([armed({los: false})], {x: 0, y: 0}), 'cover breaks the pressure');
+  assert.ok(!pressureThreat([armed({los: false, x: 400})], {x: 0, y: 0}), 'cover breaks the pressure at range');
+  assert.ok(pressureThreat([armed({los: false, x: 200})], {x: 0, y: 0}), 'a hunter right behind the corner keeps time moving');
   assert.ok(!pressureThreat([armed({aware: false})], {x: 0, y: 0}), 'unaware sleepers never pin time');
   assert.ok(!pressureThreat([armed({stun: 1})], {x: 0, y: 0}), 'a flashed enemy does not');
   assert.ok(!pressureThreat([armed({x: 900})], {x: 0, y: 0}), 'out of reach');

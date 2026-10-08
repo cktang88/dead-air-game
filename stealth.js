@@ -51,8 +51,8 @@ export function turnFacing(cur, goal, rate, dt) {
 
 // ---------------------------------------------------------------------------------------- suspicion
 export const SUSPICION = {
-  baseRate: 1.1,       // per scaled second at mid range, walking: about 0.9 s to be spotted
-  close: 48,           // inside this you are noticed in any facing (peripheral / bumping)
+  baseRate: 3.2,       // per scaled second at mid range, walking: about 0.3 s to be spotted (seen in the cone = noticed fast)
+  close: 64,           // inside this you are noticed in any facing (peripheral / bumping)
   decay: 0.55,         // per scaled second while out of sight
   questionAt: 0.12,    // '?' appears above the head
   alertAt: 1,
@@ -76,7 +76,8 @@ export function stepSuspicion(value, {inView, d, range, speed, dt}) {
 export const suspicionStage = s => s >= SUSPICION.alertAt ? 'alert' : s >= SUSPICION.questionAt ? 'question' : 'calm';
 
 // ---------------------------------------------------------------------------------------- noise
-export const NOISE = {shot: 380, suppressed: 190, sprint: 120, throughWall: 0.55, sleeperHearing: 0.7};
+// Footsteps (time-rule.js walkNoise 240 / sprintNoise 380) and shots are all heard by UNAWARE enemies regardless of cones.
+export const NOISE = {shot: 560, suppressed: 300, sprint: 380, walk: 240, throughWall: 0.6, sleeperHearing: 0.75};
 export const shotNoiseRadius = ({suppressed = false, mult = 1, silent = false} = {}) =>
   silent ? 0 : (suppressed ? NOISE.suppressed : NOISE.shot) * mult;
 

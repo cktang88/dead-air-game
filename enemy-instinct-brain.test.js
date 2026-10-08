@@ -68,6 +68,7 @@ test('an enemy standing in the open in the player\'s crosshair steps out of the 
   prime(world, rng);
   assert.ok(across(world, e) < 5);
   let sidestepped = false, windupInLane = 0;
+  world.player.vx = 0; e.ai.cd = 9;   // snap reactions: let it want the lane before it opens fire
   run(world, 3, rng, (t, en, out) => { if (out.intent === 'sidestep') sidestepped = true; if (out.aiming && across(world, en) < 12) windupInLane++; });
   assert.ok(sidestepped, 'it took a sidestep');
   assert.ok(across(world, e) > 20, `it is out of the lane (was ${across(world, e).toFixed(1)})`);
@@ -81,6 +82,7 @@ test('without a playerAim in the world nothing changes (old callers stay valid)'
   world.enemies = [e];
   prime(world, rng);
   let sidestepped = false;
+  world.player.vx = 0; e.ai.cd = 9;   // snap reactions: let it want the lane before it opens fire
   run(world, 3, rng, (t, en, out) => { if (out.intent === 'sidestep') sidestepped = true; });
   assert.equal(sidestepped, false);
 });

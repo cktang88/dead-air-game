@@ -69,6 +69,43 @@ Reading: careful stand-still shooting against a big squad is now punished (5 of 
 
 Other fixes from the same playtest: the RIOT is a **floor 2+** enemy (no recipe or elite room rolls it on floor 1; shield hits flinch it and print BLOCKED; its name card reads FLANK IT, SHOVE OR FLASH BREAKS ITS GUARD). Enemy counts scale per floor (`countMult` 0.42 / 0.8 / 1 / 0.9: floor 1 now has about 10 to 19 hostiles, mean 15.7, was 22 to 41, mean 33). The objective line says SIDE ROOMS OPTIONAL, and a room clear drops ammo when any gun is dry or the combined reserve is under half. Music holds `combat` only while an aware enemy has line of sight (or you are shooting); hunters without sight fall to `tension` after the hold. The Conductor's adds are capped at 2 (1 per summon, 2 in phase III).
 
+## Hearing, snap reactions and squads (difficulty pass 3: "it is still stupid easy")
+
+Owner feedback: lone enemies were picked off for free, stealth was meaningless, floor 1 was boring. Rules now (all in `stealth.js`, `time-rule.js`, `enemy-brain.js`, `run-loop.js`, `room-roles.js`; every rule is still drawn):
+
+- **Moving is loud; only standing still is quiet.** An UNAWARE enemy hears the player regardless of cone: walking pings a footstep ring every 0.28 s real with radius **240 px** (`TIME_RULE.walkNoise`), sprinting **380 px** every 0.3 s, shots **560 px** (suppressed 300), kicked doors as before. Walls muffle to **60 %** (was 55 %), sleepers hear 75 % of that. A heard enemy becomes aware at once (reaction 0.03 to 0.08 s), faces the sound, and alerts its room. The footstep ripple and the sound-wave glyph over each enemy that heard (`kind: 'step'` and `'sprint'`, `stealth2d.js`) stay the visible rule; the field manual NOISE RINGS, SLEEPERS and "! AND ?" lines were rewritten.
+- **Cones still matter for standing still.** Spotting in a cone fills in about 0.3 s moving (was 0.9 s; `SUSPICION.baseRate` 3.2, close-range bump radius 64 px). Standing still in a cone fills at 0.55x and, because the world runs at 0.08x, takes several real seconds: freezing is the stealth choice.
+- **Snap reactions.** Reaction delays: gunner 0.02 to 0.05 s, warden 0.03 to 0.06, rusher 0.02 to 0.05, marksman 0.1 to 0.2 (scaled). Telegraph (the visible aim line): gunner **0.18**, warden **0.22**, rusher lunge 0.24, brute 0.30, riot 0.26, marksman unchanged at 1.3 (a lane to read). Aware enemies already face you instantly; the opening shot is a snap (no walking to cover first for 0.45 s, the duck phase and fire gap are cleared when an enemy becomes aware), and an already-hunting enemy that regains sight snap-shoots (fire gap cut to 0.06). Fire gaps: gunner 0.3 to 0.65 s, warden 0.55 to 1.0 s; simultaneous shooters 4 (6 in a squad of 4+); stagger between wind-up starts 0.18 s. Shooters lead moving targets harder (lead fraction 0.75 to 0.97, was 0.35 to 0.92), so a steady strafe is no longer a free dodge.
+- **PRESSURE retuned**: world floor **0.3x** (was 0.22), enemy think clock floor **0.65x** (was 0.4), hostile bullet floor 0.4x (was 0.35), reach min 380 px / melee 360 px (was 300 / 240). New: **hunters** (aware, no line of sight, inside 240 px) also pin the world at the floor, so waiting behind a corner is not a free freeze: they arrive.
+- **Squads from floor 1.** Ordinary combat rooms hold 3 to 5 base hostiles (first two rooms at most 4), plus the floor bonus (floors 1 to 4: +1 / +2 / +2 / +0), times `countMult` 1.0 / 1.1 / 1.15 / 1.0 (was 0.42 / 0.8 / 1 / 0.9), capped at **7** (`MAX_SQUAD`). Hazard rooms 5 to 6, cache 3, armory 4, elite pair unchanged. Floor 1 therefore has roughly 4 to 6 per combat room (was about 2), drawn from the existing recipes (`rush-support`, `crossfire`, `warden-rush`, `brute-guns`: 2+ gunners with a rusher pack; marksman and riot squads later). `findEnemySpawn` now scores candidates by distance from squadmates already placed (up to 170 px), standing beside cover, and for shooters distance from the door, so a squad spreads across the room and covers each other instead of bunching.
+- **Ammo/heal economy** unchanged per kill (18 % kill drop, 2.5x when low, clear-ammo when reserve under half): the doubled kill count scales drops with it.
+
+Measurement (`tools/ttfs.mjs`: one enemy made aware by a real noise with line of sight, real milliseconds from awareness to the shot leaving the gun; `tools/duel.mjs`: 10 trials at 260 px, "would die" is 3+ HP lost):
+
+Time from awareness (with line of sight, via a real noise) to the first shot leaving the gun, medians, real ms:
+
+| Enemy, state | Before | After |
+| --- | --- | --- |
+| Gunner at 240 px, standing still | 1600 | 380 |
+| Gunner at 200 px, walking toward it | not within 7 s | 370 |
+| Warden at 180 px, standing still | 2430 | 480 (about 400 with the 0.22 s wind-up) |
+| Walking perpendicular, 240 px, unaware gunner: noticed after | never noticed in 7 s | 330 ms (hears at about 249 px) |
+| Sprinting, 240 px, unaware gunner: noticed after | 500 ms (at 251 px) | 170 ms (at 250 px); 340 px start noticed at 346 px |
+| Standing still in the cone at 240 px: noticed after | not noticed in 7 s | 3.6 s (freeze = stealth) |
+
+Duel (aware squads at 260 px, 8 trials before, 10 after; hits = HP lost per fight, would-die = lost 3+ HP):
+
+| Squad / policy | Before (hits avg, would die) | After |
+| --- | --- | --- |
+| 5-squad, spray | 1.0, 1/8 | 1.7, 1/10 |
+| 5-squad, burst | 1.9, 1/8 | 2.6, 5/10 |
+| 5-squad, read | 0.4, 0/8 | 1.0, 1/10 |
+| 6-squad, spray | 2.0, 3/8 | 3.1, 4/10 |
+| 6-squad, burst | 3.4, 4/8 | 3.5, 6/10 |
+| 6-squad, read | 0.7, 0/7 | 1.2, 2/10 |
+
+Autoplay (`tools/autoplay.mjs`, seeds 7001 to 7003, `--speed 30 --max-game-time 500`, floor 1; the bot stops exploring after about 6 rooms on seeds 7001 to 7003, a bot navigation limit that predates this pass, so it never reaches floor 2): before, skill 0.5 took 0 damage in 4 of 4 runs; after, skill 0.5 takes 2 hits per run on average (1 of 3 runs died on floor 1, 4 hits in 4 rooms) and skill 0.8 takes 0.33. Kills per run rose from about 8 to about 21 in the same cleared rooms.
+
 ## In-run economy and difficulty numbers (balance pass)
 
 One in-run currency, **scrap**, now buys decisions instead of piling up. All numbers live in `economy.js` (`SCRAP`), `supply.js` (`PRICES`), `run-loop.js` (`FLOORS`) and `enemy-brain.js` / `catalog.js` (enemy timing).

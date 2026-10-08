@@ -40,13 +40,13 @@ test('suspicion fills faster when close and moving fast, never while out of view
 });
 
 test('noise: suppressed is half, walls trim the reach, sleepers hear less, ring shape matches the hearing rule', () => {
-  assert.equal(shotNoiseRadius({}), 380);
-  assert.equal(shotNoiseRadius({suppressed: true}), 190);
+  assert.equal(shotNoiseRadius({}), 560);
+  assert.equal(shotNoiseRadius({suppressed: true}), 300);
   assert.equal(shotNoiseRadius({silent: true}), 0);
-  assert.equal(hearingReach({radius: 380, blocked: true}), 380 * 0.55);
+  assert.equal(hearingReach({radius: 380, blocked: true}), 380 * 0.6);
   assert.ok(hearingReach({radius: 380, asleep: true}) < 380);
   assert.equal(noiseRingRadius(380, 1000), 380);       // open ray: full radius
-  assert.equal(noiseRingRadius(380, 50), 380 * 0.55);  // near wall: muffled radius beyond it
+  assert.equal(noiseRingRadius(380, 50), 380 * 0.6);  // near wall: muffled radius beyond it
   assert.equal(noiseRingRadius(380, 300), 300);        // far wall: heard up to the wall
 });
 
