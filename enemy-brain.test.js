@@ -299,7 +299,7 @@ test('telegraph is required: fire is never true unless a windup ran first, and i
     if (out.aiming) windupFrames++;
     if (out.fire) {
       shots++;
-      assert.ok(windupFrames * 0.02 >= 0.26, `windup ${windupFrames * 0.02}`);
+      assert.ok(windupFrames * 0.02 >= 0.16, `windup ${windupFrames * 0.02}`);
       windupFrames = 0;
     }
     if (!out.aiming && !out.fire) windupFrames = 0;

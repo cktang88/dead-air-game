@@ -109,11 +109,11 @@ export function createStealthLayer() {
     if (!rings) return;
     for (let i = rings.length - 1; i >= 0; i--) {
       const r = rings[i]; r.age += dt;
-      const sprint = r.kind === 'sprint', life = sprint ? STEP_LIFE : RING_LIFE;
+      const sprint = r.kind === 'sprint' || r.kind === 'step', life = sprint ? STEP_LIFE : RING_LIFE;
       if (r.age >= life) { rings.splice(i, 1); continue; }
       if (r.skip === undefined) {
         r.skip = false;
-        if (!sprint) for (let j = 0; j < i; j++) { const o = rings[j]; if (!o.skip && o.kind !== 'sprint' && o.age < 0.3 && Math.hypot(o.x - r.x, o.y - r.y) < 90) { r.skip = true; break; } }
+        if (!sprint) for (let j = 0; j < i; j++) { const o = rings[j]; if (!o.skip && o.kind !== 'sprint' && o.kind !== 'step' && o.age < 0.3 && Math.hypot(o.x - r.x, o.y - r.y) < 90) { r.skip = true; break; } }
       }
       const t = r.age / life, k = 1 - (1 - t) * (1 - t) * (1 - t), fade = 1 - t * t;
       if (sprint) {

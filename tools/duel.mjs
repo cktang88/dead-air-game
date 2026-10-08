@@ -37,7 +37,7 @@ page.on('pageerror', e => console.log('PAGEERR', e.message));
 await page.goto(`http://127.0.0.1:${port}/?debug`);
 await page.waitForFunction(() => !document.getElementById('start-button').disabled, null, {timeout: 60000});
 await page.fill('#seed-input', '7001'); await page.click('#start-button');
-await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player, null, {timeout: 20000});
+await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player && !window.__deadair.state.loading, null, {timeout: 20000});
 // --pressure floor,attack,bullet overrides the PRESSURE tunables (same module instance the game uses) for tuning sweeps
 if (opt('pressure')) { const v = opt('pressure').split(',').map(Number); await page.evaluate(async v => { const m = await import('/time-rule.js'); if (v[0] >= 0) m.PRESSURE.floor = v[0]; if (v[1] >= 0) m.PRESSURE.attackFloor = v[1]; if (v[2] >= 0) m.PRESSURE.bulletFloor = v[2]; }, v); }
 // headless software GL makes render() the bottleneck; the sim does not need it, so it is stubbed (state, brain and bullets are untouched)

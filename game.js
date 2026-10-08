@@ -340,14 +340,24 @@ function findEnemySpawn(room,type,elite=false){
     !state.cover.some(cover=>Math.hypot(x-cover.x,y-cover.y)<cover.radius+radius+3)&&
     !state.pickups.some(pickup=>pickup.available&&Math.hypot(x-pickup.x,y-pickup.y)<radius+18)&&
     !state.enemies.some(enemy=>enemy.alive&&Math.hypot(x-enemy.x,y-enemy.y)<radius+enemy.radius+4);
-  // Planned spawn tiles sit far from the entry door and near cover; take the best few in random order.
-  const planned=(room.spawnTiles||[]).slice(0,14).sort(()=>random()-.5);
-  for(const tile of planned){const x=(tile.x+.5)*TILE,y=(tile.y+.5)*TILE;if(clear(x,y))return {x,y};}
   const entry=room.entry?{x:(room.entry.x+.5)*TILE,y:(room.entry.y+.5)*TILE}:null;
-  for(let attempt=0;attempt<48;attempt++){
-    const x=rand(room.x1+2,room.x2-2)*TILE,y=rand(room.y1+2,room.y2-2)*TILE;
-    if(clear(x,y)&&(!entry||attempt>30||Math.hypot(x-entry.x,y-entry.y)>TILE*5))return {x,y};
+  const mates=state.enemies.filter(enemy=>enemy.alive&&enemy.roomIndex===room.index);
+  // Formation: a squad spreads across the room so cover gives crossfire instead of one bunched target. Each candidate scores its
+  // distance from the squad already placed (up to ~170 px), a bonus for standing beside cover, and for shooters a bonus for range from the door.
+  const shooter=type==='gunner'||type==='guard'||type==='sniper';
+  const score=(x,y)=>{
+    let s=mates.length?Math.min(170,...mates.map(m=>Math.hypot(m.x-x,m.y-y))):80;
+    if(state.cover.some(c=>Math.hypot(c.x-x,c.y-y)<c.radius+46))s+=40;
+    if(entry)s+=Math.min(60,Math.hypot(x-entry.x,y-entry.y)/(shooter?5:12));
+    return s+random()*14;
+  };
+  const cands=[];
+  for(const tile of (room.spawnTiles||[]).slice(0,24)){const x=(tile.x+.5)*TILE,y=(tile.y+.5)*TILE;if(clear(x,y))cands.push({x,y});}
+  for(let attempt=0;attempt<28;attempt++){
+    const x=rand(room.x1+1.5,room.x2-1.5)*TILE,y=rand(room.y1+1.5,room.y2-1.5)*TILE;
+    if(clear(x,y)&&(!entry||Math.hypot(x-entry.x,y-entry.y)>TILE*4))cands.push({x,y});
   }
+  if(cands.length){let best=cands[0],bs=-1;for(const c of cands){const sc=score(c.x,c.y);if(sc>bs){bs=sc;best=c;}}return best;}
   for(let ty=room.y1+1;ty<=room.y2;ty++)for(let tx=room.x1+1;tx<=room.x2;tx++){
     const x=(tx+.5)*TILE,y=(ty+.5)*TILE;if(clear(x,y))return {x,y};
   }
@@ -1033,7 +1043,7 @@ function updatePlayer(dt){
     state.cornerStuck=blockedRatio<.35&&(vx!==0||vy!==0)?state.cornerStuck+1:0;if(state.cornerStuck>8){state.cornerSign=-(state.cornerSign||1);state.cornerStuck=0;}
     const nudge=cornerNudge({x:vx,y:vy},blockedRatio,topSpeed,state.cornerSign||1);
     state.cmdVel={x:state.playerVel.x+state.playerKnock.x+nudge.x,y:state.playerVel.y+state.playerKnock.y+nudge.y};
-    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise&&!freqStats(state.freq).sprintSilent)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult,kind:'sprint'});}
+    {const sn=sprintNoiseStep(state.sprintNoiseT||0,rd0,playerSpeedRatio());state.sprintNoiseT=sn.timer;if(sn.noise&&!freqStats(state.freq).sprintSilent)state.noises.push({x:p.x,y:p.y,radius:sn.noise.radius*freqStats(state.freq).noiseMult,kind:sn.noise.kind});}
     state.sprintBlend=approach(state.sprintBlend,sprinting?1:0,12,rdt);state.recoil=stepRecoil(state.recoil,rdt);state.dryTimer=Math.max(0,state.dryTimer-rdt);
     stepBloom(state.bloom,rd0,gunFeel(GUNS[state.weaponIndex]));
     p.x=here.x;p.y=here.y;

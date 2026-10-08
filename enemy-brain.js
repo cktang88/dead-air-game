@@ -39,12 +39,14 @@ const bodyRadius = e => Math.min(e.radius ?? 8, 13) + 1;
 
 // Per-type tuning. Times are scaled seconds.
 export const PROFILES = {
-  chaser: {dodge: 0.55, react: [0.05, 0.1], alertRadius: 240},
-  gunner: {dodge: 0.5, react: [0.05, 0.1], windup: 0.28, fireGap: [0.5, 1.0], duck: [0.8, 1.7], burst: [1, 2], aimMul: 1, alertRadius: 280},
-  guard: {dodge: 0.3, react: [0.08, 0.15], windup: 0.36, fireGap: [0.9, 1.6], duck: [1.2, 2.4], burst: [1, 1], aimMul: 0.85, alertRadius: 280},
-  sniper: {dodge: 0.35, react: [0.2, 0.4], windup: 1.3, lockTime: 0.4, trackRate: 1.15, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 320},
-  riot: {dodge: 0.02, react: [0.08, 0.15], alertRadius: 240},
-  brute: {dodge: 0.08, react: [0.08, 0.15], alertRadius: 220, chargeWindup: 0.36, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.6, 2.6], recover: 0.9},
+  // Reactions are SNAP: aware enemies already face you instantly; react = scaled seconds before the telegraph starts, windup = the
+  // visible aim line. At the pressure attack clock (time-rule.js) gunner react+windup is ~0.3 s real: dodging is skill, not a free read.
+  chaser: {dodge: 0.55, react: [0.02, 0.05], alertRadius: 280},
+  gunner: {dodge: 0.5, react: [0.02, 0.05], windup: 0.18, fireGap: [0.4, 0.8], duck: [0.8, 1.7], burst: [1, 3], aimMul: 1, alertRadius: 320},
+  guard: {dodge: 0.3, react: [0.03, 0.06], windup: 0.26, fireGap: [0.7, 1.2], duck: [1.1, 2.2], burst: [1, 1], aimMul: 0.85, alertRadius: 320},
+  sniper: {dodge: 0.35, react: [0.1, 0.2], windup: 1.3, lockTime: 0.4, trackRate: 1.5, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 360},
+  riot: {dodge: 0.02, react: [0.03, 0.06], alertRadius: 280},
+  brute: {dodge: 0.08, react: [0.03, 0.06], alertRadius: 260, chargeWindup: 0.3, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.4, 2.4], recover: 0.9},
 };
 const SIGHT_RANGE = 440;   // aware enemies see 360 degrees out to this range; UNAWARE ones only see their cone (stealth.js)
 const FORGET_AFTER = 14;
@@ -113,7 +115,7 @@ function alertMates(c, at, delay) {
     if (!near) continue;
     const oa = brainState(o, rng);
     if (oa.aware || oa.pending) continue;
-    oa.pending = {x: at.x, y: at.y, t: delay + between(rng, 0.05, 0.3) + dist(e, o) / 900};
+    oa.pending = {x: at.x, y: at.y, t: delay + between(rng, 0.03, 0.15) + dist(e, o) / 1200};
     world.alerts?.push({from: e, to: o});   // the renderer draws a radio pulse from the alerter to each mate it wakes
   }
 }
@@ -141,8 +143,10 @@ function perceive(c) {
     if (ai.suspicion >= SUSPICION.alertAt) { sees = true; ai.spotted = true; }
   }
   ai.sees = sees;
+  if (sees && !ai.prevSees && wasAware) ai.cd = Math.min(ai.cd, 0.06);   // peek: an enemy already hunting snap-shoots the moment you show
+  ai.prevSees = sees;
   if (sees) {
-    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react); alertMates(c, p, 0.2); if (e.posture === 'sleep') e.posture = 'guard'; }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react); ai.cd = Math.min(ai.cd, 0.05); alertMates(c, p, 0.12); if (e.posture === 'sleep') e.posture = 'guard'; }
     learn(ai, p);
     ai.lost = 0; ai.peekMiss = 0; ai.lockTime += dt;
   } else {
@@ -154,7 +158,7 @@ function perceive(c) {
     const reach = hearingReach({radius: n.radius, blocked: !world.los(e.x, e.y, n.x, n.y), asleep});
     if (dist(e, n) > reach) continue;
     const guess = {x: n.x + gaussian(rng) * 28, y: n.y + gaussian(rng) * 28};
-    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.heard = true; ai.reaction = between(rng, 0.12, 0.3); learn(ai, guess, false); alertMates(c, guess, 0.15); if (e.posture === 'sleep') e.posture = 'guard'; }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.heard = true; ai.reaction = between(rng, 0.03, 0.08); ai.cd = Math.min(ai.cd, 0.05); learn(ai, guess, false); alertMates(c, guess, 0.15); if (e.posture === 'sleep') e.posture = 'guard'; }
     else if (!sees) { learn(ai, guess, false); ai.lost = Math.min(ai.lost, 2); }
   }
   if (e.hp < ai.hpPrev - 1e-9 && !sees) {
@@ -451,7 +455,7 @@ function shotClear(c, aim, length) {
 function computeAim(c) {
   const {e, ai, world, rng, p, def} = c;
   const speed = def.projectileSpeed ?? 200;
-  const frac = clamp(0.35 + ai.lockTime * 0.25, 0.35, 0.92);
+  const frac = clamp(0.75 + ai.lockTime * 0.25, 0.75, 0.97);   // shooters lead a moving target: strafing at a steady pace is not a free dodge
   const vx = p.vx ?? 0, vy = p.vy ?? 0;
   const lead = leadAim(e, p, vx, vy, speed, frac);
   const rx = p.x - e.x, ry = p.y - e.y, d2 = Math.max(1, rx * rx + ry * ry);
@@ -480,10 +484,10 @@ function fireReady(c) {
   if (world.fireAllowed && !world.fireAllowed(e)) return false;
   // Token limit: only a few enemies may be winding up or have just fired; starts are staggered.
   const squad = living(world, e).filter(o => o.ai?.aware);
-  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 5 : 3);
+  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 5 : 4);
   const active = squad.filter(o => o.ai.windup > 0 || o.ai.sinceFire < 0.3).length;
   if (active >= maxFiring) return false;
-  if (squad.some(o => o.ai.sinceStart < 0.3)) return false;
+  if (squad.some(o => o.ai.sinceStart < 0.18)) return false;
   return true;
 }
 

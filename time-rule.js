@@ -16,8 +16,10 @@ export const TIME_RULE = {
   deadSpeed: 0.04,       // speed ratio below this counts as standing still (coast tail, wall pushing)
   // Each shot lets a "beat" of world time through (seconds of world time, delivered at 1x).
   beat: {base: 0.12, min: 0.03, max: 0.2, refDamage: 30, interval: {ref: 0.25, exp: 0.5}, reload: 0.1, cap: 0.45},
-  // Sprinting is loud: a footstep noise ping (enemy-brain noises) every `every` real seconds.
-  sprintNoise: {radius: 150, every: 0.34, minRatio: 1.15},
+  // MOVING IS LOUD (the only quiet state is standing still): a footstep noise ping (enemy-brain noises) every `every` real
+  // seconds. Any walking is heard by unaware enemies inside ~240 px (walls cut it to 55 %), sprinting inside 380 px.
+  walkNoise: {radius: 240, every: 0.28, minRatio: 0.12},
+  sprintNoise: {radius: 380, every: 0.3, minRatio: 1.15},
 };
 
 // PRESSURE (the stand-still-duel fix). Stillness is for READING, not a free win: while an aware, armed enemy has line of
@@ -26,7 +28,7 @@ export const TIME_RULE = {
 // smoke), stunning or killing the watchers lets time freeze again. The floor feeds the same rate the edge meter shows.
 // attackFloor: an enemy that pins the world also THINKS (windup, aim lock, fire gap, duck) at no less than this x real time,
 // and every hostile bullet flies at no less than bulletFloor x real time, so a frozen-looking world still has a clock you can hear tick.
-export const PRESSURE = {floor: 0.22, attackFloor: 0.4, bulletFloor: 0.35, minReach: 300, meleeReach: 240, maxReach: 560};
+export const PRESSURE = {floor: 0.3, attackFloor: 0.65, bulletFloor: 0.4, minReach: 380, meleeReach: 360, maxReach: 560};
 
 // True when this enemy pins the world rate. `dist` is its distance to the player.
 export function pressuring(e, dist, rule = PRESSURE) {
@@ -100,13 +102,14 @@ export function addBeat(bank, beat, rule = TIME_RULE) {
   return clamp(bank + beat, 0, rule.beat.cap);
 }
 
-// Footstep noise while sprinting. Returns {timer, noise|null}; timer counts down in real seconds.
+// Footstep noise while moving. Returns {timer, noise|null}; timer counts down in real seconds. Walking pings a mid-size
+// ring, sprinting a big one; standing (or coasting) is silent. noise = {radius, kind: 'step' | 'sprint'}.
 export function sprintNoiseStep(timer, dt, speedRatio, rule = TIME_RULE) {
-  const n = rule.sprintNoise;
-  if (!(speedRatio >= n.minRatio)) return {timer: Math.min(timer, n.every * 0.5), noise: null};
+  const sprint = speedRatio >= rule.sprintNoise.minRatio, n = sprint ? rule.sprintNoise : rule.walkNoise;
+  if (!(speedRatio >= n.minRatio)) return {timer: Math.min(timer, rule.walkNoise.every * 0.5), noise: null};
   const t = timer - dt;
   if (t > 0) return {timer: t, noise: null};
-  return {timer: n.every, noise: {radius: n.radius}};
+  return {timer: n.every, noise: {radius: n.radius, kind: sprint ? 'sprint' : 'step'}};
 }
 
 // Display helper: label for the small HUD rate chip.

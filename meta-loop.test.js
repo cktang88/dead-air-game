@@ -423,12 +423,14 @@ test('daily share line summarises the result', () => {
 });
 
 import {scaledEnemyCount} from './run-loop.js';
-test('floor 1 is a short introduction: enemy counts scale up with the floor', () => {
+test('rooms hold squads from floor 1 and the headcount grows with the floor', () => {
   assert.ok(floorConfig(1).countMult < floorConfig(2).countMult && floorConfig(2).countMult < floorConfig(3).countMult + 1e-9);
   assert.equal(scaledEnemyCount(0, floorConfig(1)), 0);
   assert.equal(scaledEnemyCount(1, floorConfig(1)), 1, 'never rounds a populated room to empty');
   assert.equal(scaledEnemyCount(2, floorConfig(1), 'elite'), 2, 'elite pairs are fixed');
   let f1 = 0, f3 = 0;
   for (const c of [3, 4, 5, 6]) { f1 += scaledEnemyCount(c, floorConfig(1)); f3 += scaledEnemyCount(c, floorConfig(3)); }
-  assert.ok(f1 < f3 * 0.6, `floor 1 total ${f1} vs floor 3 ${f3}`);
+  assert.ok(f1 >= 18 && f1 <= f3, `floor 1 total ${f1} vs floor 3 ${f3}`);
+  assert.ok(scaledEnemyCount(99, floorConfig(3)) <= 7, 'squads cap at 7');
+  assert.ok(scaledEnemyCount(4, floorConfig(1)) >= 3, 'a floor 1 combat room is a squad, not a straggler');
 });

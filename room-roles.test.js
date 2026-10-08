@@ -54,11 +54,11 @@ test('the guaranteed cache fallback is not secret when the floor has no branch',
 });
 
 test('room roles control safe rewards and combat pressure',()=>{
-  assert.equal(roomEnemyCount('cache'),2);
+  assert.equal(roomEnemyCount('cache'),3);
   assert.equal(roomEnemyCount('clinic'),0);
   assert.deepEqual(roomPickupKinds('cache'),['supply']);
   assert.deepEqual(roomPickupKinds('clinic'),['heal']);
-  assert.equal(roomEnemyCount('armory'),3);
+  assert.equal(roomEnemyCount('armory'),4);
   assert.equal(roomEnemyCount('elite'),2);
   assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner']),['brute','guard']);
   assert.deepEqual(roomEncounterTypes('elite',['chaser','gunner'],.8),['brute','riot']);
@@ -66,15 +66,15 @@ test('room roles control safe rewards and combat pressure',()=>{
   assert.deepEqual(roomEncounterTypes('combat',['chaser','gunner']),['chaser','gunner']);
   assert.deepEqual(roomPickupKinds('elite'),['scrap','mod']);
   assert.deepEqual(roomPickupKinds('armory'),['gun']);
-  assert.equal(roomEnemyCount('hazard',0),4);
-  assert.equal(roomEnemyCount('hazard',.99),5);
+  assert.equal(roomEnemyCount('hazard',0),5);
+  assert.equal(roomEnemyCount('hazard',.99),6);
   assert.deepEqual(roomPickupKinds('combat'),[]);
-  assert.equal(roomEnemyCount('combat',0),2);
-  assert.equal(roomEnemyCount('combat',.99),4);
-  assert.equal(roomEnemyCount('combat',.99,0),3);
-  assert.equal(roomEnemyCount('combat',.99,1),3);
-  assert.equal(roomEnemyCount('combat',.99,2),4);
-  assert.equal(roomEnemyCount('hazard',.99,0),5);
+  assert.equal(roomEnemyCount('combat',0),3);
+  assert.equal(roomEnemyCount('combat',.99),5);
+  assert.equal(roomEnemyCount('combat',.99,0),4);
+  assert.equal(roomEnemyCount('combat',.99,1),4);
+  assert.equal(roomEnemyCount('combat',.99,2),5);
+  assert.equal(roomEnemyCount('hazard',.99,0),6);
 });
 
 test('room completion follows living enemies to their spawn room, not their current position',()=>{
