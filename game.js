@@ -1183,7 +1183,7 @@ function update(dt){
   if(state.peek&&(state.paused||state.mode!=='play'))endPeek();
   if(state.mode!=='play'||state.paused||state.loadoutOpen||state.supplyOpen||state.runModal)return;
   updateDoorInput(dt);if(state.peek){peekFrame(dt);return;}
-  trackRunClock(dt);state.timeScaleTarget=getTimeScale();const scale=state.timeScaleSmoothed=easeTimeScale(state.timeScaleSmoothed,state.timeScaleTarget,dt);setTimeScaleAudio(scale);setMusicTimeScale(scale);if(scale>0&&state.mode==='play'&&(scale<.6)!==!!state.audioSlow){state.audioSlow=scale<.6;(state.audioSlow?playSlowmoEnter:playSlowmoExit)();}state.frameDt=dt;
+  trackRunClock(dt);state.timeScaleTarget=getTimeScale();const scale=state.timeScaleSmoothed=easeTimeScale(state.timeScaleSmoothed,state.timeScaleTarget,dt);setTimeScaleAudio(scale);setMusicTimeScale(scale);state.frameDt=dt;
   // Beat: shots owe the world a burst of 1x flow on top of the speed-driven rate.
   const bd=drainBeat(state.beatBank||0,dt,scale);state.beatBank=bd.bank;state.beatPulse=Math.max(0,(state.beatPulse||0)-dt*6);
   const step=dt*scale+bd.extra;state.lastStep=step;state.worldRate=dt>0?step/dt:scale;
