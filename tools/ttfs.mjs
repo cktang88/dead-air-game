@@ -59,7 +59,6 @@ const setup = ({type, dist, trial}) => page.evaluate(({type, dist, trial, pre}) 
       const fx = -Math.cos(ang), fy = -Math.sin(ang);
       e.posture = 'guard'; e.post = {home: {x: ex, y: ey}, base: {x: fx, y: fy}, route: null}; e.face = {x: fx, y: fy}; e.aim = {x: fx, y: fy}; e.aware = false;
       const ai = D.brainState(e, Math.random); ai.face = {x: fx, y: fy}; ai.cd = 0; ai.aware = false; ai.suspicion = 0;
-      if (pre) { ai.aware = true; ai.suspicion = 1; ai.spotted = true; ai.reaction = ai.prof.react[0] + Math.random() * (ai.prof.react[1] - ai.prof.react[0]); e.aware = true; }
       return {ok: true, nx, ny, ang, cx: Math.cos(ang), cy: Math.sin(ang)};
     }
   }
@@ -73,6 +72,7 @@ const keys = async want => { want = new Set(want); for (const k of [...held]) if
 async function trialRun(type, dist, mode, trial) {
   const info = await setup({type, dist, trial}); if (!info.ok) return null;
   await page.evaluate(() => { window.__deadair.view.render = window.__realRender; window.advanceTime(500); window.__deadair.view.render = () => {}; });
+  if (PRE) await page.evaluate(() => { const s = window.__deadair.state; s.noises.push({x: s.player.x, y: s.player.y, radius: 700, kind: 'shot'}); });   // a real noise: the enemy becomes aware through the same code path as in play
   const want = mode === "still" ? [] : mode === "approach" ? keyFor(info.cx, info.cy) : keyFor(info.nx, info.ny);
   if (mode === 'sprint') want.push('ShiftLeft');
   await keys(want);
@@ -82,10 +82,10 @@ async function trialRun(type, dist, mode, trial) {
     const r = await page.evaluate(() => {
       window.advanceTime(16); const D = window.__deadair, s = D.state, e = s.enemies.find(x => x.alive);
       if (!e) return null;
-      return {t: s.realElapsed, aware: !!e.ai?.aware, shot: s.bullets.some(b => b.owner !== 'player'), intent: e.intent, los: e.los, rate: +s.worldRate.toFixed(2), wind: e.aimTimer > 0 || e.meleeWindup > 0, hp: s.health, d: Math.hypot(e.x - s.player.x, e.y - s.player.y)};
+      return {t: s.realElapsed, aware: !!e.ai?.aware, shot: s.bullets.some(b => b.owner !== 'player'), intent: e.intent, ai: e.ai && {cd: +e.ai.cd.toFixed(2), react: +e.ai.reaction.toFixed(2), ph: e.ai.phase, pt: +e.ai.phaseT.toFixed(2), rel: e.reloadTimer, ammo: e.ammo, cov: !!e.ai.cover, sinceStart: +e.ai.sinceStart.toFixed(2)}, los: e.los, rate: +s.worldRate.toFixed(2), wind: e.aimTimer > 0 || e.meleeWindup > 0, hp: s.health, d: Math.hypot(e.x - s.player.x, e.y - s.player.y)};
     });
     if (!r) break;
-    if (process.env.TRACE && i % 10 === 0) console.log(JSON.stringify(r));
+    if (process.env.TRACE && i < 40) console.log(JSON.stringify(r));
     if (r.aware && tAware === null) { tAware = r.t; dAware = r.d; }
     if (r.aware && tWind === null && r.wind) tWind = r.t;
     if (r.aware && tShot === null && (r.shot || r.hp < 100)) tShot = r.t;

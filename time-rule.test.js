@@ -110,7 +110,8 @@ test('pressure: an aware armed enemy in sight raises the world floor; nothing el
   near(pressureScale(0.35, true), 0.35, 1e-9);       // walking is already above the floor
   near(pressureScale(0, true), 0, 1e-9);             // paused stays paused
   assert.ok(pressureThreat([armed()], {x: 0, y: 0}));
-  assert.ok(!pressureThreat([armed({los: false})], {x: 0, y: 0}), 'cover breaks the pressure');
+  assert.ok(!pressureThreat([armed({los: false, x: 400})], {x: 0, y: 0}), 'cover breaks the pressure at range');
+  assert.ok(pressureThreat([armed({los: false, x: 200})], {x: 0, y: 0}), 'a hunter right behind the corner keeps time moving');
   assert.ok(!pressureThreat([armed({aware: false})], {x: 0, y: 0}), 'unaware sleepers never pin time');
   assert.ok(!pressureThreat([armed({stun: 1})], {x: 0, y: 0}), 'a flashed enemy does not');
   assert.ok(!pressureThreat([armed({x: 900})], {x: 0, y: 0}), 'out of reach');

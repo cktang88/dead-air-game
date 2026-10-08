@@ -42,8 +42,8 @@ export const PROFILES = {
   // Reactions are SNAP: aware enemies already face you instantly; react = scaled seconds before the telegraph starts, windup = the
   // visible aim line. At the pressure attack clock (time-rule.js) gunner react+windup is ~0.3 s real: dodging is skill, not a free read.
   chaser: {dodge: 0.55, react: [0.02, 0.05], alertRadius: 280},
-  gunner: {dodge: 0.5, react: [0.02, 0.05], windup: 0.18, fireGap: [0.4, 0.8], duck: [0.8, 1.7], burst: [1, 3], aimMul: 1, alertRadius: 320},
-  guard: {dodge: 0.3, react: [0.03, 0.06], windup: 0.26, fireGap: [0.7, 1.2], duck: [1.1, 2.2], burst: [1, 1], aimMul: 0.85, alertRadius: 320},
+  gunner: {dodge: 0.5, react: [0.02, 0.05], windup: 0.18, fireGap: [0.3, 0.65], duck: [0.6, 1.3], burst: [1, 3], aimMul: 1, alertRadius: 320},
+  guard: {dodge: 0.3, react: [0.03, 0.06], windup: 0.22, fireGap: [0.55, 1.0], duck: [0.9, 1.8], burst: [1, 1], aimMul: 0.85, alertRadius: 320},
   sniper: {dodge: 0.35, react: [0.1, 0.2], windup: 1.3, lockTime: 0.4, trackRate: 1.5, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 360},
   riot: {dodge: 0.02, react: [0.03, 0.06], alertRadius: 280},
   brute: {dodge: 0.08, react: [0.03, 0.06], alertRadius: 260, chargeWindup: 0.3, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.4, 2.4], recover: 0.9},
@@ -82,7 +82,7 @@ export function brainState(e, rng = Math.random) {
   if (e.ai) return e.ai;
   const prof = PROFILES[e.type] ?? PROFILES.chaser;
   e.ai = {
-    clock: 0, aware: false, sees: false, lockTime: 0, lost: 0, reaction: 0, last: null, pending: null, hpPrev: e.hp,
+    clock: 0, awareAt: -9, aware: false, sees: false, lockTime: 0, lost: 0, reaction: 0, last: null, pending: null, hpPrev: e.hp,
     role: 'engage', roleT: 0, flankPref: rng() < 0.55,
     phase: 'duck', phaseT: between(rng, 0.1, 0.7), cover: null, coverT: 0, peekMiss: 0,
     windup: 0, windupTotal: 0, aim: {x: 1, y: 0}, cd: between(rng, 0.4, 1.4), sinceFire: 9, sinceStart: 9, shotsLeft: 0,
@@ -143,10 +143,10 @@ function perceive(c) {
     if (ai.suspicion >= SUSPICION.alertAt) { sees = true; ai.spotted = true; }
   }
   ai.sees = sees;
-  if (sees && !ai.prevSees && wasAware) ai.cd = Math.min(ai.cd, 0.06);   // peek: an enemy already hunting snap-shoots the moment you show
+  if (sees && !ai.prevSees && wasAware && e.type !== 'sniper') ai.cd = Math.min(ai.cd, 0.06), ai.phaseT = Math.min(ai.phaseT, 0.12);   // peek: an enemy already hunting snap-shoots the moment you show
   ai.prevSees = sees;
   if (sees) {
-    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react); ai.cd = Math.min(ai.cd, 0.05); alertMates(c, p, 0.12); if (e.posture === 'sleep') e.posture = 'guard'; }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.reaction = between(rng, ...ai.prof.react); if (e.type !== 'sniper') { ai.cd = Math.min(ai.cd, 0.05); ai.phaseT = Math.min(ai.phaseT, 0.05); } alertMates(c, p, 0.12); if (e.posture === 'sleep') e.posture = 'guard'; }
     learn(ai, p);
     ai.lost = 0; ai.peekMiss = 0; ai.lockTime += dt;
   } else {
@@ -158,7 +158,7 @@ function perceive(c) {
     const reach = hearingReach({radius: n.radius, blocked: !world.los(e.x, e.y, n.x, n.y), asleep});
     if (dist(e, n) > reach) continue;
     const guess = {x: n.x + gaussian(rng) * 28, y: n.y + gaussian(rng) * 28};
-    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.heard = true; ai.reaction = between(rng, 0.03, 0.08); ai.cd = Math.min(ai.cd, 0.05); learn(ai, guess, false); alertMates(c, guess, 0.15); if (e.posture === 'sleep') e.posture = 'guard'; }
+    if (!ai.aware) { ai.aware = true; ai.suspicion = 1; ai.heard = true; ai.reaction = between(rng, 0.03, 0.08); if (e.type !== 'sniper') { ai.cd = Math.min(ai.cd, 0.05); ai.phaseT = Math.min(ai.phaseT, 0.05); } learn(ai, guess, false); alertMates(c, guess, 0.15); if (e.posture === 'sleep') e.posture = 'guard'; }
     else if (!sees) { learn(ai, guess, false); ai.lost = Math.min(ai.lost, 2); }
   }
   if (e.hp < ai.hpPrev - 1e-9 && !sees) {
@@ -175,6 +175,7 @@ function perceive(c) {
     }
   }
   if (ai.aware && ai.lost > FORGET_AFTER) { ai.aware = false; ai.suspicion = 0.45; ai.spotted = false; ai.last = null; ai.search = null; ai.cover = null; }
+  if (ai.aware && !wasAware) ai.awareAt = ai.clock;
   return wasAware;
 }
 
@@ -484,7 +485,7 @@ function fireReady(c) {
   if (world.fireAllowed && !world.fireAllowed(e)) return false;
   // Token limit: only a few enemies may be winding up or have just fired; starts are staggered.
   const squad = living(world, e).filter(o => o.ai?.aware);
-  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 5 : 4);
+  const maxFiring = world.maxFiring ?? (squad.length >= 4 ? 6 : 4);
   const active = squad.filter(o => o.ai.windup > 0 || o.ai.sinceFire < 0.3).length;
   if (active >= maxFiring) return false;
   if (squad.some(o => o.ai.sinceStart < 0.18)) return false;
@@ -664,7 +665,7 @@ function rangedStep(c) {
 
   // Fire whenever allowed; the telegraph is mandatory. Enemies do not stop to shoot while running for cover.
   const atCover = ai.cover && dist(e, ai.cover.hide) <= 16;
-  const canShootNow = !ai.cover || ai.phase === 'peek' || atCover;
+  const canShootNow = !ai.cover || ai.phase === 'peek' || atCover || (e.type !== 'sniper' && ai.clock - ai.awareAt < 0.45);   // the opening shot is a snap: no walking to cover first
   const holdFire = shaken || (lined && ai.lineCd <= 0 && !ai.cover && !pushing && ai.lineT < 0.9);   // sidestep first, shoot from the new spot
   if (!holdFire && canShootNow && (!hurt || ai.phase === 'peek' || !ai.cover) && fireReady(c) && startWindup(c)) {
     if (e.type === 'sniper') ai.nest = ai.cover ? {...ai.cover.hide} : {x: e.x, y: e.y};   // marksman: relocate after every shot

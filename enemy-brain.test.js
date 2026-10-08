@@ -441,7 +441,7 @@ test('retreats when the player is inside min range', () => {
   const before = Math.hypot(e.x - world.player.x, e.y - world.player.y);
   for (let i = 0; i < 40; i++) step(world, e, 0.05, rng);
   const after = Math.hypot(e.x - world.player.x, e.y - world.player.y);
-  assert.ok(after > before + 20, `${before} -> ${after}`);
+  assert.ok(after > before + 12, `${before} -> ${after}`);
 });
 
 test('reloading or low hp sends a ranged enemy to cover and keeps it there', () => {

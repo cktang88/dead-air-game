@@ -28,12 +28,15 @@ export const TIME_RULE = {
 // smoke), stunning or killing the watchers lets time freeze again. The floor feeds the same rate the edge meter shows.
 // attackFloor: an enemy that pins the world also THINKS (windup, aim lock, fire gap, duck) at no less than this x real time,
 // and every hostile bullet flies at no less than bulletFloor x real time, so a frozen-looking world still has a clock you can hear tick.
-export const PRESSURE = {floor: 0.3, attackFloor: 0.65, bulletFloor: 0.4, minReach: 380, meleeReach: 360, maxReach: 560};
+export const PRESSURE = {floor: 0.3, attackFloor: 0.65, bulletFloor: 0.4, minReach: 380, meleeReach: 360, huntReach: 240, maxReach: 560};
 
 // True when this enemy pins the world rate. `dist` is its distance to the player.
 export function pressuring(e, dist, rule = PRESSURE) {
   if (!e || !e.alive || e.type === 'boss' || e.fixed) return false;
-  if (!e.aware || !e.los || (e.stun || 0) > 0) return false;
+  if (!e.aware || (e.stun || 0) > 0) return false;
+  // HUNTERS: an aware enemy that lost sight of you but is closing in (inside huntReach) still keeps the world moving, so hiding
+  // behind a corner and waiting is not a free freeze: they arrive.
+  if (!e.los) return dist <= rule.huntReach;
   const reach = e.def?.melee ? rule.meleeReach : Math.min(rule.maxReach, Math.max(rule.minReach, (e.def?.range || 0) * 1.1));
   return dist <= reach;
 }
