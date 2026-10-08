@@ -258,9 +258,16 @@ function request(e, list, lo) {
     w.postMessage({t: 'reg', id: e.id, W: e.W, H: e.H, ax: e.ax, ay: e.ay, o: e.o, dzPx: e.dzPx, nBuckets: e.nBuckets, vox: {n, cell}});
     e.wreg = true;
   }
-  const out = [];
-  for (const bi of list) if (!e.buckets[bi] && !e.pend[bi]) { e.pend[bi] = 1; stackStats.pending++; out.push(bi); }
+  // pend[bi]: 0 idle, 1 queued as demand, 2 queued as a low-priority prefetch
+  const out = [], promote = [];
+  for (const bi of list) {
+    if (e.buckets[bi]) continue;
+    if (!e.pend[bi]) { e.pend[bi] = lo ? 2 : 1; stackStats.pending++; out.push(bi); }
+    else if (!lo && e.pend[bi] === 2) { e.pend[bi] = 1; promote.push(bi); }   // demand miss on a bucket stuck in the prefetch queue
+  }
   if (out.length) w.postMessage({t: 'bake', id: e.id, list: out, lo});
+  // the worker skips jobs already done, so whichever copy runs second is a no-op (one bitmap, one pending decrement)
+  if (promote.length) w.postMessage({t: 'bake', id: e.id, list: promote, lo: false});
   return true;
 }
 function whiteOf(e, bi, img, color) {

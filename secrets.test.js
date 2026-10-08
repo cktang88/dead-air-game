@@ -143,3 +143,39 @@ test('field tapes are picked deterministically', () => {
   assert.equal(fieldTapeFor(5, 2), fieldTapeFor(5, 2));
   assert.ok(FIELD_TAPES.length >= 5);
 });
+
+test('secret crack is never planned behind a door or blocked tile', () => {
+  const {tileMap, rooms, room} = world();
+  const solidMap = tileMap.map((r) => r.slice());
+  // block every floor tile along the room edge facing each direction: edge cells solid (locked-door style)
+  const doorCells = [];
+  for (let y = room.y1; y <= room.y2; y++) for (let x = room.x1; x <= room.x2; x++) {
+    if (x === room.x1 || x === room.x2 || y === room.y1 || y === room.y2) { solidMap[y][x] = 1; doorCells.push({x, y}); }
+  }
+  for (let seed = 1; seed < 40; seed++) {
+    assert.equal(planSecret({tileMap, solidMap, rooms, seed, chance: 1}), null);
+    assert.equal(planSecret({tileMap, doorCells, rooms, seed, chance: 1}), null);
+  }
+  // a single blocked tile just in front of the edge tile also rejects that start
+  const open = world();
+  for (let seed = 1; seed < 40; seed++) {
+    const p = planSecret({tileMap: open.tileMap, rooms: open.rooms, seed, chance: 1});
+    if (!p) continue;
+    const sm = open.tileMap.map((r) => r.slice());
+    sm[p.crack.y - 2 * p.dir.y][p.crack.x - 2 * p.dir.x] = 1;
+    const q = planSecret({tileMap: open.tileMap, solidMap: sm, rooms: open.rooms, seed, chance: 1});
+    if (q) assert.ok(!(q.crack.x === p.crack.x && q.crack.y === p.crack.y));
+  }
+});
+
+test('eggs.unlock updates in-memory cosmetics and saves', async () => {
+  const store = {};
+  globalThis.localStorage = {getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); }};
+  const {createEggs} = await import('./easter-game.js');
+  const state = {};
+  const eggs = createEggs({state, toast() {}, TILE: 32});
+  assert.equal(eggs.unlock('cone'), true);
+  assert.equal(state.cosmetics.hat, 'cone');
+  assert.ok(Object.values(store).some((v) => v.includes('cone')));
+  delete globalThis.localStorage;
+});

@@ -16,7 +16,7 @@ export function planFloor(state, {boss = false} = {}) {
   if (state.signal?.active || !state.tileMap?.length) return;
   const last = state.rooms.length - 1, skipRooms = boss ? [state.rooms[last]?.index] : [];
   const seed = state.seed || 1, floor = state.floor || 1;
-  const plan = planSecret({tileMap: state.tileMap, rooms: state.rooms, seed, floor, skipRooms});
+  const plan = planSecret({tileMap: state.tileMap, solidMap: state.solidMap, doorCells: (state.doors || []).flatMap((d) => d.cells || [{x: d.x, y: d.y}]), rooms: state.rooms, seed, floor, skipRooms});
   if (plan) {
     // half of the secrets hide a hat, the rest a tape; the same seed always hides the same thing
     const wantsHat = ((seed ^ (floor * 2654435761)) >>> 0) % 2 === 0;
@@ -37,6 +37,14 @@ export function createEggs(g) {
   apply();
   const matcher = createCodeMatcher();
   const save = () => { try { saveCosmetics(localStorage, state.cosmetics); } catch { /* storage blocked: modes last for this session */ } apply(); };
+
+  /** Unlock + wear a hat (title-screen pop-all egg): updates the in-memory cosmetics, then saves. Returns true if it was new. */
+  function unlock(id) {
+    const r = unlockHat(state.cosmetics, id);
+    state.cosmetics = r.cosmetics;
+    save();
+    return r.isNew;
+  }
 
   /** Title-screen key codes. Returns true if a code completed. */
   function key(code) {
@@ -128,5 +136,5 @@ export function createEggs(g) {
   }
   function reset() { state.bowStill = 0; state.bowDone = false; }
 
-  return {key, shot, blast, frame, reset, apply, save};
+  return {key, shot, blast, frame, reset, apply, save, unlock};
 }

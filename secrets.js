@@ -40,7 +40,7 @@ const inRoomBox = (rooms, x, y) => rooms.some((r) => x >= r.x1 && x <= r.x2 && y
  * `cells` is every tile that is hollowed out when the wall opens (the crack tile + the pocket). The 5-wide ring around the
  * pocket must be solid rock so the room never touches anything else.
  */
-export function planSecret({tileMap, rooms, seed = 1, floor = 1, chance = SECRET.chance, skipRooms = []}) {
+export function planSecret({tileMap, solidMap, doorCells = [], rooms, seed = 1, floor = 1, chance = SECRET.chance, skipRooms = []}) {
   if (!tileMap?.length || !rooms?.length) return null;
   const rng = mulberry(mix(seed, floor, 0x5ec12e7));
   if (rng() >= chance) return null;
@@ -49,6 +49,9 @@ export function planSecret({tileMap, rooms, seed = 1, floor = 1, chance = SECRET
   const order = rooms.map((r, i) => ({r, k: rng(), i})).filter(({r, i}) => !skip.has(r.index ?? i) && r.role !== 'entry').sort((a, b) => a.k - b.k);
   const cover = new Set();
   for (const r of rooms) for (const c of r.cover || []) cover.add(c.y * w + c.x);
+  const doorSet = new Set(doorCells.map((c) => c.y * w + c.x));
+  // open floor a bullet can fly over: floor tile, not a (locked) door cell, not blocked in the solid map
+  const openFloor = (x, y) => tileMap[y]?.[x] === 0 && (!solidMap || solidMap[y]?.[x] === 0) && !doorSet.has(y * w + x);
   const solid = (x, y) => x >= 1 && y >= 1 && x < w - 1 && y < h - 1 && tileMap[y][x] === 1 && !cover.has(y * w + x);
   for (const {r} of order) {
     const cands = [];
@@ -59,7 +62,7 @@ export function planSecret({tileMap, rooms, seed = 1, floor = 1, chance = SECRET
       const edgeX = d.x < 0 ? {x: r.x1, ys: range(r.y1 + 1, r.y2 - 1)} : d.x > 0 ? {x: r.x2, ys: range(r.y1 + 1, r.y2 - 1)} : null;
       const starts = edge ? edge.xs.map((x) => ({x, y: edge.y})) : edgeX.ys.map((y) => ({x: edgeX.x, y}));
       for (const s of starts) {
-        if (tileMap[s.y]?.[s.x] !== 0) continue;
+        if (!openFloor(s.x, s.y) || !openFloor(s.x - d.x, s.y - d.y)) continue;   // two open tiles in front, so bullets reach the crack
         const crack = {x: s.x + d.x, y: s.y + d.y};
         if (!solid(crack.x, crack.y) || inRoomBox(rooms, crack.x, crack.y)) continue;
         // ring: lateral -2..2 across, depth 1..D+1 (crack tile row included). Everything solid, nothing inside another room.
