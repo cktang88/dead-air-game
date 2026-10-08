@@ -5,11 +5,11 @@
 
 /** CSS custom property name (without --) -> value. Keys are the canonical token names. */
 export const COLORS = Object.freeze({
-  bg: '#0d0b14',
-  panel: 'rgba(16, 13, 24, 0.94)',
-  'panel-solid': '#16121f',
-  raised: '#1f1a2b',
-  'raised-2': '#2a2338',
+  bg: '#0c0d0d',
+  panel: 'rgba(21, 22, 24, 0.96)',
+  'panel-solid': '#17181a',
+  raised: '#222426',
+  'raised-2': '#2d3033',
   border: 'rgba(241, 236, 221, 0.12)',
   'border-2': 'rgba(241, 236, 221, 0.22)',
   'text-hi': '#f4efe2',
@@ -23,9 +23,9 @@ export const COLORS = Object.freeze({
   danger: '#ff6a78',
   sprint: '#ff8a4c',
   ammo: '#f2cf8a',
-  'key-top': '#2c2638',
-  'key-bottom': '#211c2b',
-  'key-edge': '#4a4254',
+  'key-top': '#34363a',
+  'key-bottom': '#25272a',
+  'key-edge': '#54575c',
 });
 
 export const FONTS = Object.freeze({

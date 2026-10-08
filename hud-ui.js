@@ -180,17 +180,23 @@ export function setPauseScreen(visible, info = {}) {
 
 export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '', floor = 0, finalFloor = 4 }) {
   const icon = id => iconSvg(id, { size: 0 });
-  const cell = (label, value, i, ico, count = null) => `<div class="end-stat" style="--i:${i}"><small>${icon(ico)}${label}</small><b${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</b></div>`;
+  // The end screen is a printed station log: thermal paper, leader dots, a rubber stamp for the verdict.
+  const line = (label, value, count = null) => `<div class="log-line"><dt>${label}</dt><i class="leader" aria-hidden="true"></i><dd${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</dd></div>`;
   const bestLine = best
-    ? `<div class="end-best">${icon('status-trophy')}<span>${isNewBest ? 'New best run' : 'Best run'} · <b>${best.won ? 'EXTRACTED' : `${best.rooms} ROOMS`}</b> · <b>${best.kills} KILLS</b> · <b>${formatClock(best.seconds)}</b></span></div>` : '';
-  // three distinct moments: the Conductor falls (boss), a bank-out (extract), a death
-  const head = boss ? {cls: 'won boss', ico: 'status-trophy', eyebrow: 'SIGNAL RESTORED', title: 'THE CONDUCTOR IS SILENT'}
-    : won ? {cls: 'won', ico: 'exit-extraction', eyebrow: 'SECTOR EXTRACTED', title: `EXTRACTED · BANKED ${payout}`}
-    : {cls: 'dead', ico: 'status-skull', eyebrow: 'SIGNAL LOST', title: 'RUN OVER'};
-  return `<div class="end-banner ${head.cls}"><span class="end-ico">${icon(head.ico)}</span><div><small>${head.eyebrow}</small><strong>${esc(head.title)}</strong>${cause && !won ? `<span class="end-cause">${esc(cause)}</span>` : ''}${boss ? '<span class="end-cause">THE BROADCAST IS YOURS</span>' : ''}</div>${isNewBest ? '<span class="badge">NEW BEST</span>' : ''}</div>
-<div class="end-grid">${cell('Rooms cleared', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, 0, 'door', rooms)}${cell('Kills', kills, 1, 'status-kills', kills)}${cell('Run time', formatClock(seconds), 2, 'status-clock')}</div>
-<div class="end-coins">${icon('pickup-coin')}<div><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span><small>Coins earned · <span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></small></div>${floor ? `<div class="mid"><small>Reached</small><b>FLOOR ${floor}/${finalFloor}</b></div>` : ''}<div class="bal"><small>Safehouse balance</small><b data-count="${balance}">${balance}</b></div></div>
-${bestLine}`;
+    ? `<div class="end-best">${icon('status-trophy')}<span>${isNewBest ? 'NEW BEST RUN' : 'BEST RUN'} · <b>${best.won ? 'EXTRACTED' : `${best.rooms} ROOMS`}</b> · <b>${best.kills} KILLS</b> · <b>${formatClock(best.seconds)}</b></span></div>` : '';
+  // three distinct moments: the Conductor falls (boss: ON AIR lamp), a bank-out (extract), a death (test card, SIGNAL LOST)
+  const head = boss ? {cls: 'won boss', eyebrow: 'SIGNAL RESTORED', title: 'ON AIR', stamp: 'BROADCAST RESTORED', sub: 'THE CONDUCTOR IS SILENT · THE BROADCAST IS YOURS'}
+    : won ? {cls: 'won', eyebrow: 'SECTOR EXTRACTED', title: 'EXTRACTED', stamp: 'CLEARED', sub: `BANKED ${payout} COINS`}
+    : {cls: 'dead', eyebrow: 'TRANSMISSION ENDED', title: 'SIGNAL LOST', stamp: 'NO CARRIER', sub: cause || 'RUN OVER'};
+  const art = boss ? '<div class="airlamp" aria-hidden="true"><span>ON AIR</span></div>' : won ? '<div class="stamp ok" aria-hidden="true">EXTRACTED</div>' : '<div class="testcard" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>';
+  return `<div class="log ${head.cls}">
+<div class="log-top"><span>DEAD AIR · STATION LOG</span><span>SEED ${esc(seed ?? '—')}</span></div>
+${art}
+<div class="log-head"><small>${head.eyebrow}</small><strong>${head.title}</strong><span class="end-cause">${esc(head.sub)}</span>${isNewBest ? '<span class="badge stamp-new">NEW BEST</span>' : ''}</div>
+<dl class="log-lines">${line('ROOMS CLEARED', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, rooms)}${line('KILLS', kills, kills)}${line('RUN TIME', formatClock(seconds))}${floor ? line('FLOOR REACHED', `${floor} / ${finalFloor}`) : ''}</dl>
+<div class="log-total"><div><small>COINS EARNED</small><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span></div><div class="bal"><small>SAFEHOUSE BALANCE</small><b data-count="${balance}">${balance}</b></div></div>
+<div class="log-note"><span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></div>
+${bestLine}</div>`;
 }
 
 /** Count `[data-count]` numbers up from 0 (real time; instant under prefers-reduced-motion). Keeps data-prefix. */
