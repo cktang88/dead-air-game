@@ -383,7 +383,7 @@ export class Fx {
         pop = 1 + Math.max(0, 1 - (f.age - f.t0) * 9) * 0.35; fade = 1 - Math.max(0, q - 0.75) * 4;
         if (q > 0 && tg) { const e = q * q; sx += (tg.x * dpr - sx) * e; sy += (tg.y * dpr - sy) * e; pop *= 1 - 0.5 * e; }
       }
-      ctx.font = `800 ${Math.round(f.size * dpr * pop)}px 'Barlow Condensed','DM Mono',system-ui,sans-serif`;
+      ctx.font = `800 ${Math.round(f.size * dpr * pop)}px 'Barlow Condensed','Bahnschrift','Roboto Condensed','Arial Narrow','Liberation Sans Narrow','Inter',system-ui,sans-serif`;
       ctx.globalAlpha = Math.max(0, fade);
       ctx.lineWidth = Math.max(3.6, f.size * 0.2) * dpr; ctx.strokeStyle = 'rgba(14,10,20,0.92)'; ctx.strokeText(f.text, sx, sy);
       ctx.fillStyle = f.color; ctx.fillText(f.text, sx, sy);

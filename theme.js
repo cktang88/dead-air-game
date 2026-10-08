@@ -29,9 +29,9 @@ export const COLORS = Object.freeze({
 });
 
 export const FONTS = Object.freeze({
-  display: "'Barlow Condensed', 'Oswald', 'Roboto Condensed', 'Arial Narrow', 'Liberation Sans Narrow', 'Inter Display', 'Inter', system-ui, sans-serif",
-  body: "'DM Sans', 'Inter', system-ui, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
-  mono: "'DM Mono', ui-monospace, 'SF Mono', 'DejaVu Sans Mono', Consolas, monospace",
+  display: "'Barlow Condensed', 'Bahnschrift', 'DIN Condensed', 'Avenir Next Condensed', 'Roboto Condensed', 'Oswald', 'Arial Narrow', 'Liberation Sans Narrow', 'Helvetica Neue', 'Inter Display', 'Inter', system-ui, sans-serif",
+  body: "'DM Sans', 'Inter', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif",
+  mono: "'DM Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, 'Roboto Mono', 'DejaVu Sans Mono', 'Liberation Mono', Consolas, monospace",
 });
 
 export const RADII = Object.freeze({ sm: 3, md: 6, lg: 8 });

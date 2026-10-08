@@ -15,7 +15,7 @@
       #boot::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.18) 3px 4px)}
       #boot .boot-card{position:relative;width:min(460px,100%);display:grid;gap:16px;padding:26px 28px 24px;background:#1a1b1d;box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -2px 0 rgba(0,0,0,.7),0 0 0 1px #000,0 2px 0 #000,0 22px 50px rgba(0,0,0,.6);background-image:radial-gradient(circle at 36% 30%,#d4d1c6 0 1px,#8d8b83 2.2px,#46453f 4px,#121211 4.6px,transparent 5.2px),radial-gradient(circle at 36% 30%,#d4d1c6 0 1px,#8d8b83 2.2px,#46453f 4px,#121211 4.6px,transparent 5.2px),radial-gradient(circle at 36% 30%,#d4d1c6 0 1px,#8d8b83 2.2px,#46453f 4px,#121211 4.6px,transparent 5.2px),radial-gradient(circle at 36% 30%,#d4d1c6 0 1px,#8d8b83 2.2px,#46453f 4px,#121211 4.6px,transparent 5.2px);background-size:10px 10px;background-repeat:no-repeat;background-position:left 6px top 6px,right 6px top 6px,left 6px bottom 6px,right 6px bottom 6px}
       #boot .boot-eyebrow{justify-self:start;padding:3px 11px;background:#e6dec6;color:#19150f;font-size:11px;font-weight:700;letter-spacing:.18em;clip-path:polygon(0 0,100% 0,calc(100% - 3px) 50%,100% 100%,0 100%,3px 50%)}
-      #boot .boot-title{margin:0;font:800 clamp(44px,9vw,72px)/.9 'Barlow Condensed','Arial Narrow',system-ui,sans-serif;letter-spacing:.02em}
+      #boot .boot-title{margin:0;font:800 clamp(44px,9vw,72px)/.9 'Barlow Condensed','Bahnschrift','Roboto Condensed','Arial Narrow','Liberation Sans Narrow','Inter',system-ui,sans-serif;letter-spacing:.02em}
       #boot .boot-title em{font-style:normal;color:#ff3b30}
       #boot .boot-bars{display:grid;grid-template-columns:repeat(7,1fr);height:56px;box-shadow:0 0 0 2px #000,0 1px 0 2px rgba(255,255,255,.1);overflow:hidden;background:#000}
       #boot .boot-bars i{background:var(--bar);opacity:.12;transition:opacity .2s cubic-bezier(.2,.8,.2,1)}
@@ -122,6 +122,7 @@
     <link rel="modulepreload" href="./tuner-ui.js" />
     <link rel="modulepreload" href="./armory-ui.js" />
     <link rel="modulepreload" href="./equip-art.js" />
+    <link rel="modulepreload" href="./desk-ui.js" />
     <link rel="modulepreload" href="./panel-ui.js" />
     <link rel="modulepreload" href="./progress-storage.js" />
     <link rel="modulepreload" href="./tactical.js" />
@@ -185,6 +186,7 @@
     <link rel="modulepreload" href="./secrets.js" />
     <link rel="modulepreload" href="./icons-data.js" />
     <link rel="modulepreload" href="./ui-art.js" />
+    <link rel="modulepreload" href="./stack-bake.js" />
     <link rel="modulepreload" href="./floor-topology.js" />
     <link rel="modulepreload" href="./enemy-nav.js" />
     <link rel="modulepreload" href="./enemy-tactics.js" />
@@ -193,13 +195,13 @@
     <link rel="modulepreload" href="./floors2d.js" />
     <link rel="modulepreload" href="./props2d.js" />
     <link rel="modulepreload" href="./prop-stack2d.js" />
-    <link rel="modulepreload" href="./stack-bake.js" />
     <link rel="modulepreload" href="./heavy-models2d.js" />
     <link rel="modulepreload" href="./creatures2d.js" />
     <link rel="modulepreload" href="./creature-models.js" />
     <link rel="modulepreload" href="./brute-models.js" />
     <link rel="modulepreload" href="./conductor-models.js" />
     <link rel="modulepreload" href="./hud-safe.js" />
+    <link rel="modulepreload" href="./tray2d.js" />
     <link rel="modulepreload" href="./conductor-pose.js" />
     <link rel="modulepreload" href="./creature-core.js" />
     <link rel="modulepreload" href="./rusher-pose.js" />
@@ -326,15 +328,22 @@
           <button id="close-settings" class="close" type="button" aria-label="Close settings"><span data-icon="status-close"></span></button>
           <div class="eyebrow">PREFERENCES</div>
           <h2 id="settings-title">SETTINGS</h2>
-          <div class="set-group">
-            <div class="eyebrow">AUDIO</div>
-            <div class="audio-control-row"><label class="audio-volume" for="master-volume"><span>Master volume <output id="master-volume-value" for="master-volume">65%</output></span><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /></label><button id="mute-audio" class="btn secondary sm" type="button" aria-pressed="false">MUTE</button></div>
-            <label class="audio-volume" for="music-volume"><span>Music <output id="music-volume-value" for="music-volume">55%</output></span><input id="music-volume" type="range" min="0" max="100" step="1" value="55" /></label>
+          <div class="set-group desk" id="audio-desk">
+            <div class="eyebrow">AUDIO · MIXER</div>
+            <div class="strip">
+              <label class="audio-volume fader" for="master-volume"><span class="fader-name">Master volume <output id="master-volume-value" for="master-volume">65%</output></span><canvas class="vu" data-vu="master" aria-hidden="true"></canvas><input id="master-volume" type="range" min="0" max="100" step="1" value="65" /><i class="fader-scale" aria-hidden="true"></i></label>
+              <button id="mute-audio" class="mute-sw" type="button" aria-pressed="false"><span class="lamp" aria-hidden="true"></span><span class="mute-text">MUTE</span></button>
+            </div>
+            <div class="strip">
+              <label class="audio-volume fader" for="music-volume"><span class="fader-name">Music <output id="music-volume-value" for="music-volume">55%</output></span><canvas class="vu" data-vu="music" aria-hidden="true"></canvas><input id="music-volume" type="range" min="0" max="100" step="1" value="55" /><i class="fader-scale" aria-hidden="true"></i></label>
+            </div>
           </div>
-          <div class="set-group">
-            <div class="eyebrow">COMFORT</div>
-            <label class="audio-volume visual-volume" for="shake-strength"><span>Screen shake <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" type="range" min="0" max="100" step="5" value="100" /></label>
-            <label class="audio-volume visual-volume" for="flash-strength"><span>Flash brightness <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" type="range" min="0" max="100" step="5" value="100" /></label>
+          <div class="set-group desk knobs">
+            <div class="eyebrow">COMFORT · TRIM</div>
+            <div class="knob-row">
+              <div class="knob-unit"><div class="knob" aria-hidden="true"><i class="knob-ticks"></i><b class="knob-cap"><u></u></b></div><label class="audio-volume visual-volume" for="shake-strength"><span>Screen shake <output id="shake-strength-value" for="shake-strength">100%</output></span><input id="shake-strength" class="knob-input" type="range" min="0" max="100" step="5" value="100" /></label></div>
+              <div class="knob-unit"><div class="knob" aria-hidden="true"><i class="knob-ticks"></i><b class="knob-cap"><u></u></b></div><label class="audio-volume visual-volume" for="flash-strength"><span>Flash brightness <output id="flash-strength-value" for="flash-strength">100%</output></span><input id="flash-strength" class="knob-input" type="range" min="0" max="100" step="5" value="100" /></label></div>
+            </div>
           </div>
           <div class="set-group">
             <div class="eyebrow">ONBOARDING</div>
@@ -398,5 +407,11 @@
     <script type="module" src="./title-intro.js"></script>
     <script type="module" src="./title-scene.js"></script>
 <!-- game.js itself is imported by the inline boot controller in <head> (so the loader can report its progress) -->
-  </body>
+  <script>
+/* Google Fonts can be blocked or slow: after they should have loaded, check what really rendered and flag the fallback so CSS can tune it. */
+(function(){var h=document.documentElement;function w(f){try{var c=document.createElement('canvas').getContext('2d');c.font='800 40px '+f+',monospace';var a=c.measureText('mmmmWWWW1l').width;c.font='800 40px monospace';return a!==c.measureText('mmmmWWWW1l').width}catch(e){return true}}
+function chk(){if(!w('"Barlow Condensed"'))h.classList.add('fb-display');if(!w('"Permanent Marker"'))h.classList.add('fb-hand');}
+(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){setTimeout(chk,800)});setTimeout(chk,5000);})();
+</script>
+</body>
 </html>

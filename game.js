@@ -28,6 +28,7 @@ import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml,
 import {mountTuner} from './tuner-ui.js';
 import {rackHtml,binsHtml,modDrawerHtml} from './armory-ui.js';
 import {paintStacks,sweepNeedles} from './equip-art.js';
+import {mountDesk} from './desk-ui.js';
 import {mountPanel, pullLever} from './panel-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -1308,12 +1309,13 @@ window.advanceTime=(ms)=>{const frames=Math.max(1,Math.ceil(ms/16.667));for(let 
 
 function setupControls(){
   armMusicOnGesture();{const mv=loadMusicSettings(localStorage);$('music-volume').value=String(Math.round(mv*100));$('music-volume-value').textContent=`${Math.round(mv*100)}%`;}const volume=loadAudioSettings(localStorage);$('master-volume').value=String(Math.round(volume*100));$('master-volume-value').textContent=`${Math.round(volume*100)}%`;
-  const syncMuteButton=()=>{const muted=isAudioMuted(),button=$('mute-audio');button.textContent=muted?'UNMUTE':'MUTE';button.setAttribute('aria-pressed',String(muted));};syncMuteButton();
+  const syncMuteButton=()=>{const muted=isAudioMuted(),button=$('mute-audio');button.querySelector('.mute-text').textContent=muted?'UNMUTE':'MUTE';button.setAttribute('aria-pressed',String(muted));};syncMuteButton();
   visualSettings=loadVisualSettings(localStorage);
   for(const [id,key] of [['shake-strength','shake'],['flash-strength','flash']]){
     const slider=$(id),output=$(`${id}-value`);slider.value=String(Math.round(visualSettings[key]*100));output.textContent=`${slider.value}%`;
     slider.addEventListener('input',event=>{visualSettings={...visualSettings,[key]:Number(event.currentTarget.value)/100};output.textContent=`${event.currentTarget.value}%`;try{saveVisualSettings(localStorage,visualSettings);}catch{toast('VISUAL SETTING CHANGED FOR THIS SESSION ONLY');}});
   }
+  mountDesk($('settings-panel'));
   controls.bindings=loadKeyBindings(localStorage);renderKeyBindings();renderKeyGuide();updateThrowableHud();
   $('key-bindings').addEventListener('click',event=>{const button=event.target.closest('[data-bind-action]');if(!button)return;controls.waitingFor=button.dataset.bindAction;$('binding-status').textContent=`Press a key for ${KEY_BINDING_ACTIONS.find(action=>action.id===controls.waitingFor)?.label.toLowerCase()}. Escape cancels.`;renderKeyBindings(controls.waitingFor);});
   addEventListener('keydown',e=>{const key=normalizeKey(e.key);if(controls.waitingFor||key==='space'||key.startsWith('arrow')||Object.values(controls.bindings).includes(key))e.preventDefault();

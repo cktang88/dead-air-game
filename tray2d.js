@@ -10,7 +10,7 @@ import {FONTS} from './theme.js';
 const MONO = FONTS.mono, DISPLAY = FONTS.display, TAU = Math.PI * 2;
 const hexOf = n => '#' + (Number(n) & 0xffffff).toString(16).padStart(6, '0');
 export const TRAY_W = 348;
-export const trayHeight = target => (target.kind === 'gun' ? 178 : 160);
+export const trayHeight = target => (target.kind === 'gun' ? 192 : 190);
 
 /** True when this target gets the tray treatment (it carries the item data collectInteractables attaches). */
 export const hasTray = target => (target.kind === 'gun' && !!target.gunRef) || (target.kind === 'mod' && !!target.modRef);
@@ -85,7 +85,7 @@ export function drawTray(ctx, target, x, y, {accent = '#74c9ed', ok = true, key 
   ctx.font = `800 14px ${DISPLAY}`; const vw = ctx.measureText(verb).width + 16;
   ctx.fillStyle = '#e6dec6'; ctx.fillRect(42, 12, vw, 18);
   ctx.fillStyle = '#19150f'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(verb, 50, 21.5);
-  const sub = isGun ? target.gunRef.short : (target.modRef.info || '');
+  const sub = isGun ? target.gunRef.short : 'SEATS IN THE RAIL';
   ctx.fillStyle = ok ? '#cdc7d3' : '#a39dae'; ctx.font = `600 10px ${MONO}`;
   let st = String(sub).toUpperCase(); while (st.length > 4 && ctx.measureText(st).width > W - vw - 66) st = st.slice(0, -2);
   ctx.fillText(st, 42 + vw + 8, 21.5);

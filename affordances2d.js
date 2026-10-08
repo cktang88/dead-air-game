@@ -3,6 +3,7 @@
 import {drawIcon, ENEMY_ICON} from './icons.js';
 import {hudSafeRects, placeEdgeArrow, clearShift} from './hud-safe.js';
 import {nearestHostileRoom, promptParts} from './interaction.js';
+import {hasTray, drawTray, trayHeight, TRAY_W} from './tray2d.js';
 
 import {COLORS, FONTS, RADII} from './theme.js';
 // Canvas prompts share the DOM design tokens (theme.js mirrors style.css): same fonts, panel fill, keycap and corner radii.
@@ -48,7 +49,20 @@ export function createAffordances() {
   function toScreen(cam, x, y) { return {x: (x - cam.x) * cam.scale + cam.w / 2, y: (y - cam.y) * cam.scale + cam.h / 2}; }
   const onScreen = (p, cam, m = 0) => p.x > m && p.y > m && p.x < cam.w - m && p.y < cam.h - m;
 
+  const uiK = () => { try { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-k')); return v > 0 ? v : 1; } catch { return 1; } };
+  // floor guns and mods: an inspection tray (item in foam, tag, "swap with" half) instead of the one-line prompt
+  function drawTrayPrompt(ctx, target, sp, key, a, scaleIn, cam) {
+    const k = Math.min(1.6, uiK()) , w = TRAY_W * k, h = trayHeight(target) * k, ok = target.enabled;
+    let cx = sp.x, top = sp.y - 44 - h * scaleIn - (1 - scaleIn) * 8;
+    const sh = clearShift({x0: cx - w / 2 - 6, x1: cx + w / 2 + 6, y0: top - 4, y1: top + h + 12}, hudSafeRects(4), cam.w, cam.h, 160);
+    if (sh && (sh.dx || sh.dy)) { cx += sh.dx; top += sh.dy; }
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(cx, top + h / 2); ctx.scale((0.85 + 0.15 * scaleIn) * k, (0.85 + 0.15 * scaleIn) * k); ctx.translate(-TRAY_W / 2, -trayHeight(target) / 2);
+    drawTray(ctx, target, 0, 0, {accent: target.color, ok, key: parts_key(target, key), t, drawKey: (label, x, y) => keycap(ctx, label, x, y, 15, ok, 0.5 + 0.5 * Math.sin(t * 6))});
+    ctx.restore();
+  }
+  const parts_key = (target, key) => (target.keyed ? key : '');
   function drawPrompt(ctx, target, sp, key, a, scaleIn, cam) {
+    if (hasTray(target)) return drawTrayPrompt(ctx, target, sp, key, a, scaleIn, cam);
     const parts = promptParts(target, key), ok = parts.enabled, pulse = 0.5 + 0.5 * Math.sin(t * 6);
     const accent = ok ? target.color : BAD, size = 15;
     const iconSz = 20, gap = 8;

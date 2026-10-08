@@ -41,7 +41,7 @@ function lgrad(ctx, x0, y0, x1, y1, c0, c1) {
 export {hexStr};
 /** Distance from an enemy's centre to the drawn muzzle (bullets, flash, telegraph all start here). */
 export const enemyMuzzle = (e) => (isHeavy(e) ? heavyMuzzle(e) : ENEMY_GUNS[e.type] ? gunMuzzle(ENEMY_GUNS[e.type]) : 13);
-const FONT = "'Barlow Condensed','DM Mono',system-ui,sans-serif";
+const FONT = "'Barlow Condensed','Bahnschrift','Roboto Condensed','Arial Narrow','Liberation Sans Narrow','Inter',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
 

@@ -47,9 +47,9 @@
   /* radii */
   --r-sm: 3px; --r-md: 6px; --r-lg: 8px;
   /* type */
-  --font-display: 'Barlow Condensed', 'Oswald', 'Roboto Condensed', 'Arial Narrow', 'Liberation Sans Narrow', 'Inter Display', 'Inter', system-ui, sans-serif;
-  --font-body: 'DM Sans', 'Inter', system-ui, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', 'DejaVu Sans Mono', Consolas, monospace;
+  --font-display: 'Barlow Condensed', 'Bahnschrift', 'DIN Condensed', 'Avenir Next Condensed', 'Roboto Condensed', 'Oswald', 'Arial Narrow', 'Liberation Sans Narrow', 'Helvetica Neue', 'Inter Display', 'Inter', system-ui, sans-serif;
+  --font-body: 'DM Sans', 'Inter', 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, 'Roboto Mono', 'DejaVu Sans Mono', 'Liberation Mono', Consolas, monospace;
   --fs-micro: 11px; --fs-label: 12px; --fs-body: 13px; --fs-lead: 15px; --fs-num: 22px; --fs-title: 34px;
   /* elevation */
   --e-1: 0 2px 10px rgba(6, 4, 10, .5);
