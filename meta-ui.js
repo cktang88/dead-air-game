@@ -154,11 +154,12 @@ function goalRows(progress) {
   }).join('');
 }
 
+const cassetteHtml = (title, n) => `<span class="cassette" aria-hidden="true"><span class="clabel"><b>${esc(title)}</b><em>TAPE ${String(n).padStart(2, '0')}</em></span><span class="cwin"><i class="reel"></i><i class="reel"></i></span></span>`;
 function tapeRows(progress) {
   const have = new Set(progress.tapes || []);
   return `<div class="tape-list">${TAPES.map((tape, i) => have.has(tape.id)
-    ? `<div class="tape-row got"><strong>TAPE ${String(i + 1).padStart(2, '0')} · ${esc(tape.title)}</strong><q>${esc(tape.text)}</q></div>`
-    : `<div class="tape-row"><strong>TAPE ${String(i + 1).padStart(2, '0')} · ??????</strong><small>Not recovered yet.</small></div>`).join('')}</div>`;
+    ? `<div class="tape-row got">${cassetteHtml(tape.title, i + 1)}<div class="tape-body"><strong>TAPE ${String(i + 1).padStart(2, '0')} · ${esc(tape.title)}</strong><q>${esc(tape.text)}</q></div></div>`
+    : `<div class="tape-row">${cassetteHtml('? ? ?', i + 1)}<div class="tape-body"><strong>TAPE ${String(i + 1).padStart(2, '0')} · ??????</strong><small>Not recovered yet.</small></div></div>`).join('')}</div>`;
 }
 
 function heatRows(progress) {

@@ -41,7 +41,7 @@ function drawDial(c, st, now) {
   for (let i = 0; i <= 80; i++) {
     const x = Math.round(x0 + (span * i) / 80) + 0.5, big = i % 10 === 0, mid = i % 5 === 0;
     ctx.beginPath(); ctx.moveTo(x, h * 0.74); ctx.lineTo(x, h * (big ? 0.5 : mid ? 0.58 : 0.65)); ctx.stroke();
-    if (big) ctx.fillText(String(FREQ_MIN + (i / 80) * (FREQ_MAX - FREQ_MIN)), x, h * 0.93);
+    if (big) ctx.fillText((FREQ_MIN + (i / 80) * (FREQ_MAX - FREQ_MIN)).toFixed(1), x, h * 0.93);
   }
   // station windows
   for (const id of STATION_ORDER) {
@@ -58,13 +58,13 @@ function drawDial(c, st, now) {
     ctx.fillText(lit ? String(s.slot + 1) : '·', x, h * 0.395);
     ctx.fillStyle = lit ? s.color : 'rgba(255,196,120,.38)';
     ctx.font = `700 ${Math.max(10, Math.round(h * 0.115))}px "DM Mono", ui-monospace, monospace`;
-    ctx.fillText(s ? s.name : id.toUpperCase(), x, h * 0.18);
+    ctx.fillText(s ? s.name : id.toUpperCase(), x, h * 0.15);
   }
   // needle
   const nx = x0 + span * ((st.needle - 0.04) / 0.92);
   ctx.shadowColor = '#ff3b2f'; ctx.shadowBlur = 10; ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(nx, h * 0.06); ctx.lineTo(nx, h * 0.8); ctx.stroke(); ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.moveTo(nx - 6, h * 0.02); ctx.lineTo(nx + 6, h * 0.02); ctx.lineTo(nx, h * 0.12); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(nx, h * 0.24); ctx.lineTo(nx, h * 0.8); ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff4a3a'; ctx.beginPath(); ctx.moveTo(nx - 6, h * 0.17); ctx.lineTo(nx + 6, h * 0.17); ctx.lineTo(nx, h * 0.27); ctx.fill();
   // static burst across the dial on lock
   if (st.burst > 0.02) {
     ctx.fillStyle = '#e8e2d0'; ctx.globalAlpha = Math.min(0.55, st.burst * 0.6);
