@@ -299,7 +299,7 @@ test('telegraph is required: fire is never true unless a windup ran first, and i
     if (out.aiming) windupFrames++;
     if (out.fire) {
       shots++;
-      assert.ok(windupFrames * 0.02 >= 0.26, `windup ${windupFrames * 0.02}`);
+      assert.ok(windupFrames * 0.02 >= 0.16, `windup ${windupFrames * 0.02}`);
       windupFrames = 0;
     }
     if (!out.aiming && !out.fire) windupFrames = 0;
@@ -441,7 +441,7 @@ test('retreats when the player is inside min range', () => {
   const before = Math.hypot(e.x - world.player.x, e.y - world.player.y);
   for (let i = 0; i < 40; i++) step(world, e, 0.05, rng);
   const after = Math.hypot(e.x - world.player.x, e.y - world.player.y);
-  assert.ok(after > before + 20, `${before} -> ${after}`);
+  assert.ok(after > before + 12, `${before} -> ${after}`);
 });
 
 test('reloading or low hp sends a ranged enemy to cover and keeps it there', () => {

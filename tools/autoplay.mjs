@@ -860,7 +860,7 @@ async function playSeed(browser, seed, o, ctx) {
     await page.waitForFunction(() => !document.getElementById('start-button').disabled, null, {timeout: 60000});
     await page.fill('#seed-input', String(seed));
     await page.click('#start-button');
-    await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player, null, {timeout: 20000});
+    await page.waitForFunction(() => window.__deadair && window.__deadair.state.mode === 'play' && window.__deadair.state.player && !window.__deadair.state.loading, null, {timeout: 20000});
     // Deterministic stepping: the harness drives the sim ONLY through window.advanceTime (the game's own test hook; inputs stay
     // held between steps), so wall time no longer limits game time and runs are reproducible. --realtime keeps the rAF loop.
     if (!o.realtime) await page.evaluate(() => { window.requestAnimationFrame = () => 0; });

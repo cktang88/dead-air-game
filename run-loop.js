@@ -7,19 +7,19 @@ export const FINAL_FLOOR = 4;
 // depthShift is added to each room's 0..1 depth when picking encounter recipes, so MARKSMAN / RIOT squads appear
 // earlier on deeper floors. aimMul scales enemy aim error (below 1 = more accurate shots). eliteRooms converts that many ordinary combat rooms into WARDEN rooms.
 export const FLOORS = {
-  1: {n:1, countMult:0.42, aimMul:0.55, name:'THE SPILLWAY', depthShift:0, countBonus:1, eliteRooms:0, hpMult:1, speedMult:1, clearBonus:40, boss:false},
-  2: {n:2, countMult:0.8, aimMul:0.45, name:'FOUNDRY ROW', depthShift:.3, countBonus:3, eliteRooms:2, hpMult:1.08, speedMult:1.04, clearBonus:70, boss:false},
-  3: {n:3, countMult:1, aimMul:0.4, name:'THE UNDERCROFT', depthShift:.55, countBonus:3, eliteRooms:3, hpMult:1.15, speedMult:1.08, clearBonus:110, boss:false},
-  4: {n:4, countMult:0.9, aimMul:0.55, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.15, speedMult:1.08, clearBonus:0, boss:true},
+  1: {n:1, countMult:1, aimMul:0.55, name:'THE SPILLWAY', depthShift:0, countBonus:1, eliteRooms:0, hpMult:1, speedMult:1, clearBonus:40, boss:false},
+  2: {n:2, countMult:1.1, aimMul:0.45, name:'FOUNDRY ROW', depthShift:.3, countBonus:2, eliteRooms:2, hpMult:1.08, speedMult:1.04, clearBonus:70, boss:false},
+  3: {n:3, countMult:1.15, aimMul:0.4, name:'THE UNDERCROFT', depthShift:.55, countBonus:2, eliteRooms:3, hpMult:1.15, speedMult:1.08, clearBonus:110, boss:false},
+  4: {n:4, countMult:1, aimMul:0.55, name:'THE CONDUCTOR’S HALL', depthShift:.45, countBonus:0, eliteRooms:1, hpMult:1.15, speedMult:1.08, clearBonus:0, boss:true},
 };
 
-// Enemy headcount per room scales with the floor: floor 1 is a short, ammo-sized introduction (about 15 to 18 hostiles
-// against ~108 starting rounds; extraction only needs the route clear), deeper floors grow back toward the full budget.
-// Elite rooms keep their fixed pair, breathers stay light (a single enemy never drops to zero).
+// Enemy headcount per room: rooms hold SQUADS (3 to 7 hostiles mixed from the encounter recipes), floor 1 included. Lone enemies
+// were picked off for free; a group means crossfire, cover play and real decisions. Elite rooms keep their fixed pair.
+export const MAX_SQUAD = 7;
 export function scaledEnemyCount(count, cfg, role = 'combat') {
   if (!(count > 0)) return 0;
   if (role === 'elite') return count;
-  return Math.max(1, Math.round(count * (cfg?.countMult ?? 1)));
+  return Math.max(1, Math.min(MAX_SQUAD, Math.round(count * (cfg?.countMult ?? 1))));
 }
 
 export function floorConfig(n) {

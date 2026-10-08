@@ -30,14 +30,14 @@ export function assignRoomRoles(rooms,seed,gateableCacheIndexes=[]){
 
 export function roomEnemyCount(role,roll=0.5,combatIndex=Infinity){
   if(role==='entry'||role==='clinic')return 0;
-  if(role==='cache')return 2;
-  if(role==='armory')return 3;
+  if(role==='cache')return 3;
+  if(role==='armory')return 4;
   if(role==='elite')return 2;
   const boundedRoll=Math.max(0,Math.min(1-Number.EPSILON,roll));
-  if(role==='hazard')return 4+Math.floor(boundedRoll*2);
-  const count=2+Math.floor(boundedRoll*3);
-  // Only ordinary combat rooms consume this ordinal; specials keep fixed budgets.
-  return role==='combat'&&combatIndex<2?Math.min(count,3):count;
+  if(role==='hazard')return 5+Math.floor(boundedRoll*2);
+  // Groups of 3 to 5 (squads, not stragglers); floor config adds more. The first two ordinary rooms stay at 4 or fewer.
+  const count=3+Math.floor(boundedRoll*3);
+  return role==='combat'&&combatIndex<2?Math.min(count,4):count;
 }
 
 export function roomPickupKinds(role){
