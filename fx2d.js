@@ -143,6 +143,9 @@ export class Fx {
     this.floaters.push({x: e.x + rand(-5, 5), y: e.y - e.radius - 6, tag: e, text, sum: Math.round(damage), age: 0, life: 1.05, size: sizeFor(damage, killed), color: killed ? '#ffd86e' : '#fff4e8', vy: -40, kill: killed});
   }
   floater(x, y, text, color = '#fff', size = 13, life = 1.1) {
+    // pickups collected together stack instead of printing over each other
+    let guard = 0;
+    while (guard++ < 4 && this.floaters.some((f) => !f.tag && f.age < 0.6 && Math.abs(f.x - x) < 64 && Math.abs(f.y - y) < 14)) y -= 17;
     this.floaters.push({x, y, text, sum: 0, age: 0, life, size: Math.max(size, 16), color, vy: -30});
   }
   // Scrap pickups merge into one "+N SCRAP" pop (anything picked up within MERGE_S of the last one joins it),

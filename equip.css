@@ -560,9 +560,9 @@ input[type=range]:focus-visible { outline: 2px solid var(--phos); outline-offset
 .rack-legend { margin: 8px 2px 0; display: flex; align-items: center; gap: 8px; font: 500 11px var(--font-mono); letter-spacing: .08em; color: var(--text-low); text-transform: uppercase; }
 .ghost-key { display: inline-block; width: 14px; height: 0; border-top: 2px dashed #c8412f; }
 /* analog gauges: a printed dial face and a needle that swings in with some overshoot */
-.gauges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: 2px 0; padding-right: 6px; }
+.gauges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: 2px 0; padding-right: 16px; }
 .gauge { min-width: 0; position: relative; display: grid; justify-items: center; line-height: 1; }
-.gauge svg { width: 100%; max-width: 58px; height: auto; overflow: visible; }
+.gauge svg { width: 100%; max-width: 52px; height: auto; overflow: visible; }
 .gauge .face { fill: #f6efd4; stroke: #19150f; stroke-width: 1.2; }
 .gauge .ticks path { stroke: #19150f; stroke-width: 1; fill: none; }
 .gauge .red { stroke: #b8362b; stroke-width: 2.4; fill: none; }
