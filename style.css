@@ -874,7 +874,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #overlay:has(#run-result:not([hidden])) { padding: 24px 5vw 48px; }
 #overlay:has(#run-result:not([hidden])) .title-card { display: flex; flex-direction: column; max-height: calc(100vh - 72px); overflow: hidden; }
 #overlay:has(#run-result:not([hidden])) .title-card::before { display: none; }
-#overlay:has(#run-result:not([hidden])) #run-result { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-bottom: var(--s-3); scrollbar-width: thin; scrollbar-color: #3b3544 transparent; }
+#overlay:has(#run-result:not([hidden])) #run-result { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-bottom: var(--s-3); scrollbar-width: thin; -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent); mask-image: linear-gradient(#000 calc(100% - 22px), transparent); scrollbar-color: #3b3544 transparent; }
 #overlay:has(#run-result:not([hidden])) .title-card > :not(#run-result) { flex: none; }
 #overlay:has(#run-result:not([hidden])) .seed-control { display: none; }
 #run-result[data-kind=boss] { --acc: var(--coin); }
@@ -893,7 +893,7 @@ input[type=range] { accent-color: var(--health); cursor: pointer; }
 #how-to.compact.open > :not(.eyebrow) { display: revert; }
 #how-to.compact.open { cursor: default; }
 #how-to.compact.open .eyebrow::after { content: '– COLLAPSE'; }
-@media (max-height: 760px) { #overlay:has(#run-result:not([hidden])) .kit-chip { display: none; } }
+@media (max-height: 960px) { #overlay:has(#run-result:not([hidden])) .kit-chip { display: none; } }
 
 /* the rule card is for the title screen; the win / death screens already carry the story */
 #overlay:has(#run-result:not([hidden])) #how-to { display: none; }
