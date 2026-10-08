@@ -56,6 +56,9 @@ test('run plan labels: floor number, chunk counts, sprite percent, then done', (
   assert.equal(p.label(), 'BAKING SPRITES 64%');
   assert.equal(p.done(), false);
   p.update('sprites', 25, 25);
+  assert.equal(p.label(), 'FIRST FRAME');
+  assert.equal(p.done(), false);
+  p.finish('settle');
   assert.equal(p.done(), true);
   assert.equal(p.fraction(), 1);
   assert.equal(p.label(), 'ON AIR');

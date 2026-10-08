@@ -19,7 +19,14 @@ export function startTitleScene({reduced = false} = {}) {
   if (!shell || !overlay) return null;
   const canvas = document.createElement('canvas');
   canvas.id = 'title-scene'; canvas.setAttribute('aria-hidden', 'true');
+  // inline layout so the backdrop never depends on style.css having loaded (an unstyled canvas would sit in the page flow)
+  Object.assign(canvas.style, {position: 'absolute', inset: '0', width: '100%', height: '100%', zIndex: '6', pointerEvents: 'none'});
   shell.insertBefore(canvas, overlay);
+  // hide the instant the title menu closes, not on this canvas's next animation frame: a busy main thread right after a run
+  // starts must never leave the backdrop standing in front of the game
+  const sync = () => { canvas.style.visibility = overlay.classList.contains('show') ? 'visible' : 'hidden'; };
+  new MutationObserver(sync).observe(overlay, {attributes: true, attributeFilter: ['class']});
+  sync();
   const g = canvas.getContext('2d');
   let pattern = null, W = 0, H = 0, raf = 0, last = performance.now(), t = 0;
   const bullets = sceneBullets();

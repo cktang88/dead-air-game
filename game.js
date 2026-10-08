@@ -1587,11 +1587,15 @@ async function loadThen(floorNo,build){
     view.warmLevel();
     let left=view.warmPump(6);const total=Math.max(1,left);
     while(left>0){plan.update('sprites',(total-left)/total*50,100);show();await tick();left=view.warmPump(8);}
-    const peak=view.bakePending(),until=performance.now()+450;
+    const peak=view.bakePending(),until=performance.now()+4000;
     for(let p=peak;p>0&&performance.now()<until;p=view.bakePending()){const s=spriteProgress(p,peak);plan.update('sprites',50+s.done/s.total*50,100);show();await tick();}
     plan.finish('sprites');show();
-  }catch(error){console.error(error);}
-  finally{state.loading=false;ui.hide();}
+    // the map is only "ready" once the real game loop has presented it: wait for a few consecutive smooth frames of the level
+    // (render runs under the loader while state.loading holds the sim), so the loader never hides in front of a stall
+    for(let smooth=0,last=performance.now(),limit=last+5000;smooth<3&&performance.now()<limit;){await nextFrame();const t=performance.now();smooth=t-last<60?smooth+1:0;last=t;plan.update('settle',smooth,3);show();}
+    plan.finish('settle');show();
+  }catch(error){console.error(error);state.loading=false;ui.fail(error);return;}
+  state.loading=false;ui.hide();
 }
 
 async function boot(){

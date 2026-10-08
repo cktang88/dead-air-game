@@ -66,11 +66,15 @@
         function fail(err){
           if(S.dead)return;S.dead=true;console.error(err);
           var b=el();if(!b)return;
-          var host=S.failedHosts[0],msg=host?'Couldn’t reach '+host+'. Check your connection and RETRY.':'The game couldn’t load. Check your connection and RETRY.';
+          var host=S.failedHosts[0],detail=err&&(err.message||String(err)),msg=host?'Couldn’t reach '+host+'. Check your connection and RETRY.':'The game couldn’t load'+(detail?': '+String(detail).slice(0,180):'')+'. RETRY, or hard-refresh (Ctrl+Shift+R).';
           b.hidden=false;b.classList.add('failed');b.querySelector('.boot-eyebrow').textContent='STATION 0 \u00b7 NO CARRIER';b.querySelector('.boot-err p').textContent=msg;
           var btn=b.querySelector('.boot-err button');if(btn)btn.focus();
         }
         window.deadairBoot={css:css,set:set,show:show,hide:hide,phase:phase,fail:fail};
+        // an uncaught error while the loader is up (startup or a level build) must never leave a frozen screen: say what broke
+        function loaderUp(){var b=el();return b&&!b.hidden;}
+        window.addEventListener('error',function(e){if(e.target&&e.target!==window)return;if(/ResizeObserver/.test(e.message||''))return;if(loaderUp())fail(e.error||new Error(e.message));});
+        window.addEventListener('unhandledrejection',function(e){if(loaderUp())fail(e.reason||new Error('unhandled rejection'));});
         document.addEventListener('DOMContentLoaded',paint);
         function onLink(e,ok){
           var t=e.target;if(!t||t.tagName!=='LINK'||t.rel!=='modulepreload')return;

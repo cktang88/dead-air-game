@@ -15,9 +15,10 @@ export const BOOT_PHASES = [
 
 /** Starting a run or descending a floor. `floor` is a count-less step; chunks and sprites report real counts. */
 export const RUN_PHASES = [
-  {id: 'floor', w: 0.30, label: 'BUILDING FLOOR', floorNo: true},
-  {id: 'chunks', w: 0.40, label: 'DRAWING THE MAP', counts: true},
+  {id: 'floor', w: 0.25, label: 'BUILDING FLOOR', floorNo: true},
+  {id: 'chunks', w: 0.35, label: 'DRAWING THE MAP', counts: true},
   {id: 'sprites', w: 0.30, label: 'BAKING SPRITES', percent: true},
+  {id: 'settle', w: 0.10, label: 'FIRST FRAME'},
 ];
 
 const clamp01 = (v) => (v > 1 ? 1 : v > 0 ? v : 0);
