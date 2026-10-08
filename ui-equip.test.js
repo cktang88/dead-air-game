@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EMBLEMS, emblemFor, sampleWave, WAVES, flapHtml, gaugeHtml, vuHtml} from './ui-art.js';
-import {dialPos, springStep, STATION_ORDER, dialFreq} from './tuner-ui.js';
+import {browseIndex} from './pick-ui.js';
 import {flapValue} from './panel-ui.js';
 import {UPGRADES, STATIONS, offerFrequencies} from './frequencies.js';
-import {freqOfferHtml, decisionHtml} from './meta-ui.js';
+import {freqOfferHtml, decisionHtml, buildStripHtml} from './meta-ui.js';
 
 test('every frequency upgrade has its own drawn emblem', () => {
   for (const u of UPGRADES) assert.ok(EMBLEMS[u.effect], `missing emblem for ${u.effect}`);
@@ -24,17 +24,11 @@ test('every station has a distinct waveform within -1..1', () => {
   assert.ok(sampleWave('feedback', 1, 96).some(y => Math.abs(y) === 0.82), 'feedback clips');
   assert.equal(typeof WAVES.static(0.3, 0.2), 'number');
 });
-test('dial positions are ordered and inside the band', () => {
-  const pos = STATION_ORDER.map(dialPos);
-  assert.deepEqual([...pos].sort((a, b) => a - b), pos);
-  assert.ok(pos[0] > 0.05 && pos.at(-1) < 0.95);
-  assert.match(dialFreq(0.5), /^\d+\.\d$/);
-});
-test('needle spring converges and overshoots', () => {
-  let x = 0, v = 0, peak = 0;
-  for (let i = 0; i < 240; i++) { ({x, v} = springStep(x, v, 1, 1 / 60)); peak = Math.max(peak, x); }
-  assert.ok(Math.abs(x - 1) < 0.01);
-  assert.ok(peak > 1.01, 'under-damped: overshoots the station');
+test('arrow keys browse the three cards and wrap', () => {
+  assert.equal(browseIndex(0, 3, 'ArrowRight'), 1);
+  assert.equal(browseIndex(2, 3, 'ArrowRight'), 0);
+  assert.equal(browseIndex(0, 3, 'ArrowLeft'), 2);
+  assert.equal(browseIndex(1, 3, 'x'), 1);
 });
 test('flap drums count up and land exactly on the value', () => {
   assert.equal(flapValue(240, 0), 0);
@@ -47,12 +41,25 @@ test('gauge and VU markup', () => {
   assert.match(gaugeHtml(0.6), /--to:16\.0deg/);
   assert.equal((vuHtml(2).match(/class="on/g) || []).length, 2);
 });
-test('tuner markup keeps the ids and attributes game.js relies on', () => {
+test('upgrade pick markup keeps the attributes game.js relies on and reads in plain language', () => {
   const offers = offerFrequencies({unlockedIds: [], owned: {}, rng: () => 0.3});
   const html = freqOfferHtml({offers, owned: {}});
   assert.equal((html.match(/data-freq="/g) || []).length, offers.length);
-  assert.match(html, /class="tuner-dial"/);
-  assert.equal((html.match(/class="scope"/g) || []).length, offers.length);
+  assert.equal((html.match(/class="plate-effect"/g) || []).length, offers.length);
+  assert.match(html, /class="pbadge new">NEW</);
+  assert.doesNotMatch(html.replace(/<[^>]*>/g, ' '), /MHz|TUNE|FREQUENC|CROSSFADE|STATION|SIGNAL/i);
+  assert.doesNotMatch(html, /tuner-dial|class="scope"/);
+  const lvl = offerFrequencies({unlockedIds: [], owned: {arc: 1}, rng: () => 0.01});
+  const up = freqOfferHtml({offers: lvl, owned: {arc: 1}});
+  assert.match(up, /LEVEL UP 1→2/);
+  assert.match(up, /LEVEL 2\/3/);
+  assert.match(up, /Combos with|COMBO UNLOCKED/);
+});
+test('build strip chips are plain: name, level numeral, family, effect in the tooltip', () => {
+  const html = buildStripHtml({arc: 2, through: 2, rage: 1});
+  assert.match(html, /CHAIN LIGHTNING <b>II<\/b>/);
+  assert.match(html, /Level 2\/3: Lightning chains to 2 enemies/);
+  assert.match(html, /COMBO · STORM RICOCHET/);
 });
 test('decision markup keeps data-act extract / descend levers', () => {
   const html = decisionHtml({floor: 1, gross: 50, kept: 60, deathKeep: 0.4, nextClear: 20, hp: 3, maxHp: 3});

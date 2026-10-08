@@ -70,7 +70,7 @@ export function showSigComplete(on = true) {
   const el = $('sig-complete');
   if (!el) return;
   if (!on) { el.classList.remove('show'); return; }
-  el.innerHTML = '<small>5 / 5</small><strong>SIGNAL CHECK COMPLETE</strong><span>FLOOR 1 NEXT</span>';
+  el.innerHTML = '<small>5 / 5</small><strong>TUTORIAL COMPLETE</strong><span>FLOOR 1 NEXT</span>';
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
 }
 export function setPeekChrome(on) {

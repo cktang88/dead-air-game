@@ -1,4 +1,4 @@
-// World-space glyphs for the roguelike layer: door reward markers (Hades-style) and the FREQUENCY pickup.
+// World-space glyphs for the roguelike layer: door reward markers (Hades-style) and the UPGRADE pickup.
 // Hooked once from render2d.js after the lighting pass, so these read clearly in the dark.
 import {REWARDS} from './door-rewards.js';
 import {hudSafeRects, clearShift, boxHits} from './hud-safe.js';
@@ -8,7 +8,10 @@ const INK = '#120d1a';
 
 export function glyph(ctx, kind, r, color) {
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = Math.max(1.4, r * 0.18);
-  if (kind === 'wave') {
+  if (kind === 'upgrade') {
+    // two stacked chevrons: the universal 'level up' arrow
+    for (const dy of [-r * 0.5, r * 0.25]) { ctx.beginPath(); ctx.moveTo(-r * 0.8, dy + r * 0.45); ctx.lineTo(0, dy - r * 0.35); ctx.lineTo(r * 0.8, dy + r * 0.45); ctx.stroke(); }
+  } else if (kind === 'wave') {
     ctx.beginPath(); for (let i = 0; i <= 16; i++) { const x = -r + i * r * 2 / 16, y = Math.sin(i / 16 * TAU * 1.5) * r * 0.55; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
   } else if (kind === 'hex') {
     ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85); } ctx.closePath(); ctx.fill();
@@ -49,7 +52,7 @@ export function drawMetaWorld(ctx, state, now, tile = 32) {
   // Markers the HUD does not touch are placed first; the rest then treat those placed plates as extra obstacles.
   const sc = tf && cssW ? tf.a / k : 0, toScreenPt = (x, y) => [(tf.a * x + tf.c * y + tf.e) / k, (tf.b * x + tf.d * y + tf.f) / k];
   // a freq reward marker sitting on its own radio pickup is a duplicate: the pickup model is the marker
-  const dupFreq = (m) => (m.reward === 'freq' || m.info?.glyph === 'wave') && state.pickups.some(pk => pk.kind === 'freq' && pk.available && Math.hypot(pk.x - m.x * tile, pk.y - m.y * tile) < 48);
+  const dupFreq = (m) => (m.reward === 'freq' || m.info?.glyph === 'upgrade') && state.pickups.some(pk => pk.kind === 'freq' && pk.available && Math.hypot(pk.x - m.x * tile, pk.y - m.y * tile) < 48);
   const items = (state.doorMarkers || []).filter(m => !dupFreq(m)).map(m => {
     const info = m.info || REWARDS[m.reward];
     let x = m.x * tile, y = m.y * tile - 6;

@@ -80,7 +80,7 @@ export function settleRun({outcome, floorsCleared, roomsCleared, kills, bossKill
 
 // Shareable one-line result for the daily seed run.
 export function dailyShareLine({date, floor, kills, coins, outcome, seconds = 0}) {
-  const status = outcome === 'won' ? 'BOSS DOWN' : outcome === 'extract' ? 'EXTRACTED' : 'LOST THE SIGNAL';
+  const status = outcome === 'won' ? 'BOSS DOWN' : outcome === 'extract' ? 'EXTRACTED' : 'DIED';
   const mins = Math.floor(seconds / 60), secs = String(Math.floor(seconds % 60)).padStart(2, '0');
   return `DEAD AIR DAILY ${date} · FLOOR ${floor}/${FINAL_FLOOR} · ${kills} KILLS · +${coins} COINS · ${status} · ${mins}:${secs}`;
 }

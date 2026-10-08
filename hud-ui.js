@@ -89,7 +89,7 @@ export function feedTone(text) {
   const t = String(text).toUpperCase();
   if (/OUT OF|FIRST|NEED|COULD NOT|NO AMMO|CAN'T|VAULT LOCK/.test(t)) return 'warn';
   if (/HIT|TAGGED|BRUTAL|BROKEN|-1 HEALTH|RUN OVER|DEAD/.test(t)) return 'bad';
-  if (/HEALTH|PATCHED|VITALS|MEDKIT/.test(t)) return 'good';
+  if (/HEALTH|HEALED|PATCHED|MEDKIT/.test(t)) return 'good';
   if (/SCRAP|COIN|CACHE|FOUND|EQUIPPED|RESTOCK|ATTACHMENT/.test(t)) return 'loot';
   if (/DOWNED|KILL/.test(t)) return 'kill';
   return 'info';
@@ -178,22 +178,23 @@ export function setPauseScreen(visible, info = {}) {
   el.hidden = !visible;
 }
 
-export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '', floor = 0, finalFloor = 4 }) {
+export function runEndHtml({ won, boss = false, rooms, totalRooms, kills, seconds, payout, seed, scrap, balance, best = null, isNewBest = false, cause = '', floor = 0, finalFloor = 4, build = [] }) {
   const icon = id => iconSvg(id, { size: 0 });
-  // The end screen is a printed station log: thermal paper, leader dots, a rubber stamp for the verdict.
+  // The end screen is a printed run summary: thermal paper, leader dots, a rubber stamp for the verdict.
   const line = (label, value, count = null) => `<div class="log-line"><dt>${label}</dt><i class="leader" aria-hidden="true"></i><dd${count != null ? ` data-count="${count}"` : ''}>${esc(value)}</dd></div>`;
   const bestLine = best
     ? `<div class="end-best">${icon('status-trophy')}<span>${isNewBest ? 'NEW BEST RUN' : 'BEST RUN'} · <b>${best.won ? 'EXTRACTED' : `${best.rooms} ROOMS`}</b> · <b>${best.kills} KILLS</b> · <b>${formatClock(best.seconds)}</b></span></div>` : '';
   // three distinct moments: the Conductor falls (boss: ON AIR lamp), a bank-out (extract), a death (test card, SIGNAL LOST)
-  const head = boss ? {cls: 'won boss', eyebrow: 'SIGNAL RESTORED', title: 'ON AIR', stamp: 'BROADCAST RESTORED', sub: 'THE CONDUCTOR IS SILENT · THE BROADCAST IS YOURS'}
-    : won ? {cls: 'won', eyebrow: 'SECTOR EXTRACTED', title: 'EXTRACTED', stamp: 'CLEARED', sub: `BANKED ${payout} COINS`}
-    : {cls: 'dead', eyebrow: 'TRANSMISSION ENDED', title: 'SIGNAL LOST', stamp: 'NO CARRIER', sub: cause || 'RUN OVER'};
+  const head = boss ? {cls: 'won boss', eyebrow: 'BOSS DEFEATED', title: 'YOU WIN', stamp: 'BOSS DOWN', sub: 'THE CONDUCTOR IS DOWN · THE STATION IS YOURS'}
+    : won ? {cls: 'won', eyebrow: 'RUN COMPLETE', title: 'EXTRACTED', stamp: 'CLEARED', sub: `BANKED ${payout} COINS`}
+    : {cls: 'dead', eyebrow: 'RUN OVER', title: 'YOU DIED', stamp: 'DEAD AIR', sub: cause || 'RUN OVER'};
   const art = boss ? '<div class="airlamp" aria-hidden="true"><span>ON AIR</span></div>' : won ? '<div class="stamp ok" aria-hidden="true">EXTRACTED</div>' : '<div class="testcard" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>';
   return `<div class="log ${head.cls}">
-<div class="log-top"><span>DEAD AIR · STATION LOG</span><span>SEED ${esc(seed ?? '—')}</span></div>
+<div class="log-top"><span>DEAD AIR · RUN SUMMARY</span><span>SEED ${esc(seed ?? '—')}</span></div>
 ${art}
 <div class="log-head"><small>${head.eyebrow}</small><strong>${head.title}</strong><span class="end-cause">${esc(head.sub)}</span>${isNewBest ? '<span class="badge stamp-new">NEW BEST</span>' : ''}</div>
 <dl class="log-lines">${line('ROOMS CLEARED', `${rooms}${totalRooms ? ` / ${totalRooms}` : ''}`, rooms)}${line('KILLS', kills, kills)}${line('RUN TIME', formatClock(seconds))}${floor ? line('FLOOR REACHED', `${floor} / ${finalFloor}`) : ''}</dl>
+${build.length ? `<div class="log-build"><small>UPGRADES</small><span>${build.map(b => `${esc(b.name)} ${['', 'I', 'II', 'III'][b.rank] || b.rank}`).join(' · ')}</span></div>` : ''}
 <div class="log-total"><div><small>COINS EARNED</small><span class="big" data-count="${payout}" data-prefix="+">+${payout}</span></div><div class="bal"><small>SAFEHOUSE BALANCE</small><b data-count="${balance}">${balance}</b></div></div>
 <div class="log-note"><span class="term" data-tip="Coins are permanent. Spend them on Safehouse upgrades between runs. Scrap is different: it only lasts for one run.">what are coins?</span></div>
 ${bestLine}</div>`;

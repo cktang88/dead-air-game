@@ -25,7 +25,7 @@ import {spawnBoss, updateBossEnemy, bossDamageFor, bossLights, bossCamShift} fro
 import {BOSS_ROOM_NAME} from './boss.js';
 import {BOSS,BOSS_BULLET_FLOOR} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
-import {mountTuner} from './tuner-ui.js';
+import {mountPick} from './pick-ui.js';
 import {rackHtml,binsHtml,modDrawerHtml} from './armory-ui.js';
 import {paintStacks,sweepNeedles} from './equip-art.js';
 import {mountDesk} from './desk-ui.js';
@@ -161,7 +161,7 @@ function syncRunStats(){
   tickNumber($('kills'),state.kills,2);tickNumber($('scrap'),state.scrap,3);
   {const r=routeStats(),stat=$('sector-count').parentElement;if(stat)stat.hidden=signalOn();setText($('sector-count'),`${r.cleared} / ${r.total}`);}   // Signal Check has its own N / 5 chip: the route counter would read 0 / 0
   setText($('run-clock'),`RUN ${formatClock(state.realElapsed)}`);
-  setText($('room-name'),state.roomToast||(signalOn()?`SIGNAL CHECK · ${state.rooms[state.currentRoom]?.name||'BREATH'}`:`FLOOR ${String(state.floor).padStart(2,'0')} · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`));
+  setText($('room-name'),state.roomToast||(signalOn()?`TUTORIAL · ${state.rooms[state.currentRoom]?.name||'BREATH'}`:`FLOOR ${String(state.floor).padStart(2,'0')} · ${state.rooms[state.currentRoom]?.name||'ENTRY'}`));
 }
 function hud(){
   const gun=GUNS[state.weaponIndex];
@@ -542,7 +542,7 @@ function updateSurvival(dt){
 }
 function updateObjective(){
   const el=$('objective');if(!el||!state.player)return;
-  if(signalOn()){const t=`SIGNAL CHECK · ${state.signal.room+1} / 5`;if(el.textContent!==t)el.textContent=t;el.dataset.tone='seek';return;}
+  if(signalOn()){const t=`TUTORIAL · ${state.signal.room+1} / 5`;if(el.textContent!==t)el.textContent=t;el.dataset.tone='seek';return;}
   const route=state.rooms.filter((r,i)=>r.branch!==true&&roomHasLivingEnemies(i,state.enemies));
   const exit=state.pickups.find(p=>p.kind==='exit'&&p.available),routeHostiles=state.enemies.filter(e=>e.alive&&state.rooms[e.roomIndex]?.branch!==true).length;
   const ex=extractionStatus(state.rooms,state.enemies),o=objectiveText({routeRoomsLeft:route.length,routeHostiles,here:state.enemies.filter(e=>e.alive&&e.roomIndex===state.currentRoom).length,exitReady:state.extractionOpen||ex.open,awareLeft:ex.aware,exitRoomHostiles:ex.inExitRoom,unawareLeft:ex.unaware,exitMeters:exit?distance(state.player,exit)/TILE:null});
@@ -586,7 +586,7 @@ function hitPlayerBase(damage,x,y,srcAng=null,srcName=null){
   if(state.invuln>0||state.mode!=='play')return;if(srcName)state.lastHitBy=srcName;
   {const p=state.player;if(p){(state.hitIndicators??=[]);registerHitIndicator(state.hitIndicators,srcAng??Math.atan2(y-p.y,x-p.x),damage>1?1.25:1);}}
   const impact=absorbArmorDamage(state.armor,damage);state.armor=impact.armor;state.health=Math.max(0,state.health-impact.healthDamage);state.invuln=.85;state.calmTimer=0;pulseHurt();state.shake=impact.healthDamage>0?5.5:2.8;state.hitstop=Math.max(state.hitstop,.1);(impact.healthDamage>0?playPlayerHurt:playArmorHit)();markAction();emit('playerHurt',state.player.x,state.player.y,{damage:damage,armorOnly:impact.healthDamage===0,health:state.health,sx:x,sy:y});burst(state.player.x,state.player.y,impact.healthDamage>0?0xff4e63:0x75cfe0,12,1.1);
-  const message=impact.healthDamage===0?state.armor===0?'PLATE BROKEN · HEALTH HELD':`PLATE HIT · ${state.armor} LEFT`:impact.absorbed>0?'PLATE HIT · VITALS DAMAGED':damage>1?'BRUTAL HIT':'YOU GOT TAGGED';toast(message,900);hud();
+  const message=impact.healthDamage===0?state.armor===0?'ARMOR BROKEN · HEALTH HELD':`ARMOR HIT · ${state.armor} LEFT`:impact.absorbed>0?'ARMOR HIT · HEALTH DAMAGED':damage>1?'BRUTAL HIT':'YOU GOT TAGGED';toast(message,900);hud();
   {const kn=playerHitKnock(state.player.x-x,state.player.y-y,impact.healthDamage);state.playerKnock.x+=kn.x;state.playerKnock.y+=kn.y;}
   if(state.health<=0){if(signalOn()){signalRoomFail();return;}finishRun('dead');$('vignette').style.background='radial-gradient(ellipse,rgba(95,15,30,.25),rgba(10,6,13,.85))';}
 }
@@ -651,7 +651,7 @@ function collect(pickup,manual=false){if(!pickup.available)return false;const d=
     case'ammo':{const gi=state.weaponSlots[ammoSlot],g=GUNS[gi],add=Math.min(g.reserve-state.reserveAmmo[gi],ammoPickupRounds(g.reserve,pickup.value||.2));state.reserveAmmo[gi]+=add;view.fx.floater(pickup.x,pickup.y-8,collectPopup('ammo',add),'#8fe0ff',14,1.1);toast(`+${add} AMMO · ${g.name}`);break;}
     case'armor':{const plate=GEAR.find(item=>item.id==='armor');if(state.maxArmor===0){state.gear='armor';state.maxArmor=plate.armorDurability;state.armor=plate.armorDurability;view.fx.floater(pickup.x,pickup.y-8,'ARMOR PLATE','#75cfe0',14,1.1);toast(`ARMOR PLATE · ABSORBS ${plate.armorDurability} DAMAGE`);}else{state.armor=Math.min(state.maxArmor,state.armor+1);view.fx.floater(pickup.x,pickup.y-8,'+1 PLATE','#75cfe0',14,1.1);toast('ARMOR PLATE PATCHED · +1');}break;}
     case'scrap':{const got=scrapGain(pickup.value||12);state.scrap+=got;view.fx.scrapPop(pickup.x,pickup.y-8,got);toast(`+${pickup.value||12} SCRAP`);break;}
-    case'heal':{const amt=pickup.value||2,got=Math.min(amt,state.maxHealth-state.health);state.health+=got;view.fx.floater(pickup.x,pickup.y-8,collectPopup('heal',got),'#74dfab',15,1.1);toast(`PATCHED UP · +${got} VITALS`);break;}
+    case'heal':{const amt=pickup.value||2,got=Math.min(amt,state.maxHealth-state.health);state.health+=got;view.fx.floater(pickup.x,pickup.y-8,collectPopup('heal',got),'#74dfab',15,1.1);toast(`HEALED · +${got} HEALTH`);break;}
     case'freq':openFreqPick(pickup.elite?'elite':'door');break;
     case'exit':if(!exitOpenNow()){toast('EXIT LOCKED · CLEAR THE EXIT ROOM, LOSE ANYONE HUNTING YOU');pickup.available=true;return false;}reachExit();break;
   }if(!pickup.available){if(pickup.kind!=='exit')playPickup(pickup.kind);}hud();return true;
@@ -741,7 +741,7 @@ function stunBurst(x,y,radius,seconds,{wipe=false,knock=false,color='#9ad8ff'}={
 function jamEnemy(enemy,seconds,{splash=0,fromFreq=true}={}){
   if(!enemy.alive||enemy.type==='boss'||seconds<=0)return;
   const wasJammed=enemy.stun>.2;enemy.stun=Math.max(enemy.stun||0,seconds);
-  if(!wasJammed)view.fx.floater(enemy.x,enemy.y-20,'JAMMED','#9ad8ff',11,.8);
+  if(!wasJammed)view.fx.floater(enemy.x,enemy.y-20,'STUNNED','#9ad8ff',11,.8);
   for(let i=state.bullets.length-1;i>=0;i--){const bl=state.bullets[i];if(bl.owner==='enemy'&&bl.enemyId===enemy.id){view.fx.spark(bl.x,bl.y,0,4,Math.PI,[40,140],'#9ad8ff');removeBullet(i);}}
   if(splash>0)for(const other of state.enemies)if(other.alive&&other!==enemy&&other.type!=='boss'&&Math.hypot(other.x-enemy.x,other.y-enemy.y)<splash&&!lineBlocked(enemy.x,enemy.y,other.x,other.y)){other.stun=Math.max(other.stun||0,seconds*.5);view.fx.bolt(enemy.x,enemy.y,other.x,other.y,'#9ad8ff',.25,1.6);}
 }
@@ -870,7 +870,7 @@ function onBossKilled(enemy){
 function roomRewardDrop(room){
   const kind=room.reward;if(!kind||room.rewardTaken)return;room.rewardTaken=true;
   const [x,y]=freeRoomPoint(room),builtIn=roomPickupKinds(room.role);
-  if(kind==='freq'||kind==='elite'){dropPickup('freq',x,y,0,state.rooms.indexOf(room));const pk=state.pickups.at(-1);if(pk?.kind==='freq'&&kind==='elite')pk.elite=true;pushFeed(kind==='elite'?'ELITE DOWN · A FREQUENCY IS BROADCASTING':'A FREQUENCY IS BROADCASTING HERE','loot');}
+  if(kind==='freq'||kind==='elite'){dropPickup('freq',x,y,0,state.rooms.indexOf(room));const pk=state.pickups.at(-1);if(pk?.kind==='freq'&&kind==='elite')pk.elite=true;pushFeed(kind==='elite'?'ELITE DOWN · AN UPGRADE DROPPED':'AN UPGRADE DROPPED HERE','loot');}
   else if(kind==='scrap'){for(let n=0;n<4;n++)dropPickup('scrap',...freeRoomPoint(room),SCRAP.rewardDoor/4);}
   else if(kind==='gun'&&!builtIn.includes('gun'))dropPickup('gun',x,y,0,state.rooms.indexOf(room));
   else if(kind==='heal'&&!builtIn.includes('heal')&&!interferenceStats(state.progress).noHeals)dropPickup('heal',x,y,2);
@@ -881,15 +881,15 @@ function roomClearTracking(room){
 }
 
 /* ---------- run modal (decision + frequency pick) */
-let runModalClear=0,tunerH=null,runModalBusy=false;
+let runModalClear=0,pickH=null,runModalBusy=false;
 function setRunModal(kind,html){
-  state.runModal=kind;input.keys.clear();input.firing=false;runModalBusy=false;tunerH?.dispose();tunerH=null;
+  state.runModal=kind;input.keys.clear();input.firing=false;runModalBusy=false;pickH?.dispose();pickH=null;
   const el=$('run-modal');clearTimeout(runModalClear);el.classList.remove('committing');el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');
-  if(kind==='freq')tunerH=mountTuner(el);else mountPanel(el);
+  if(kind==='freq')pickH=mountPick(el);else mountPanel(el);
   el.querySelector('button')?.focus();
 }
 function closeRunModal(){
-  tunerH?.dispose();tunerH=null;state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
+  pickH?.dispose();pickH=null;state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
 }
 const runCoinMult=()=>runStats().coinMult*(1+interferenceStats(state.progress).coinBonus);
 function reachExit(){
@@ -909,7 +909,7 @@ function commitDecision(choice){
 function commitFreq(id){
   if(state.runModal!=='freq'||runModalBusy||!state.freqOffers.some(o=>o.id===id))return;
   runModalBusy=true;playUiClick();
-  if(tunerH?.lock(id,()=>{runModalBusy=false;pickFreq(id);}))ambienceStatic(.35);else{runModalBusy=false;pickFreq(id);}
+  if(pickH?.lock(id,()=>{runModalBusy=false;pickFreq(id);}))ambienceStatic(.35);else{runModalBusy=false;pickFreq(id);}
 }
 function decide(choice){
   if(state.runModal!=='decision')return;
@@ -919,22 +919,22 @@ function decide(choice){
 }
 function openFreqPick(source='door',then=null){
   const offers=offerFrequencies({unlockedIds:unlockedFreqIds(state.progress),owned:state.freq,rng:random});
-  if(!offers.length){state.scrap+=40;toast('ALL FREQUENCIES MAXED · +40 SCRAP');then?.();return;}
+  if(!offers.length){state.scrap+=40;toast('ALL UPGRADES MAXED · +40 SCRAP');then?.();return;}
   state.freqOffers=offers;state.freqThen=then;
-  const meta={floor:['TUNE IN.','FLOOR REWARD · PICK ONE FREQUENCY'],elite:['ELITE SIGNAL.','ELITE CLEARED · PICK ONE FREQUENCY'],door:['TUNE IN.','FREQUENCY FOUND · PICK ONE'],supply:['TUNE IN.','SUPPLY DROP · PICK ONE FREQUENCY']}[source]||['TUNE IN.','PICK ONE'];
+  const meta={floor:['CHOOSE AN UPGRADE','FLOOR REWARD · PICK ONE'],elite:['ELITE REWARD','ELITE CLEARED · PICK ONE UPGRADE'],door:['CHOOSE AN UPGRADE','UPGRADE FOUND · PICK ONE'],supply:['CHOOSE AN UPGRADE','SUPPLY DROP · PICK ONE UPGRADE']}[source]||['TUNE IN.','PICK ONE'];
   setRunModal('freq',freqOfferHtml({offers,owned:state.freq,title:meta[0],eyebrow:meta[1]}));
 }
-// A crossfade unlocking is a moment: name card, a beat of near-frozen time, a chord, and a ring from the player in both station colors.
+// A combo unlocking is a moment: name card, a beat of near-frozen time, a chord, and a ring from the player in both family colors.
 function crossfadeFlourish(cf){
-  state.flourishT=1.5;pushFeed(`CROSSFADE · ${cf.name}`,'good');showBanner(cf.name,cf.desc,'clear','CROSSFADE');playRoomClear();playSlowmoEnter();
-  const p=state.player;if(p){cf.stations.forEach((id,n)=>view.fx.ring(p.x,p.y,10+n*6,70+n*34,STATION_BY_ID.get(id).color,.9,3));view.fx.floater(p.x,p.y-34,`CROSSFADE · ${cf.name}`,'#ffffff',14,1.6);}
+  state.flourishT=1.5;pushFeed(`COMBO · ${cf.name}`,'good');showBanner(cf.name,cf.desc,'clear','COMBO UNLOCKED');playRoomClear();playSlowmoEnter();
+  const p=state.player;if(p){cf.stations.forEach((id,n)=>view.fx.ring(p.x,p.y,10+n*6,70+n*34,STATION_BY_ID.get(id).color,.9,3));view.fx.floater(p.x,p.y-34,`COMBO · ${cf.name}`,'#ffffff',14,1.6);}
 }
 function pickFreq(id){
   const offer=state.freqOffers.find(item=>item.id===id);if(!offer||state.runModal!=='freq')return;
   const before=new Set(activeCrossfades(state.freq).map(c=>c.id));
   state.freq=pickFrequency(state.freq,id);
   const fresh=activeCrossfades(state.freq).filter(c=>!before.has(c.id));
-  kn.freqPicked=true;closeRunModal();playPickup('mod');toast(`${offer.name} · ${offer.isNew?'NEW':`RANK ${offer.rank}`}`,1700);
+  kn.freqPicked=true;closeRunModal();playPickup('mod');toast(`${offer.name} · ${offer.isNew?'NEW':`LEVEL ${offer.level}/3`}`,1700);
   if(fresh.length)crossfadeFlourish(fresh[0]);
   hud();const then=state.freqThen;state.freqThen=null;then?.();
 }
@@ -976,7 +976,7 @@ function finishRunImpl(result,causeArg){
   const showEnd=()=>{
     if(state.mode==='play')return;
     const el=$('run-result');el.hidden=false;
-    el.innerHTML=runEndHtml({won:result!=='dead',boss:result==='won',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy,floor:reached,finalFloor:FINAL_FLOOR})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
+    el.innerHTML=runEndHtml({won:result!=='dead',boss:result==='won',rooms:state.runRooms,totalRooms:0,kills:state.kills,seconds:state.realElapsed,payout:settle.kept,seed:state.seed,scrap:state.scrap,balance:progress.coins,best:merged.best,isNewBest:merged.isNew&&!!merged.previous,cause:killedBy,floor:reached,finalFloor:FINAL_FLOOR,build:buildSummaryForUi()})+storyHtml({lines,goals:rec.completed,unlocks:newUnlocks,tape:tape.tape,share,payout});
     el.dataset.result=result==='dead'?'dead':'won';el.dataset.kind=result==='won'?'boss':result;$('how-to')?.classList.toggle('compact',progress.stats.runs>1);$('start-button').innerHTML='<span>RUN AGAIN</span><kbd>R</kbd>';$('start-button').classList.add('again');$('game-shell')?.classList.remove('dying');$('overlay').classList.add('show');$('meta-panel').hidden=true;renderMeta();$('start-button').focus({preventScroll:true});animateCounts(el);
   };
   toast(result==='won'?'THE CONDUCTOR IS DOWN':result==='extract'?'EXTRACTED':'RUN OVER',3500);

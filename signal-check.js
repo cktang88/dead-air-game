@@ -51,7 +51,7 @@ export const ZONES = [
 ];
 
 export const REWARD_INFO = {
-  freq: {id: 'freq', label: 'FREQUENCY', color: '#9ad8ff', glyph: 'wave'},
+  freq: {id: 'freq', label: 'UPGRADE', color: '#9ad8ff', glyph: 'upgrade'},
   scrap: {id: 'scrap', label: 'SCRAP', color: '#f4c66d', glyph: 'hex'},
   supply: {id: 'supply', label: 'SUPPLY', color: '#ffd27a', glyph: 'crate'},
 };

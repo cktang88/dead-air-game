@@ -5,7 +5,7 @@ import {UPGRADES, STATIONS, CROSSFADES, MAX_RANK, STAT_DEFAULTS, freqStats, pick
 const seq = (seed = .3) => { let v = seed; return () => (v = (v * 9301 + .49297) % 1); };
 const everything = UPGRADES.map(u => `freq:${u.id}`);
 
-test('every rank only sets known stats, and ranks 2 and 3 change behavior (a new stat or different text), not just one number', () => {
+test('every rank only sets known stats, and levels 2 and 3 change behavior (a new stat or different text), not just one number', () => {
   for (const u of UPGRADES) {
     for (const [i, r] of u.ranks.entries()) {
       for (const k of Object.keys(r.fx)) assert.ok(k in STAT_DEFAULTS, `${u.id} rank ${i + 1} sets unknown stat ${k}`);
@@ -17,8 +17,7 @@ test('every rank only sets known stats, and ranks 2 and 3 change behavior (a new
       const changesNumber = now.some(k => u.ranks[i].fx[k] !== u.ranks[i - 1].fx[k]);
       assert.ok(changesNumber || addsStat, `${u.id} rank ${i + 1} must change something`);
     }
-    const twistRanks = u.ranks.slice(1).filter(r => /^(Twist|Flourish)/.test(r.desc));
-    assert.equal(twistRanks.length, 2, `${u.id}: ranks 2 and 3 are labelled twist and flourish`);
+    for (const r of u.ranks) assert.doesNotMatch(r.desc, /\b(Twist|Flourish|jam|jams|jammed|signal|frequency|station|crossfade|tune)\b/i, `${u.id}: plain words only`);
   }
 });
 
@@ -99,4 +98,18 @@ test('RED LINE and ECHO expose the stats the game reads at the moment of the sho
   assert.ok(availableUpgrades([], {}).length >= 9);
   assert.equal(MAX_RANK, 3);
   assert.equal(pickFrequency({}, 'backlash').backlash, 1);
+});
+
+test('player-facing names are plain build language: SHOCK / TIME / PIERCE / STEALTH / RISK, no radio jargon', () => {
+  assert.deepEqual(STATIONS.map(s => s.name), ['SHOCK', 'TIME', 'PIERCE', 'STEALTH', 'RISK']);
+  const text = [...STATIONS.map(s => `${s.name} ${s.tag} ${s.voice}`), ...CROSSFADES.map(c => `${c.name} ${c.desc}`), ...UPGRADES.map(u => u.name)].join(' ');
+  assert.doesNotMatch(text, /\b(static|deadline|carrier|night shift|feedback|crossfade|jam|signal|channel|frequency|broadcast|dead air)\b/i);
+});
+
+test('offers carry plain level info: NEW vs LEVEL n-1 to n, plus the families the upgrade combos with', () => {
+  const fresh = offerFrequencies({owned: {}, unlockedIds: everything, rng: seq(.4)});
+  assert.ok(fresh.every(o => o.isNew && o.level === 1 && o.prevLevel === 0));
+  const next = offerFrequencies({owned: {arc: 1}, unlockedIds: everything, rng: () => .01}).find(o => o.id === 'arc');
+  if (next) { assert.equal(next.level, 2); assert.equal(next.prevLevel, 1); }
+  for (const o of fresh) { assert.ok(o.partners.length >= 2); assert.ok(!o.partners.includes(o.station)); }
 });

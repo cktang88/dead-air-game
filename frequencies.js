@@ -1,7 +1,7 @@
-// FREQUENCIES: the in-run build system. Each radio STATION is a family with its own voice and a distinct VISIBLE
-// play style; every upgrade is a behavior you can watch happen, and ranking one up changes what it does (rank 2 adds
-// a twist, rank 3 a flourish) instead of just growing a number. Holding two stations at level 2+ switches on a
-// CROSSFADE synergy, announced with a freeze-frame name card.
+// UPGRADES: the in-run build system. Each FAMILY (SHOCK, TIME, PIERCE, STEALTH, RISK) is a build archetype with a distinct
+// VISIBLE play style; every upgrade is a behavior you can watch happen, and levelling one up (I, II, III) changes what it
+// does instead of just growing a number. Holding two families at level 2+ switches on a COMBO synergy, announced with a
+// freeze-frame name card. (Internal ids such as 'static' / 'deadline' / 'freq:arc' stay for save compatibility.)
 //
 // Pure data and logic (no DOM). Every rank is `{fx, text}`: `fx` holds the raw stat values folded by freqStats()
 // and `text` renders the one-line player-facing description FROM those values, so the text cannot drift from the
@@ -10,138 +10,144 @@
 // `owned` everywhere is a plain object {upgradeId: rank}. Offers are pick-1-of-3 and come from doors and floors.
 
 export const STATIONS = [
-  {id:'static', name:'STATIC', tag:'ARC · JAM · ZAP', color:'#9ad8ff', voice:'Hiss and arc. Your fire leaks into the room.'},
-  {id:'deadline', name:'DEADLINE', tag:'KILLS BUY TIME', color:'#ffd27a', voice:'Every kill refunds the clock.'},
-  {id:'carrier', name:'CARRIER', tag:'PIERCE · BANK · SEEK', color:'#74dfab', voice:'One clean signal through everything.'},
-  {id:'nightshift', name:'NIGHT SHIFT', tag:'HUSH · AMBUSH · SILENT KILLS', color:'#b49bff', voice:'Quiet hands. Nobody hears the shift end.'},
-  {id:'feedback', name:'FEEDBACK', tag:'POWER FROM RISK', color:'#ff7a8a', voice:'The closer you are to dead, the louder you get.'},
+  {id:'static', name:'SHOCK', tag:'CHAIN · STUN', color:'#9ad8ff', voice:'Lightning chains and stuns.'},
+  {id:'deadline', name:'TIME', tag:'SLOW-MO · KILL REFUNDS', color:'#ffd27a', voice:'Kills slow the world down.'},
+  {id:'carrier', name:'PIERCE', tag:'PIERCE · RICOCHET · HOMING', color:'#74dfab', voice:'Bullets go through, bounce and curve.'},
+  {id:'nightshift', name:'STEALTH', tag:'QUIET · SNEAK KILLS', color:'#b49bff', voice:'Quiet shots and sneak attacks.'},
+  {id:'feedback', name:'RISK', tag:'STRONGER AT LOW HEALTH', color:'#ff7a8a', voice:'The closer you are to dead, the harder you hit.'},
 ];
-export const STATION_BY_ID = new Map(STATIONS.map(s => [s.id, s]));
+export const FAMILIES = STATIONS;
+export const FAMILY_BY_ID = new Map(STATIONS.map(s => [s.id, s]));
+export const STATION_BY_ID = FAMILY_BY_ID;
 
 export const RANK_NAMES = ['COMMON', 'RARE', 'EPIC'];
 export const MAX_RANK = 3;
+export const LEVEL_NAMES = ['I', 'II', 'III'];
 
 const TILE = 32;
 const pct = v => `${Math.round(v * 100)}%`;
 const tiles = px => { const t = px / TILE; return Number.isInteger(t) ? `${t}` : t.toFixed(1); };
 
 // `unlockCost:null` upgrades are available from the first run; others are bought in the safehouse (id `freq:<id>`).
+// Ids (arc, jam, through...) are save-compatible internals; the player-facing names are plain build language.
 const RAW = [
-  // ---------------------------------------------------------------- STATIC: your fire leaks into the room
-  {id:'arc', station:'static', name:'ARC LIGHT', effect:'arc', unlockCost:null, ranks:[
-    {fx:{chain:.5, chainTargets:1}, text: f => `Every hit arcs a lightning bolt to the nearest other enemy within 4 tiles for ${pct(f.chain)} damage.`},
-    {fx:{chain:.5, chainTargets:2}, text: () => 'Twist: the arc jumps on to a second enemy.'},
-    {fx:{chain:.6, chainTargets:2, arcStun:1}, text: f => `Flourish: arcs hit for ${pct(f.chain)} and jam every enemy they touch for ${f.arcStun} s.`},
+  // ---------------------------------------------------------------- SHOCK: chain and stun
+  {id:'arc', station:'static', name:'CHAIN LIGHTNING', effect:'arc', unlockCost:null, ranks:[
+    {fx:{chain:.5, chainTargets:1}, text: f => `Hits chain lightning to the nearest enemy within 4 tiles for ${pct(f.chain)} damage.`},
+    {fx:{chain:.5, chainTargets:2}, text: f => `Lightning chains to ${f.chainTargets} enemies.`},
+    {fx:{chain:.6, chainTargets:2, arcStun:1}, text: f => `Lightning hits for ${pct(f.chain)} and stuns each enemy for ${f.arcStun} s.`},
   ]},
-  {id:'jam', station:'static', name:'JAMMER', effect:'jam', unlockCost:null, ranks:[
-    {fx:{jam:.4}, text: f => `Your hits jam the target for ${f.jam} s: it cannot shoot, and its bullets in the air vanish.`},
-    {fx:{jam:.4, jamSplash:64}, text: f => `Twist: the jam splashes to enemies within ${tiles(f.jamSplash)} tiles of the target.`},
-    {fx:{jam:.8, jamSplash:96}, text: f => `Flourish: jam lasts ${f.jam} s and splashes ${tiles(f.jamSplash)} tiles.`},
+  {id:'jam', station:'static', name:'STUN ROUNDS', effect:'jam', unlockCost:null, ranks:[
+    {fx:{jam:.4}, text: f => `Hits stun the target for ${f.jam} s: it can't shoot, and its bullets vanish.`},
+    {fx:{jam:.4, jamSplash:64}, text: f => `The stun also spreads to enemies within ${tiles(f.jamSplash)} tiles of the target.`},
+    {fx:{jam:.8, jamSplash:96}, text: f => `Stun lasts ${f.jam} s and spreads ${tiles(f.jamSplash)} tiles.`},
   ]},
-  {id:'distortion', station:'static', name:'DISTORTION FIELD', effect:'bubble', unlockCost:35, ranks:[
-    {fx:{bubble:64, bubbleSlow:.45}, text: f => `A ring around you (${tiles(f.bubble)} tiles) slows enemy bullets to ${pct(f.bubbleSlow)}. Weave through them.`},
-    {fx:{bubble:96, bubbleSlow:.25}, text: f => `Twist: the ring grows to ${tiles(f.bubble)} tiles and slows bullets to ${pct(f.bubbleSlow)}.`},
-    {fx:{bubble:96, bubbleSlow:.25, bubbleZap:44}, text: f => `Flourish: any bullet that gets within ${tiles(f.bubbleZap)} tiles of you is zapped out of the air.`},
+  {id:'distortion', station:'static', name:'SLOW FIELD', effect:'bubble', unlockCost:35, ranks:[
+    {fx:{bubble:64, bubbleSlow:.45}, text: f => `Enemy bullets within ${tiles(f.bubble)} tiles of you slow to ${pct(f.bubbleSlow)} speed.`},
+    {fx:{bubble:96, bubbleSlow:.25}, text: f => `The field grows to ${tiles(f.bubble)} tiles; bullets slow to ${pct(f.bubbleSlow)}.`},
+    {fx:{bubble:96, bubbleSlow:.25, bubbleZap:44}, text: f => `Bullets that get within ${tiles(f.bubbleZap)} tiles of you are destroyed.`},
   ]},
-  {id:'dead_channel', station:'static', name:'DEAD CHANNEL', effect:'pulse', unlockCost:60, ranks:[
-    {fx:{pulse:80}, text: f => `Kills release a shockwave that jams enemies within ${tiles(f.pulse)} tiles.`},
-    {fx:{pulse:80, pulseWipe:1}, text: () => 'Twist: the shockwave also erases enemy bullets in the air.'},
-    {fx:{pulse:128, pulseWipe:1, pulseKnock:1}, text: f => `Flourish: the shockwave reaches ${tiles(f.pulse)} tiles and shoves enemies back.`},
+  {id:'dead_channel', station:'static', name:'SHOCKWAVE', effect:'pulse', unlockCost:60, ranks:[
+    {fx:{pulse:80}, text: f => `Kills release a shockwave that stuns enemies within ${tiles(f.pulse)} tiles.`},
+    {fx:{pulse:80, pulseWipe:1}, text: () => 'The shockwave also destroys enemy bullets.'},
+    {fx:{pulse:128, pulseWipe:1, pulseKnock:1}, text: f => `The shockwave reaches ${tiles(f.pulse)} tiles and knocks enemies back.`},
   ]},
-  // ---------------------------------------------------------------- DEADLINE: time is a currency
-  {id:'borrowed', station:'deadline', name:'BORROWED TIME', effect:'credit', unlockCost:null, ranks:[
-    {fx:{creditPerKill:.8}, text: f => `Each kill banks ${f.creditPerKill} s of borrowed time: while it lasts the world runs at half its speed, even when you sprint.`},
-    {fx:{creditPerKill:.8, hitCredit:1.5}, text: f => `Twist: getting hit refunds ${f.hitCredit} s too, so a mistake buys room to recover.`},
-    {fx:{creditPerKill:.8, hitCredit:1.5, lastStand:1}, text: () => 'Flourish: at 1 health the world always runs at half its speed, even when you sprint.'},
+  // ---------------------------------------------------------------- TIME: slow-mo and kill refunds
+  {id:'borrowed', station:'deadline', name:'BULLET TIME', effect:'credit', unlockCost:null, ranks:[
+    {fx:{creditPerKill:.8}, text: f => `Each kill slows time to half speed for ${f.creditPerKill} s, even when you sprint.`},
+    {fx:{creditPerKill:.8, hitCredit:1.5}, text: f => `Getting hit slows time for ${f.hitCredit} s too.`},
+    {fx:{creditPerKill:.8, hitCredit:1.5, lastStand:1}, text: () => 'At 1 health, time always runs at half speed.'},
   ]},
-  {id:'freeze', station:'deadline', name:'HANG FIRE', effect:'hang', unlockCost:45, ranks:[
-    {fx:{hangKill:1.5}, text: f => `Every kill freezes the victim's bullets solid in mid-air for ${f.hangKill} s, even at a full sprint.`},
-    {fx:{hangKill:4, hangUntilMove:1}, text: f => `Twist: they hang for ${f.hangKill} s, and if you killed standing still, until you move again.`},
-    {fx:{hangKill:4, hangUntilMove:1, hangAll:192}, text: f => `Flourish: the kill freezes every enemy bullet within ${tiles(f.hangAll)} tiles.`},
+  {id:'freeze', station:'deadline', name:'FROZEN BULLETS', effect:'hang', unlockCost:45, ranks:[
+    {fx:{hangKill:1.5}, text: f => `Kills freeze the victim's bullets in mid-air for ${f.hangKill} s.`},
+    {fx:{hangKill:4, hangUntilMove:1}, text: f => `Bullets stay frozen ${f.hangKill} s, or until you move if you killed standing still.`},
+    {fx:{hangKill:4, hangUntilMove:1, hangAll:192}, text: f => `Kills freeze every enemy bullet within ${tiles(f.hangAll)} tiles.`},
   ]},
-  {id:'held_breath', station:'deadline', name:'HELD BREATH', effect:'heldBreath', unlockCost:null, ranks:[
-    {fx:{heldBreath:.5}, text: f => `Stand still for 0.6 s and a ring pings: your next shot deals +${pct(f.heldBreath)}.`},
-    {fx:{heldBreath:.5, heldPierce:1}, text: () => 'Twist: the charged shot pierces every enemy in its line.'},
-    {fx:{heldBreath:.5, heldPierce:1, heldBreathSilent:1}, text: () => 'Flourish: the charged shot is silent.'},
+  {id:'held_breath', station:'deadline', name:'STEADY AIM', effect:'heldBreath', unlockCost:null, ranks:[
+    {fx:{heldBreath:.5}, text: f => `Stand still for 0.6 s: your next shot deals +${pct(f.heldBreath)} damage.`},
+    {fx:{heldBreath:.5, heldPierce:1}, text: () => 'The steady shot pierces every enemy in its line.'},
+    {fx:{heldBreath:.5, heldPierce:1, heldBreathSilent:1}, text: () => 'The steady shot is silent.'},
   ]},
-  // ---------------------------------------------------------------- CARRIER: one clean signal
-  {id:'through', station:'carrier', name:'THROUGHPUT', effect:'pierce', unlockCost:null, ranks:[
-    {fx:{pierce:1}, text: f => `Rounds pierce ${f.pierce} enemy: one tracer, two victims.`},
-    {fx:{pierce:2, crateThru:1}, text: f => `Twist: rounds pierce ${f.pierce} enemies and punch straight through crates.`},
-    {fx:{pierce:9, crateThru:1}, text: () => 'Flourish: rounds pierce every enemy and crate in their line.'},
+  // ---------------------------------------------------------------- PIERCE: through, bounce, curve
+  {id:'through', station:'carrier', name:'PIERCING ROUNDS', effect:'pierce', unlockCost:null, ranks:[
+    {fx:{pierce:1}, text: f => `Bullets pierce ${f.pierce} enemy.`},
+    {fx:{pierce:2, crateThru:1}, text: f => `Bullets pierce ${f.pierce} enemies and pass through crates.`},
+    {fx:{pierce:9, crateThru:1}, text: () => 'Bullets pierce every enemy and crate in their line.'},
   ]},
-  {id:'bounce', station:'carrier', name:'MULTIPATH', effect:'ricochet', unlockCost:null, ranks:[
-    {fx:{ricochet:1}, text: () => 'Bullets bounce off a wall once. Bank shots around cover.'},
-    {fx:{ricochet:1, bounceSeek:1}, text: () => 'Twist: the bounce bends toward the nearest enemy.'},
-    {fx:{ricochet:3, bounceSeek:1}, text: f => `Flourish: bullets bounce ${f.ricochet} times, bending toward an enemy each time.`},
+  {id:'bounce', station:'carrier', name:'RICOCHET', effect:'ricochet', unlockCost:null, ranks:[
+    {fx:{ricochet:1}, text: () => 'Bullets bounce off a wall once.'},
+    {fx:{ricochet:1, bounceSeek:1}, text: () => 'The bounce curves toward the nearest enemy.'},
+    {fx:{ricochet:3, bounceSeek:1}, text: f => `Bullets bounce ${f.ricochet} times, curving toward an enemy each time.`},
   ]},
-  {id:'homing', station:'carrier', name:'LOCK-ON', effect:'homing', unlockCost:55, ranks:[
-    {fx:{homing:1, homingRange:140}, text: f => `Bullets curve toward an enemy within ${tiles(f.homingRange)} tiles of their path.`},
-    {fx:{homing:1.8, homingRange:200}, text: f => `Twist: a tighter curve that finds enemies up to ${tiles(f.homingRange)} tiles away.`},
-    {fx:{homing:2.6, homingRange:280}, text: f => `Flourish: bullets hunt: they swing onto targets up to ${tiles(f.homingRange)} tiles away.`},
+  {id:'homing', station:'carrier', name:'HOMING ROUNDS', effect:'homing', unlockCost:55, ranks:[
+    {fx:{homing:1, homingRange:140}, text: f => `Bullets curve toward enemies within ${tiles(f.homingRange)} tiles of their path.`},
+    {fx:{homing:1.8, homingRange:200}, text: f => `Tighter curve; finds enemies up to ${tiles(f.homingRange)} tiles away.`},
+    {fx:{homing:2.6, homingRange:280}, text: f => `Strongest curve; finds enemies up to ${tiles(f.homingRange)} tiles away.`},
   ]},
-  {id:'shatter', station:'carrier', name:'SHATTER', effect:'shards', unlockCost:70, ranks:[
-    {fx:{shards:2}, text: f => `Kills burst into ${f.shards} seeking shards.`},
-    {fx:{shards:3, shardPierce:1}, text: f => `Twist: ${f.shards} shards, and each pierces one enemy.`},
-    {fx:{shards:4, shardPierce:1, shardBounce:1}, text: f => `Flourish: ${f.shards} shards that also ricochet off one wall.`},
+  {id:'shatter', station:'carrier', name:'SHRAPNEL', effect:'shards', unlockCost:70, ranks:[
+    {fx:{shards:2}, text: f => `Kills burst into ${f.shards} homing shards.`},
+    {fx:{shards:3, shardPierce:1}, text: f => `${f.shards} shards, and each pierces 1 enemy.`},
+    {fx:{shards:4, shardPierce:1, shardBounce:1}, text: f => `${f.shards} shards that also ricochet off 1 wall.`},
   ]},
-  // ---------------------------------------------------------------- NIGHT SHIFT: nobody hears the shift end
-  {id:'silent', station:'nightshift', name:'DEAD MIC', effect:'noise', unlockCost:null, ranks:[
-    {fx:{noise:.5}, text: () => 'Your shots make half the noise: the ring that wakes rooms is half size.'},
-    {fx:{noise:.5, quietKill:1}, text: () => 'Twist: a shot that kills an enemy who has not noticed you makes no noise at all.'},
-    {fx:{noise:.75, quietKill:1, sprintSilent:1}, text: f => `Flourish: shots are ${pct(f.noise)} quieter and sprinting makes no noise.`},
+  // ---------------------------------------------------------------- STEALTH: quiet shots, sneak attacks
+  {id:'silent', station:'nightshift', name:'QUIET SHOTS', effect:'noise', unlockCost:null, ranks:[
+    {fx:{noise:.5}, text: () => 'Shots make half the noise (half the alert radius).'},
+    {fx:{noise:.5, quietKill:1}, text: () => 'A shot that kills an unaware enemy makes no noise at all.'},
+    {fx:{noise:.75, quietKill:1, sprintSilent:1}, text: f => `Shots are ${pct(f.noise)} quieter, and sprinting makes no noise.`},
   ]},
-  {id:'blindside', station:'nightshift', name:'BLINDSIDE', effect:'unaware', unlockCost:null, ranks:[
-    {fx:{unaware:.6}, text: f => `+${pct(f.unaware)} damage to enemies who have not noticed you.`},
-    {fx:{unaware:.6, ambush:1}, text: () => 'Twist: any hit on an unaware enemy kills it outright (brutes, riots and the boss excepted).'},
-    {fx:{unaware:.6, ambush:1, ammoBack:1}, text: () => 'Flourish: a quiet takedown puts the round back in your magazine.'},
+  {id:'blindside', station:'nightshift', name:'SNEAK ATTACK', effect:'unaware', unlockCost:null, ranks:[
+    {fx:{unaware:.6}, text: f => `+${pct(f.unaware)} damage to enemies that haven't noticed you.`},
+    {fx:{unaware:.6, ambush:1}, text: () => 'Any hit on an unaware enemy kills it (not brutes, riots or the boss).'},
+    {fx:{unaware:.6, ambush:1, ammoBack:1}, text: () => 'A sneak kill puts the round back in your magazine.'},
   ]},
-  {id:'smoke_reload', station:'nightshift', name:'SMOKE BLOOM', effect:'smokeReload', unlockCost:45, ranks:[
-    {fx:{smokeReload:55, smokeTime:3}, text: f => `Reloading drops a small smoke cloud (${f.smokeTime} s). Reload is cover.`},
-    {fx:{smokeReload:75, smokeTime:3}, text: f => `Twist: a bigger cloud, ${tiles(f.smokeReload)} tiles wide.`},
-    {fx:{smokeReload:95, smokeTime:6}, text: f => `Flourish: the cloud grows to ${tiles(f.smokeReload)} tiles and lingers ${f.smokeTime} s.`},
+  {id:'smoke_reload', station:'nightshift', name:'SMOKE RELOAD', effect:'smokeReload', unlockCost:45, ranks:[
+    {fx:{smokeReload:55, smokeTime:3}, text: f => `Reloading drops a smoke cloud that lasts ${f.smokeTime} s.`},
+    {fx:{smokeReload:75, smokeTime:3}, text: f => `Bigger cloud: ${tiles(f.smokeReload)} tiles wide.`},
+    {fx:{smokeReload:95, smokeTime:6}, text: f => `The cloud grows to ${tiles(f.smokeReload)} tiles and lasts ${f.smokeTime} s.`},
   ]},
-  {id:'blackout', station:'nightshift', name:'BLACKOUT', effect:'cones', unlockCost:55, ranks:[
-    {fx:{coneRange:.8}, text: f => `Enemy vision cones are ${pct(1 - f.coneRange)} shorter. Watch them shrink.`},
-    {fx:{coneRange:.7, coneHalf:.8}, text: f => `Twist: cones are ${pct(1 - f.coneRange)} shorter and ${pct(1 - f.coneHalf)} narrower.`},
-    {fx:{coneRange:.6, coneHalf:.7, stillCloak:96}, text: f => `Flourish: stand still and unaware enemies cannot notice you from more than ${tiles(f.stillCloak)} tiles.`},
+  {id:'blackout', station:'nightshift', name:'BLIND SPOT', effect:'cones', unlockCost:55, ranks:[
+    {fx:{coneRange:.8}, text: f => `Enemy vision cones are ${pct(1 - f.coneRange)} shorter.`},
+    {fx:{coneRange:.7, coneHalf:.8}, text: f => `Vision cones are ${pct(1 - f.coneRange)} shorter and ${pct(1 - f.coneHalf)} narrower.`},
+    {fx:{coneRange:.6, coneHalf:.7, stillCloak:96}, text: f => `Standing still, unaware enemies can't notice you beyond ${tiles(f.stillCloak)} tiles.`},
   ]},
-  // ---------------------------------------------------------------- FEEDBACK: the closer to dead, the louder
-  {id:'rage', station:'feedback', name:'RED LINE', effect:'missingHp', unlockCost:null, ranks:[
-    {fx:{missingHp:.2}, text: f => `Each health point you are missing: +${pct(f.missingHp)} damage, and your shots grow bigger and brighter.`},
-    {fx:{missingHp:.2, ragePierce:1}, text: () => 'Twist: at 2 health or less your shots pierce one enemy.'},
-    {fx:{missingHp:.2, ragePierce:1, rageBlast:48}, text: f => `Flourish: at 1 health your shots burst on impact (${tiles(f.rageBlast)} tiles).`},
+  // ---------------------------------------------------------------- RISK: stronger at low health
+  {id:'rage', station:'feedback', name:'BERSERK', effect:'missingHp', unlockCost:null, ranks:[
+    {fx:{missingHp:.2}, text: f => `+${pct(f.missingHp)} damage for each health point you're missing.`},
+    {fx:{missingHp:.2, ragePierce:1}, text: () => 'At 2 health or less, bullets also pierce 1 enemy.'},
+    {fx:{missingHp:.2, ragePierce:1, rageBlast:48}, text: f => `At 1 health, bullets explode on impact (${tiles(f.rageBlast)} tiles).`},
   ]},
-  {id:'loop', station:'feedback', name:'ECHO', effect:'echo', unlockCost:null, ranks:[
-    {fx:{echoDmg:.5, echoCount:1}, text: f => `At 2 health or less every shot echoes: a ghost round follows 0.2 s later for ${pct(f.echoDmg)} damage.`},
-    {fx:{echoDmg:.75, echoCount:1}, text: f => `Twist: the echo hits for ${pct(f.echoDmg)}.`},
-    {fx:{echoDmg:.75, echoCount:2}, text: () => 'Flourish: two echoes trail every shot.'},
+  {id:'loop', station:'feedback', name:'DOUBLE TAP', effect:'echo', unlockCost:null, ranks:[
+    {fx:{echoDmg:.5, echoCount:1}, text: f => `At 2 health or less, every shot fires a second bullet for ${pct(f.echoDmg)} damage.`},
+    {fx:{echoDmg:.75, echoCount:1}, text: f => `The second bullet deals ${pct(f.echoDmg)} damage.`},
+    {fx:{echoDmg:.75, echoCount:2}, text: () => 'Two extra bullets follow every shot.'},
   ]},
-  {id:'kindle', station:'feedback', name:'KINDLING', effect:'burnKill', unlockCost:55, ranks:[
-    {fx:{burnKill:70}, text: f => `Kills set fire to enemies within ${tiles(f.burnKill)} tiles: they burn for 3 s and panic.`},
-    {fx:{burnKill:100}, text: f => `Twist: the fire reaches ${tiles(f.burnKill)} tiles.`},
-    {fx:{burnKill:130}, text: f => `Flourish: the fire reaches ${tiles(f.burnKill)} tiles.`},
+  {id:'kindle', station:'feedback', name:'IGNITE', effect:'burnKill', unlockCost:55, ranks:[
+    {fx:{burnKill:70}, text: f => `Kills set enemies within ${tiles(f.burnKill)} tiles on fire for 3 s.`},
+    {fx:{burnKill:100}, text: f => `Fire reaches ${tiles(f.burnKill)} tiles.`},
+    {fx:{burnKill:130}, text: f => `Fire reaches ${tiles(f.burnKill)} tiles.`},
   ]},
-  {id:'backlash', station:'feedback', name:'BACKLASH', effect:'backlash', unlockCost:70, ranks:[
-    {fx:{hitPulse:96}, text: f => `Taking a hit sends out a shockwave that jams enemies within ${tiles(f.hitPulse)} tiles.`},
-    {fx:{hitPulse:128, hitWipe:1}, text: () => 'Twist: the shockwave also erases enemy bullets in the air.'},
-    {fx:{hitPulse:160, hitWipe:1, hitKnock:1}, text: f => `Flourish: the shockwave reaches ${tiles(f.hitPulse)} tiles and shoves enemies back.`},
+  {id:'backlash', station:'feedback', name:'COUNTERBLAST', effect:'backlash', unlockCost:70, ranks:[
+    {fx:{hitPulse:96}, text: f => `Getting hit releases a shockwave that stuns enemies within ${tiles(f.hitPulse)} tiles.`},
+    {fx:{hitPulse:128, hitWipe:1}, text: f => `Shockwave reaches ${tiles(f.hitPulse)} tiles and destroys enemy bullets.`},
+    {fx:{hitPulse:160, hitWipe:1, hitKnock:1}, text: f => `Shockwave reaches ${tiles(f.hitPulse)} tiles and knocks enemies back.`},
   ]},
 ];
 export const UPGRADES = RAW.map(u => ({...u, ranks: u.ranks.map(r => ({...r, v: r.fx, desc: r.text(r.fx)}))}));
 export const UPGRADE_BY_ID = new Map(UPGRADES.map(u => [u.id, u]));
 export const upgradeById = id => UPGRADE_BY_ID.get(id);
 
-// Crossfades: both stations at level 2+ (total ranks) switch the synergy on. Each has a visible effect in play.
+// Combos: hold two families at level 2+ (total levels) to switch on a synergy. Each has a visible effect in play.
+// (ids and the CROSSFADES export name are save/test-compatible internals.)
 export const CROSSFADE_LEVEL = 2;
+export const COMBO_LEVEL = CROSSFADE_LEVEL;
 export const CROSSFADES = [
-  {id:'signal_boost', stations:['static', 'carrier'], name:'SIGNAL BOOST', desc:'Arcs jump to one extra enemy, and every ricochet fires an arc at the nearest enemy.', effects:{chainTargets:1, bounceArc:1}},
-  {id:'dead_air', stations:['static', 'deadline'], name:'DEAD AIR', desc:'Killing a jammed enemy refunds 1 s of slow time.', effects:{stunKillCredit:1}},
-  {id:'hold_breath', stations:['deadline', 'nightshift'], name:'HOLD YOUR BREATH', desc:'The held-breath bonus doubles and the shot is silent.', effects:{heldBreathMult:2, heldBreathSilent:1}},
-  {id:'red_shift', stations:['carrier', 'feedback'], name:'RED SHIFT', desc:'Ricocheted bullets deal +60% damage and glow red.', effects:{bounceDamage:.6}},
-  {id:'borrowed_pulse', stations:['deadline', 'feedback'], name:'BORROWED PULSE', desc:'At 2 health or less, every kill releases a 3-tile jamming shockwave.', effects:{lowPulse:96}},
-  {id:'dead_drop', stations:['nightshift', 'feedback'], name:'DEAD DROP', desc:'Quiet kills heal 1 health when you are at half health or less.', effects:{unawareHeal:1}},
-  {id:'white_noise', stations:['static', 'nightshift'], name:'WHITE NOISE', desc:'Jams last twice as long on enemies who have not noticed you.', effects:{unawareStunMult:2}},
+  {id:'signal_boost', stations:['static', 'carrier'], name:'STORM RICOCHET', desc:'Lightning chains to 1 more enemy, and every ricochet fires a lightning bolt at the nearest enemy.', effects:{chainTargets:1, bounceArc:1}},
+  {id:'dead_air', stations:['static', 'deadline'], name:'TIMEOUT', desc:'Killing a stunned enemy slows time for 1 s.', effects:{stunKillCredit:1}},
+  {id:'hold_breath', stations:['deadline', 'nightshift'], name:'DEAD EYE', desc:'Steady Aim damage doubles and the shot is silent.', effects:{heldBreathMult:2, heldBreathSilent:1}},
+  {id:'red_shift', stations:['carrier', 'feedback'], name:'BLOOD RICOCHET', desc:'Ricocheted bullets deal +60% damage.', effects:{bounceDamage:.6}},
+  {id:'borrowed_pulse', stations:['deadline', 'feedback'], name:'LAST GASP', desc:'At 2 health or less, every kill releases a 3-tile stunning shockwave.', effects:{lowPulse:96}},
+  {id:'dead_drop', stations:['nightshift', 'feedback'], name:'CLEAN KILL', desc:'Sneak kills heal 1 health when you are at half health or less.', effects:{unawareHeal:1}},
+  {id:'white_noise', stations:['static', 'nightshift'], name:'AMBUSH STUN', desc:"Stuns last twice as long on enemies that haven't noticed you.", effects:{unawareStunMult:2}},
 ];
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -228,7 +234,8 @@ export function offerFrequencies({unlockedIds = [], owned = {}, rng = Math.rando
   }
   return chosen.map(u => {
     const rank = rankOf(owned, u.id) + 1;
-    return {id: u.id, station: u.station, name: u.name, rank, rarity: RANK_NAMES[rank - 1].toLowerCase(), desc: u.ranks[rank - 1].desc, isNew: rank === 1, held: held.has(u.station), crossfades: crossfadesCompletedBy(owned, u.id).map(c => c.id)};
+    const partners = [...new Set(CROSSFADES.filter(c => c.stations.includes(u.station)).map(c => c.stations.find(x => x !== u.station)))];
+    return {id: u.id, station: u.station, name: u.name, level: rank, prevLevel: rank - 1, partners, rank, rarity: RANK_NAMES[rank - 1].toLowerCase(), desc: u.ranks[rank - 1].desc, isNew: rank === 1, held: held.has(u.station), crossfades: crossfadesCompletedBy(owned, u.id).map(c => c.id)};
   });
 }
 

@@ -3,12 +3,12 @@
 // Pure: no DOM / physics. game.js spawns the reward and the overlay draws the markers.
 
 export const REWARDS = {
-  freq: {id: 'freq', label: 'FREQUENCY', color: '#9ad8ff', glyph: 'wave'},
+  freq: {id: 'freq', label: 'UPGRADE', color: '#9ad8ff', glyph: 'upgrade'},
   scrap: {id: 'scrap', label: 'SCRAP', color: '#f4c66d', glyph: 'hex'},
   gun: {id: 'gun', label: 'WEAPON', color: '#74c9ed', glyph: 'gun'},
   heal: {id: 'heal', label: 'MEDKIT', color: '#74dfab', glyph: 'cross'},
   supply: {id: 'supply', label: 'SUPPLY DROP', color: '#ffd27a', glyph: 'crate'},
-  elite: {id: 'elite', label: 'ELITE · FREQUENCY', color: '#ff6a78', glyph: 'skull'},
+  elite: {id: 'elite', label: 'ELITE · UPGRADE', color: '#ff6a78', glyph: 'skull'},
 };
 
 const ORDINARY_WEIGHTS = [['freq', 34], ['scrap', 24], ['heal', 14], ['gun', 12], ['supply', 16]];

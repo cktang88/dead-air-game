@@ -39,7 +39,7 @@ test('every gun category has a silhouette icon', () => {
 
 test('feedTone and formatClock', () => {
   assert.equal(feedTone('OUT OF FRAG GRENADE'),'warn');
-  assert.equal(feedTone('PLATE HIT · 1 LEFT'),'bad');
+  assert.equal(feedTone('ARMOR HIT · 1 LEFT'),'bad');
   assert.equal(feedTone('+12 SCRAP'),'loot');
   assert.equal(feedTone('DOWNED · RUSHER'),'kill');
   assert.equal(formatClock(214),'03:34');

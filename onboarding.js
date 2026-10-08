@@ -63,7 +63,7 @@ export function nextCard(wanted, seen) {
 // ------------------------------------------------------------------------------------------------ field manual
 export const MANUAL_SECTIONS = Object.freeze(['TIME', 'COMBAT', 'ENEMIES', 'ITEMS', 'ECONOMY', 'ROOMS']);
 
-/** One plain line per mechanic (current code: continuous time rule, stealth, 3 HP, doors, frequencies, multi-floor runs). */
+/** One plain line per mechanic (current code: continuous time rule, stealth, 3 HP, doors, upgrades, multi-floor runs). */
 export const MANUAL = Object.freeze([
   // TIME
   {id: 'still', section: 'TIME', title: 'STILL', line: 'Stand still and the world nearly stops (0.08x).'},
@@ -104,7 +104,7 @@ export const MANUAL = Object.freeze([
   {id: 'coins', section: 'ECONOMY', title: 'COINS', line: 'Coins are banked when a run ends and buy permanent options in the safehouse.'},
   {id: 'gate', section: 'ECONOMY', title: 'GATES', line: 'A locked gate costs scrap and hides a cache.'},
   {id: 'supply', section: 'ECONOMY', title: 'SUPPLY', line: 'Spend scrap or pick one reward at a supply station.'},
-  {id: 'freq', section: 'ECONOMY', title: 'FREQUENCIES', line: 'Frequencies are in-run upgrades from radio stations. They stack, and pairs crossfade.'},
+  {id: 'freq', section: 'ECONOMY', title: 'UPGRADES', line: 'Upgrades last for the run. Pick 1 of 3 and level them up to III. Two families at level 2+ switch on a COMBO.'},
   {id: 'extract', section: 'ECONOMY', title: 'EXTRACT OR DESCEND', line: 'When the route is clear, leave with your coins or go deeper for more.'},
   // ROOMS
   {id: 'door', section: 'ROOMS', title: 'DOORS', line: 'Doors stay shut until you act: tap E to open one, hold E to peek in frozen time.'},

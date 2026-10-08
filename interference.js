@@ -1,13 +1,13 @@
-// INTERFERENCE: stackable difficulty modifiers (Hades' heat) unlocked after the first boss win. Each active
+// HEAT (id 'interference' in saves): stackable difficulty modifiers (Hades' heat) unlocked after the first boss win. Each active
 // modifier adds a coin bonus to the run payout. Pure data + folding into plain numbers.
 
 export const INTERFERENCE = [
-  {id: 'armored', name: 'ARMORED SIGNAL', desc: 'Enemies have +30% health.', bonus: .2, effects: {enemyHp: .3}},
-  {id: 'overdrive', name: 'OVERDRIVE', desc: 'Enemies move 15% faster.', bonus: .15, effects: {enemySpeed: .15}},
+  {id: 'armored', name: 'ARMORED ENEMIES', desc: 'Enemies have +30% health.', bonus: .2, effects: {enemyHp: .3}},
+  {id: 'overdrive', name: 'FAST ENEMIES', desc: 'Enemies move 15% faster.', bonus: .15, effects: {enemySpeed: .15}},
   {id: 'redline', name: 'NO SAFE HARBOR', desc: 'Below 2 health, standing still only slows time to 0.5×.', bonus: .2, effects: {lowHealthIdle: .5}},
   {id: 'scarce', name: 'SCARCE', desc: '40% less scrap from everything.', bonus: .15, effects: {scrap: -.4}},
-  {id: 'thin_air', name: 'THIN AIR', desc: 'Medkits no longer drop from clears.', bonus: .2, effects: {noHeals: 1}},
-  {id: 'encore', name: 'ENCORE', desc: 'The Conductor has +40% health.', bonus: .25, effects: {bossHp: .4}},
+  {id: 'thin_air', name: 'NO MEDKITS', desc: 'Medkits no longer drop from clears.', bonus: .2, effects: {noHeals: 1}},
+  {id: 'encore', name: 'TOUGH BOSS', desc: 'The Conductor has +40% health.', bonus: .25, effects: {bossHp: .4}},
 ];
 export const INTERFERENCE_BY_ID = new Map(INTERFERENCE.map(m => [m.id, m]));
 

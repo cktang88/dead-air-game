@@ -1,6 +1,6 @@
 // DEAD AIR equipment art: drawn parts for the physical-interface language (see docs/art/UI_DIRECTION.md).
 // Pure string builders + pure waveform maths, so they can be unit tested under node. The DOM/canvas
-// controllers live in tuner-ui.js and panel-ui.js.
+// controllers live in pick-ui.js and panel-ui.js.
 import {STAT_DEFS} from './hud-ui.js';
 
 /* ------------------------------------------------------------------ emblems */

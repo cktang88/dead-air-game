@@ -1,5 +1,5 @@
 // STACKED WORLD ITEMS: destructible crates (with damage stages and a tumbling-planks break), pickups (scrap, ammo, medkit,
-// armor, mod, floor gun, supply drop, frequency radio), door / gate leaves and jamb posts, and the exit radio mast with its
+// armor, mod, floor gun, supply drop, run-upgrade core), door / gate leaves and jamb posts, and the exit radio mast with its
 // rotating light. Same engine, tilt, light and ink as the stacked characters (stack2d.js). Visual only: no collision change.
 import {VoxelGrid, drawStack, drawContactShadow, STACK_TILT, hexMix} from './stack2d.js';
 import {hash2, TAU} from './sprites2d.js';
@@ -238,22 +238,17 @@ function supplyModel() {
     return mk('pk.supply', g, pal, {x: 23, y: 20}, {unit: U, buckets: 32});
   });
 }
+// The run-upgrade pickup: a glowing diamond core hovering over a dark pad with four posts (reads as "power-up", not radio).
+// (The model key stays 'radio' for UI_MODELS / data-stack="radio".)
 function radioModel() {
   return memo('pk.radio', () => {
-    const g = new VoxelGrid(38, 26, 30), pal = {w: '#7a5436', W: '#946a46', k: '#17141c', K: '#2c2a31', m: '#c8c3b4', M: '#e4dfcf', e: {c: '#9ad8ff', emit: true}, E: {c: '#e8fbff', emit: true}, r: '#d14a3a', g: '#8d8b92', y: '#e5b524'};
-    g.ellipsoid(19, 13, 8, 17.4, 11.4, 8, 'w', 4.2);
-    g.box(2, 3, 0, 36, 24, 2, 'k');
-    // front: speaker grille left, glowing dial window right
-    for (let z = 3; z < 13; z++) for (let x = 4; x < 17; x++) g.set(x, 24, z, (x + z) % 2 ? 'K' : 'W');
-    for (let z = 4; z < 11; z++) for (let x = 21; x < 33; x++) g.set(x, 24, z, 'e');
-    for (let x = 21; x < 33; x++) { g.set(x, 24, 4, 'm'); g.set(x, 24, 10, 'm'); } for (const z of [4, 5, 6, 7, 8, 9, 10]) { g.set(21, 24, z, 'm'); g.set(32, 24, z, 'm'); }
-    g.set(27, 24, 7, 'r'); g.set(27, 24, 8, 'r'); g.set(27, 24, 6, 'r');
-    // top: tuning knobs, dial glow strip, handle and telescoping antenna with an emissive tip
-    g.cyl(8, 10, 14, 17, 2.4, 2.4, 'm', 2); g.cyl(30, 10, 14, 17, 2.4, 2.4, 'm', 2); g.set(8, 8.4, 17, 'r'); g.set(30, 8.4, 17, 'r');
-    g.box(13, 9, 15, 25, 17, 16, 'e');
-    g.box(33, 4, 15, 34.2, 5.2, 29, 'g'); g.ellipsoid(33.6, 4.6, 29, 1.6, 1.6, 1.6, 'E');
-    g.box(12, 20, 15, 26, 22, 17, 'K');
-    return mk('pk.radio', g, pal, {x: 19, y: 13}, {unit: U, buckets: 32});
+    const g = new VoxelGrid(30, 30, 34), pal = {k: '#17141c', K: '#2c2a31', m: '#c8c3b4', e: {c: '#9ad8ff', emit: true}, E: {c: '#e8fbff', emit: true}, g: '#8d8b92'};
+    g.cyl(15, 15, 0, 2, 13, 13, 'K', 3); g.cyl(15, 15, 2, 4, 10, 10, 'k', 3);
+    for (const [x, y] of [[6, 6], [24, 6], [6, 24], [24, 24]]) { g.box(x - 1, y - 1, 4, x + 1, y + 1, 11, 'g'); g.set(x, y, 11, 'E'); }
+    for (let a = 0; a < 28; a++) { const th = a * TAU / 28; g.set(15 + Math.cos(th) * 11, 15 + Math.sin(th) * 11, 8, 'm'); }
+    g.ellipsoid(15, 15, 20, 7.5, 7.5, 12, 'e', 1.3);
+    g.ellipsoid(15, 15, 20, 3.6, 3.6, 7, 'E', 1.3);
+    return mk('pk.radio', g, pal, {x: 15, y: 15}, {unit: U, buckets: 32});
   });
 }
 const hashPos = (x, y) => { let h = Math.imul(Math.round(x) * 73856093 ^ Math.round(y) * 19349663, 1274126177); h ^= h >>> 15; return (h >>> 0) / 4294967296; };

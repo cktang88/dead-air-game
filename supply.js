@@ -74,7 +74,7 @@ function offerUsable(offer, {ammoNeed, health, maxHealth, activeModId, hasGunInH
 export function offerCard(offer, {activeGun = null, activeModId = null, handGun = null} = {}) {
   if (offer.kind === 'ammo') return {title: 'RESTOCK', text: 'Refill every carried gun · magazines and reserves', icon: 'ammo'};
   if (offer.kind === 'heal') return {title: 'MEDKIT', text: `+${SUPPLY_MEDKIT_HP} health`, icon: 'health'};
-  if (offer.kind === 'freq') return {title: 'TUNE A SIGNAL', text: 'Pick one of three frequencies', icon: 'upgrade'};
+  if (offer.kind === 'freq') return {title: 'UPGRADE', text: 'Pick 1 of 3 upgrades', icon: 'upgrade'};
   if (offer.kind === 'mod') {
     const mod = MOD_BY_ID.get(offer.modId), worn = activeModId ? MOD_BY_ID.get(activeModId) : null;
     return {title: mod.name, text: `${mod.info} · fits ${activeGun?.name || 'your gun'}${worn ? ` · REPLACES ${worn.name}` : ''}`, icon: offer.modId};

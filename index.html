@@ -124,7 +124,7 @@
     <link rel="modulepreload" href="./boss-fight.js" />
     <link rel="modulepreload" href="./boss.js" />
     <link rel="modulepreload" href="./meta-ui.js" />
-    <link rel="modulepreload" href="./tuner-ui.js" />
+    <link rel="modulepreload" href="./pick-ui.js" />
     <link rel="modulepreload" href="./armory-ui.js" />
     <link rel="modulepreload" href="./equip-art.js" />
     <link rel="modulepreload" href="./desk-ui.js" />
@@ -242,7 +242,7 @@
       </div>
       <div id="room-banner" aria-live="polite"></div>
       <div id="boss-bar" hidden role="status" aria-live="polite"></div>
-      <div id="build-strip" aria-label="Active frequencies"></div>
+      <div id="build-strip" aria-label="Active upgrades"></div>
       <div id="feed" aria-live="polite"></div>
       <section id="hud" aria-live="polite">
         <div class="hud-row">
@@ -265,7 +265,7 @@
       <div id="hud-right">
         <section id="run-stats" class="run-stats panel" aria-label="Run stats">
           <div class="stat" title="Hostiles downed this run."><small><span class="ico sm" data-icon="status-kills"></span>KILLS</small><b id="kills">00</b></div>
-          <div class="stat scrap" data-tip="Scrap: run currency. Spend it on vault gates and on tuning a frequency at a supply drop. Lost when you die."><small><span class="ico sm" data-icon="pickup-scrap"></span>SCRAP</small><b id="scrap">000</b></div>
+          <div class="stat scrap" data-tip="Scrap: run currency. Spend it on vault gates and on upgrades at a supply drop. Lost when you die."><small><span class="ico sm" data-icon="pickup-scrap"></span>SCRAP</small><b id="scrap">000</b></div>
           <div class="stat" title="Rooms cleared out of total rooms on this floor."><small><span class="ico sm" data-icon="door"></span>ROOMS</small><b id="sector-count">01 / 10</b></div>
         </section>
         <div id="minimap-wrap" class="panel"><canvas id="minimap" width="156" height="117"></canvas><div class="mm-legend"><span style="--c:var(--slow)">EXIT</span><span style="--c:var(--coin)">SUPPLY</span><span style="--c:var(--armor)">CLINIC</span><span style="--c:var(--sprint)">GATE</span></div></div>
@@ -298,7 +298,7 @@
               <div><small><span class="ico sm" data-icon="status-seed"></span>SEED</small><b id="pause-seed">—</b></div>
             </div>
             <button id="resume-button" class="btn primary block" type="button"><span>RESUME</span><kbd>ESC</kbd></button>
-            <button id="skip-signal" class="btn ghost block sm" type="button" hidden>SKIP SIGNAL CHECK</button>
+            <button id="skip-signal" class="btn ghost block sm" type="button" hidden>SKIP TUTORIAL</button>
           </div>
           <div id="manual-panel" hidden>
             <div id="manual-list"></div>
@@ -352,7 +352,7 @@
           </div>
           <div class="set-group">
             <div class="eyebrow">ONBOARDING</div>
-            <button id="replay-signal" class="btn secondary block sm" type="button"><span class="ico sm" data-icon="status-slowmo"></span><span class="grow">REPLAY SIGNAL CHECK</span></button>
+            <button id="replay-signal" class="btn secondary block sm" type="button"><span class="ico sm" data-icon="status-slowmo"></span><span class="grow">REPLAY TUTORIAL</span></button>
           </div>
           <details id="controls-settings">
             <summary><span class="ico sm" data-icon="status-keyboard"></span>REMAP CONTROLS</summary>
@@ -365,7 +365,7 @@
           <button id="close-meta" class="close" aria-label="Close safehouse upgrades"><span data-icon="status-close"></span></button>
           <div class="eyebrow">BETWEEN RUNS · PERMANENT</div>
           <h2 id="meta-title">BUILD YOUR <em>EDGE.</em></h2>
-          <p class="dlg-sub">Coins you bank stay with you. Unlock new guns, kits and frequencies; finish goals for rewards.</p>
+          <p class="dlg-sub">Coins you bank stay with you. Unlock new guns, kits and run upgrades; finish goals for rewards.</p>
           <div id="meta-coins" class="meta-coins"></div>
           <div id="meta-list"></div>
           <button id="reset-save" class="btn ghost danger sm" type="button">RESET SAVE…</button>
@@ -385,7 +385,7 @@
             <div id="carry-readout" class="carry-readout"></div>
           </header>
           <div class="loadout-columns"><div><div class="eyebrow sec">CARRIED GUNS · CLICK TO DRAW</div><div id="loadout-gun" class="loadout-gun"></div><div class="eyebrow sec">EXTRAS</div><div id="extras-list" class="mod-list"></div></div><div><div class="eyebrow sec">MOD ON YOUR ACTIVE GUN</div><div id="mod-list" class="mod-list"></div></div></div>
-          <footer class="dlg-foot"><span id="loadout-scrap" class="dlg-balance" data-tip="Scrap is run currency: it opens vault gates and tunes frequencies at supply drops. Lost if you die.">000 SCRAP</span><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd><kbd data-action="weaponTwo">2</kbd>Draw</span><span class="keyhint dim">Third slot adds <kbd data-action="weaponThree">3</kbd></span><span class="keyhint"><kbd>ESC</kbd>Return</span></span></footer>
+          <footer class="dlg-foot"><span id="loadout-scrap" class="dlg-balance" data-tip="Scrap is run currency: it opens vault gates and buys upgrades at supply drops. Lost if you die.">000 SCRAP</span><span class="keyhints"><span class="keyhint"><kbd data-action="weaponOne">1</kbd><kbd data-action="weaponTwo">2</kbd>Draw</span><span class="keyhint dim">Third slot adds <kbd data-action="weaponThree">3</kbd></span><span class="keyhint"><kbd>ESC</kbd>Return</span></span></footer>
 
         </div>
       </section>

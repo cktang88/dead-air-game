@@ -30,7 +30,7 @@ export const UNLOCKS = [
   ...Object.entries(GUN_COSTS).map(([id, cost]) => ({id:`gun:${id}`, kind:'gun', ref:id, name:gunName(id), cost, desc:'Joins the loot, armory and supply drop pool.'})),
   ...KITS.filter(kit => kit.cost > 0).map(kit => ({id:`kit:${kit.id}`, kind:'kit', ref:kit.id, name:`${kit.name} KIT`, cost:kit.cost, desc:kit.blurb})),
   ...Object.entries(THROW_COSTS).map(([id, cost]) => ({id:`throw:${id}`, kind:'throw', ref:id, name:'FRAG GRENADE', cost, desc:'Start runs with frag grenades.'})),
-  ...UPGRADES.filter(upgrade => upgrade.unlockCost !== null).map(upgrade => ({id:`freq:${upgrade.id}`, kind:'freq', ref:upgrade.id, name:upgrade.name, cost:upgrade.unlockCost, desc:`Frequency: ${upgrade.ranks[0].desc}`})),
+  ...UPGRADES.filter(upgrade => upgrade.unlockCost !== null).map(upgrade => ({id:`freq:${upgrade.id}`, kind:'freq', ref:upgrade.id, name:upgrade.name, cost:upgrade.unlockCost, desc:`Run upgrade: ${upgrade.ranks[0].desc}`})),
   {id:'upg:highroller', kind:'upg', ref:'highroller', name:'HIGH ROLLER', cost:null, desc:'Safehouse upgrade with a tradeoff.'},
   {id:'upg:adrenal', kind:'upg', ref:'adrenal', name:'ADRENAL GLAND', cost:null, desc:'Safehouse upgrade with a tradeoff.'},
   {id:'upg:stockpile', kind:'upg', ref:'stockpile', name:'STOCKPILE', cost:null, desc:'Safehouse upgrade with a tradeoff.'},

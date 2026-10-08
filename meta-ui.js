@@ -11,14 +11,13 @@ import {TAPES} from './story.js';
 import {FINAL_FLOOR, floorConfig} from './run-loop.js';
 import {formatClock} from './hud-ui.js';
 import {emblemFor, flapHtml, gaugeHtml, vuHtml} from './ui-art.js';
-import {dialFreq, dialPos} from './tuner-ui.js';
 
 export const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
 const roman = n => ['', 'I', 'II', 'III'][n] || String(n);
 
 /* ------------------------------------------------------------------ descend / extract: a two-lever control panel */
 const SVG = (body, vb = '0 0 24 24') => `<svg viewBox="${vb}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
-/** One small glyph per radio station (tape labels and the manual). The big per-upgrade emblems live in ui-art.js. */
+/** One small glyph per upgrade family (tape labels and the manual). The big per-upgrade emblems live in ui-art.js. */
 export const STATION_GLYPH = {
   static: SVG('<path d="M13 2 5 13h6l-1 9 8-12h-6z"/>'),
   deadline: SVG('<circle cx="12" cy="13" r="8"/><path d="M12 8v5l3 2M9 2h6"/>'),
@@ -65,36 +64,42 @@ export function decisionHtml({floor, gross, kept, scrap = 0, scrapCoins = 0, cas
       <i class="lamp off bay-lamp" aria-hidden="true"></i>
     </section>
   </div>
-  <footer class="deck-foot"><span class="keyhints"><span class="keyhint"><kbd>1</kbd>Extract</span><span class="keyhint"><kbd>2</kbd>Descend</span></span><span class="decision-meta">VITALS ${hp}/${maxHp} · ${build.length ? build.map(b => `${esc(b.name)} ${roman(b.rank)}`).join(' · ') : 'NO FREQUENCIES YET'}${interference ? ` · <i class="heat">INTERFERENCE +${Math.round(interference * 100)}%</i>` : ''}</span></footer>
+  <footer class="deck-foot"><span class="keyhints"><span class="keyhint"><kbd>1</kbd>Extract</span><span class="keyhint"><kbd>2</kbd>Descend</span></span><span class="decision-meta">HEALTH ${hp}/${maxHp} · ${build.length ? build.map(b => `${esc(b.name)} ${roman(b.rank)}`).join(' · ') : 'NO UPGRADES YET'}${interference ? ` · <i class="heat">HEAT +${Math.round(interference * 100)}%</i>` : ''}</span></footer>
 </div>`;
 }
 
-/* ------------------------------------------------------------------ frequency pick-1-of-3: a radio tuner */
-export function freqOfferHtml({offers, owned, title = 'TUNE IN.', eyebrow = 'FREQUENCY FOUND · PICK ONE', note = ''}) {
-  const plates = offers.map((offer, index) => {
-    const station = STATION_BY_ID.get(offer.station);
+/* ------------------------------------------------------------------ upgrade pick: three plain cards (Hades boon / level-up style) */
+export function freqOfferHtml({offers, owned, title = 'CHOOSE AN UPGRADE', eyebrow = 'UPGRADE · PICK ONE', note = ''}) {
+  const cards = offers.map((offer, index) => {
+    const family = STATION_BY_ID.get(offer.station);
     const up = UPGRADE_BY_ID.get(offer.id);
     const cross = offer.crossfades.map(id => CROSSFADES.find(c => c.id === id)).filter(Boolean);
-    const partner = c => STATION_BY_ID.get(c.stations.find(s => s !== offer.station));
-    const freq = dialFreq(dialPos(offer.station));
-    return `<button class="plate rarity-${offer.rarity}${cross.length ? ' has-cross' : ''}" style="--st:${station.color}" data-freq="${esc(offer.id)}" data-station="${offer.station}" data-color="${station.color}" data-name="${esc(station.name)}" type="button" aria-label="${esc(`${offer.name}, ${station.name}, ${offer.isNew ? 'new' : `rank ${offer.rank}`}. ${offer.desc}`)}">
-      <span class="plate-head"><span class="tapelabel st">${STATION_GLYPH[offer.station] || ''}${esc(station.name)}</span><span class="plate-tag">${freq} MHz</span><kbd class="pushkey">${index + 1}</kbd></span>
-      <span class="plate-hero"><span class="bezel">${emblemFor(up?.effect, offer.station)}</span><span class="plate-id"><strong class="plate-name">${esc(offer.name)}</strong><span class="plate-rank">${vuHtml(offer.rank, MAX_RANK, {fresh: !offer.isNew})}<em>${offer.isNew ? 'NEW' : `RANK ${roman(offer.rank)}`}</em></span></span></span>
-      <span class="screen"><canvas class="scope" aria-hidden="true"></canvas><span class="scope-tag">${esc(station.tag)}</span><span class="locked-tag">LOCKED</span></span>
-      <span class="strip"><span>${esc(offer.desc)}</span></span>
-      ${cross.map(c => { const pa = partner(c); return `<span class="cross"><canvas class="mix-scope" data-a="${offer.station}" data-ca="${station.color}" data-b="${pa.id}" data-cb="${pa.color}" aria-hidden="true"></canvas><span class="cross-text"><b>CROSSFADE · ${esc(c.name)}</b><em>${esc(pa.name)} + ${esc(station.name)} · ${esc(c.desc)}</em></span></span>`; }).join('')}
+    const partnerNames = (offer.partners || []).map(id => STATION_BY_ID.get(id)?.name).filter(Boolean);
+    const badge = offer.isNew ? 'NEW' : `LEVEL UP ${offer.prevLevel}→${offer.level}`;
+    const levelWord = `LEVEL ${offer.level}/${MAX_RANK}`;
+    const comboHtml = cross.length
+      ? cross.map(c => { const pa = STATION_BY_ID.get(c.stations.find(s => s !== offer.station)); return `<span class="combo ready"><b>COMBO UNLOCKED · ${esc(c.name)}</b><em>${esc(family.name)} + ${esc(pa.name)}: ${esc(c.desc)}</em></span>`; }).join('')
+      : `<span class="combo"><em>Combos with ${esc(partnerNames.join(', '))} upgrades</em></span>`;
+    return `<button class="plate rarity-${offer.rarity}${cross.length ? ' has-cross' : ''}" style="--st:${family.color}" data-freq="${esc(offer.id)}" data-station="${offer.station}" data-color="${family.color}" data-name="${esc(offer.name)}" type="button" aria-label="${esc(`${offer.name}, ${family.name} upgrade, ${offer.isNew ? 'new' : `level ${offer.level} of ${MAX_RANK}`}. ${offer.desc}`)}">
+      <span class="plate-top"><span class="pbadge ${offer.isNew ? 'new' : 'up'}">${badge}</span><kbd class="pushkey">${index + 1}</kbd></span>
+      <span class="bezel">${emblemFor(up?.effect, offer.station)}</span>
+      <strong class="plate-name">${esc(offer.name)}</strong>
+      <span class="plate-effect">${esc(offer.desc)}</span>
+      ${offer.isNew ? '' : `<span class="plate-prev">Level ${offer.prevLevel}: ${esc(up.ranks[offer.prevLevel - 1].desc)}</span>`}
+      <span class="plate-meta"><span class="tapelabel st">${STATION_GLYPH[offer.station] || ''}${esc(family.name)}</span><span class="plate-level">${vuHtml(offer.level, MAX_RANK, {fresh: true})}<em>${levelWord}</em></span></span>
+      ${comboHtml}
+      <span class="locked-tag">PICKED</span>
     </button>`;
   }).join('');
-  const crossActive = activeCrossfades(owned);
-  return `<div class="${PORTAL_CLASSES} tuner-deck" style="--acc:var(--coin)">
+  const comboActive = activeCrossfades(owned);
+  return `<div class="${PORTAL_CLASSES} pick-deck" style="--acc:var(--coin)">
   <header class="deck-head">
     <span class="tapelabel">${esc(eyebrow)}</span>
-    <h2>${esc(title.replace(/\.$/, ''))}<em>.</em></h2>
-    <p class="deck-sub">${esc(note || 'Each station plays differently. Stack one, or blend two for a crossfade.')}</p>
+    <h2>${esc(title)}</h2>
+    <p class="deck-sub">${esc(note || 'Upgrades last until the run ends. Match two families (level 2+ each) to switch on a COMBO.')}</p>
   </header>
-  <div class="dial-wrap"><canvas class="tuner-dial" aria-hidden="true"></canvas></div>
-  <div class="plates">${plates}</div>
-  <footer class="deck-foot"><span class="decision-meta">${crossActive.length ? crossActive.map(c => `<i class="heat">CROSSFADE ON · ${esc(c.name)}</i>`).join(' ') : 'TWO STATIONS AT LEVEL 2 TURN ON A CROSSFADE'}</span><span class="keyhints"><span class="keyhint"><kbd>←</kbd><kbd>→</kbd>Tune</span><span class="keyhint"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>Lock in</span></span></footer>
+  <div class="plates">${cards}</div>
+  <footer class="deck-foot"><span class="decision-meta">${comboActive.length ? `<i class="heat">COMBO ACTIVE · ${comboActive.map(c => esc(c.name)).join(' · ')}</i>` : 'COMBO: reach level 2 in two different families'}</span><span class="keyhints"><span class="keyhint"><kbd>←</kbd><kbd>→</kbd>Browse</span><span class="keyhint"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>Pick</span></span></footer>
 </div>`;
 }
 
@@ -102,8 +107,8 @@ export function freqOfferHtml({offers, owned, title = 'TUNE IN.', eyebrow = 'FRE
 export function buildStripHtml(owned) {
   const build = buildSummary(owned);
   if (!build.length) return '';
-  return build.map(b => `<span class="build-chip" style="--st:${STATION_BY_ID.get(b.station).color}" title="${esc(b.name)} rank ${b.rank}">${esc(b.name)} <b>${roman(b.rank)}</b></span>`).join('') +
-    activeCrossfades(owned).map(c => `<span class="build-chip cross" title="${esc(c.desc)}">${esc(c.name)}</span>`).join('');
+  return build.map(b => { const up = UPGRADE_BY_ID.get(b.id), fam = STATION_BY_ID.get(b.station); return `<span class="build-chip" style="--st:${fam.color}" title="${esc(`${b.name} · ${fam.name} · Level ${b.rank}/${MAX_RANK}: ${up.ranks[b.rank - 1].desc}`)}">${STATION_GLYPH[b.station] || ''}${esc(b.name)} <b>${roman(b.rank)}</b></span>`; }).join('') +
+    activeCrossfades(owned).map(c => `<span class="build-chip cross" title="${esc(`COMBO: ${c.desc}`)}">COMBO · ${esc(c.name)}</span>`).join('');
 }
 
 export function bossBarHtml(name, phase) {
@@ -111,7 +116,7 @@ export function bossBarHtml(name, phase) {
 }
 
 /* ------------------------------------------------------------------ safehouse panel */
-export const META_TABS = [['unlocks', 'ARMORY'], ['upgrades', 'UPGRADES'], ['goals', 'GOALS'], ['tapes', 'TAPES'], ['heat', 'INTERFERENCE'], ['records', 'RECORDS']];
+export const META_TABS = [['unlocks', 'ARMORY'], ['upgrades', 'UPGRADES'], ['goals', 'GOALS'], ['tapes', 'TAPES'], ['heat', 'HEAT'], ['records', 'RECORDS']];
 
 function row(title, desc, button, extra = '') {
   return `<div class="meta-row ${extra}"><div><strong>${title}</strong><small>${desc}</small></div>${button}</div>`;
@@ -128,7 +133,7 @@ function unlockRows(progress) {
     })],
     ['GUNS · JOIN THE LOOT POOL', UNLOCKS.filter(u => u.kind === 'gun').map(u => unlockRow(progress, u))],
     ['THROWABLES', UNLOCKS.filter(u => u.kind === 'throw').map(u => unlockRow(progress, u))],
-    ['FREQUENCIES · NEW UPGRADES FOR BUILDS', UNLOCKS.filter(u => u.kind === 'freq').map(u => unlockRow(progress, u, STATION_BY_ID.get(UPGRADES.find(x => x.id === u.ref).station).name))],
+    ['RUN UPGRADES · UNLOCK NEW ONES FOR BUILDS', UNLOCKS.filter(u => u.kind === 'freq').map(u => unlockRow(progress, u, STATION_BY_ID.get(UPGRADES.find(x => x.id === u.ref).station).name))],
   ];
   return sections.map(([title, rows]) => `<div class="meta-section"><div class="eyebrow">${title}</div>${rows.join('')}</div>`).join('');
 }
@@ -163,7 +168,7 @@ function tapeRows(progress) {
 }
 
 function heatRows(progress) {
-  if (!interferenceUnlocked(progress)) return '<p class="meta-note">INTERFERENCE unlocks after you defeat THE CONDUCTOR once. Stack modifiers for bigger coin payouts.</p>';
+  if (!interferenceUnlocked(progress)) return '<p class="meta-note">HEAT unlocks after you defeat THE CONDUCTOR once. Turn on harder-enemy modifiers for bigger coin payouts.</p>';
   const stats = interferenceStats(progress);
   return `<p class="meta-note">Active modifiers pay <b>+${Math.round(stats.coinBonus * 100)}%</b> coins on every run.</p>` + INTERFERENCE.map(m => {
     const on = progress.interference.includes(m.id);
