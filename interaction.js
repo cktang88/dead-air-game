@@ -73,13 +73,13 @@ export function collectInteractables(s) {
     } else if (pk.kind === 'mod') {
       const mod = MOD_BY_ID.get(pk.modId), hand = s.hand || {}, worn = hand.modId ? MOD_BY_ID.get(hand.modId) : null, same = hand.modId === pk.modId;
       add({id: `mod:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'mod', ref: pk, ...at, range: RANGE.mod, keyed: true, icon: pickupIconId(pk),
-        verb: 'FIT', subject: mod?.name || 'MOD', enabled: !same && !!hand.gun && modFits(hand.gun, pk.modId), note: mod?.info,
+        verb: 'FIT', subject: mod?.name || 'MOD', modRef: mod || null, handGunRef: hand.gun || null, wornRef: worn || null, enabled: !same && !!hand.gun && modFits(hand.gun, pk.modId), note: mod?.info,
         reason: same ? 'ALREADY FITTED' : !hand.gun || !modFits(hand.gun, pk.modId) ? `DOES NOT FIT ${hand.gun?.name || 'YOUR GUN'}` : `ON ${hand.gun?.name || 'YOUR GUN'}${worn ? ` · REPLACES ${worn.name}` : ''}`, color: pk.color || '#d38ff5'});
     } else if (pk.kind === 'gun') {
       const gun = s.guns?.[pk.gunIndex] || GUNS[pk.gunIndex], hand = s.hand || {}, plan = hand.weapons ? gunPickupPlan(hand.weapons, pk.gunIndex, hand.maxSlots || 2, hand.activeSlot || 0) : null;
       const swaps = plan?.replaces != null ? (s.guns || GUNS)[plan.replaces] : null;
       add({id: `gun:${Math.round(pk.x)},${Math.round(pk.y)}`, kind: 'gun', ref: pk, ...at, range: RANGE.gun, keyed: true, icon: gunIconId(gun),
-        verb: swaps ? 'SWAP' : 'TAKE', subject: gun?.name || 'WEAPON', enabled: plan !== null || !hand.weapons, note: gun?.short,
+        verb: swaps ? 'SWAP' : 'TAKE', subject: gun?.name || 'WEAPON', gunRef: gun || null, swapRef: swaps || null, enabled: plan !== null || !hand.weapons, note: gun?.short,
         reason: swaps ? `${gun?.verb || ''} · REPLACES ${swaps.name}`.replace(/^ · /, '') : gun?.verb || '', color: pk.color || '#74c9ed'});
     } else if (pk.kind === 'exit') {
       const ex = extractionStatus(rooms, enemies), n = ex.inExitRoom + ex.aware, ok = ex.open || !!s.extractionOpen;

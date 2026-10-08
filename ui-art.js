@@ -1,6 +1,7 @@
 // DEAD AIR equipment art: drawn parts for the physical-interface language (see docs/art/UI_DIRECTION.md).
 // Pure string builders + pure waveform maths, so they can be unit tested under node. The DOM/canvas
 // controllers live in tuner-ui.js and panel-ui.js.
+import {STAT_DEFS} from './hud-ui.js';
 
 /* ------------------------------------------------------------------ emblems */
 // One bold drawn emblem per frequency (viewBox 100x100). Three paint classes, themed by CSS:
@@ -114,3 +115,37 @@ export function gaugeHtml(pct, {redFrom = 0.55, label = 'RISK'} = {}) {
 export const plateLabel = text => `<span class="tapelabel">${text}</span>`;
 
 export const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch]));
+
+/* ------------------------------------------------------------------ analog meters (loadout rack, pickup tag) */
+/** The four needles on a gun's tag. Fractions are relative to the best gun in the catalogue so the dial reads as "how much of the scale". */
+export const METER_DEFS = [
+  {id: 'damage', label: 'DMG', value: g => STAT_DEFS[0].value(g)},
+  {id: 'rate', label: 'RATE', value: g => STAT_DEFS[1].value(g)},
+  {id: 'range', label: 'RNG', value: g => STAT_DEFS[2].value(g)},
+  {id: 'noise', label: 'NOISE', value: (g, modNoise = 1) => (g.noise ?? 1) * modNoise, lowerBetter: true},
+];
+const METER_MAX = new WeakMap();
+const meterMax = guns => {
+  let m = METER_MAX.get(guns);
+  if (!m) { m = Object.fromEntries(METER_DEFS.map(d => [d.id, Math.max(1e-6, ...guns.map(g => d.value(g)))])); METER_MAX.set(guns, m); }
+  return m;
+};
+/** Meter data for a gun; `versus` (the gun being compared against) adds a ghost fraction per meter. */
+export function analogMeters(gun, guns, {mod = null, versus = null, versusMod = null} = {}) {
+  const max = meterMax(guns);
+  return METER_DEFS.map(d => {
+    const v = d.value(gun, mod?.noiseMult ?? 1), o = versus ? d.value(versus, versusMod?.noiseMult ?? 1) : null;
+    return {id: d.id, label: d.label, value: v, frac: clamp(v / max[d.id], 0, 1), ghost: o == null ? null : clamp(o / max[d.id], 0, 1),
+      text: d.id === 'noise' ? v.toFixed(2) : String(Math.round(v)), lowerBetter: !!d.lowerBetter};
+  });
+}
+/** Needle angle in degrees for a 0..1 fraction (a 150 degree sweep, zero at the left). */
+export const needleAngle = f => -75 + clamp(f, 0, 1) * 150;
+
+/** One small analog gauge as SVG. The needle rotates with CSS (`--a`) so it can swing in and settle; a ghost needle marks the compared gun. */
+export function gaugeSvg(m) {
+  const ticks = Array.from({length: 11}, (_, i) => { const a = (needleAngle(i / 10) - 90) * Math.PI / 180, big = i % 5 === 0, r0 = big ? 17 : 19.5; return `<path d="M${(32 + Math.cos(a) * r0).toFixed(1)} ${(36 + Math.sin(a) * r0).toFixed(1)}L${(32 + Math.cos(a) * 22.5).toFixed(1)} ${(36 + Math.sin(a) * 22.5).toFixed(1)}"/>`; }).join('');
+  const ghost = m.ghost == null ? '' : `<g class="needle ghost" data-a="${needleAngle(m.ghost).toFixed(1)}" style="--a:-75deg"><path d="M32 36V16"/></g>`;
+  return `<span class="gauge ${m.id}" role="img" aria-label="${m.label} ${m.text}"><svg viewBox="0 0 64 46" aria-hidden="true" focusable="false"><path class="face" d="M5 38A29 29 0 0 1 59 38z"/><g class="ticks">${ticks}</g>${m.id === 'noise' ? '<path class="red" d="M44 17.5A22.5 22.5 0 0 1 54 28"/>' : ''}${ghost}<g class="needle" data-a="${needleAngle(m.frac).toFixed(1)}" style="--a:-75deg"><path d="M32 36V14"/></g><circle class="hub" cx="32" cy="36" r="3"/></svg><b>${m.text}</b><small>${m.label}</small></span>`;
+}
+export const gaugeRowHtml = (gun, guns, opts) => `<div class="gauges">${analogMeters(gun, guns, opts).map(gaugeSvg).join('')}</div>`;

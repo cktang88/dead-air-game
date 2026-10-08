@@ -26,6 +26,8 @@ import {BOSS_ROOM_NAME} from './boss.js';
 import {BOSS,BOSS_BULLET_FLOOR} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
 import {mountTuner} from './tuner-ui.js';
+import {rackHtml,binsHtml,modDrawerHtml} from './armory-ui.js';
+import {paintStacks,sweepNeedles} from './equip-art.js';
 import {mountPanel, pullLever} from './panel-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
@@ -188,19 +190,15 @@ function fadeHudOverPlay(){
 }
 // Loadout (TAB): your carried guns, the mod on the active one, and the extras. Nothing is bought here: guns and mods
 // come from pickups and supply drops, so this screen is for reading and for drawing a gun.
-function modChipHtml(modId){const mod=MOD_BY_ID.get(modId);return mod?`<em class="chip" style="--c:#${mod.color.toString(16).padStart(6,'0')}">${mod.name}</em>`:'<em class="chip dim">NO MOD</em>';}
 function renderLoadout(){
   if(!$('loadout-gun'))return;
-  $('loadout-gun').innerHTML=state.weaponSlots.map((index,slot)=>{const gun=GUNS[index],active=slot===state.activeSlot,swap=swapSeconds(gun,modOf(gun),maxWeaponSlots());
-    return `<button class="loadout-weapon held ${active?'active':''}" style="--cat:${categoryColor(gun.category)}" data-slot="${slot}"><div class="lw-icon">${gunIcon(gun,'gun-ico')}</div><div class="lw-body"><div class="lw-head"><strong>${gun.name}</strong><em class="slot-badge ${active?'active':''}">${active?'ACTIVE · ':''}${weaponSlotLabel(slot)}</em></div><span class="lw-meta">${gun.short} · ${state.weaponAmmo[index]} / ${magSize(gun)} · ${state.reserveAmmo[index]} RESERVE</span>${statBarsHtml(gun,null,GUNS,{compact:true})}<span class="lw-result">${modChipHtml(modOf(gun))} · DRAW ${swap===0?'INSTANT':swap.toFixed(2)+' S'}</span></div></button>`;
-  }).join('');
-  const shotgun=state.weaponSlots.some(i=>GUNS[i].id==='shotgun');
-  $('extras-list').innerHTML=(shotgun?SHOTGUN_SHELLS.map(shell=>`<div class="mod-row ${shell.id===state.shotgunShellId?'equipped':''}"><span><span class="nm">${shell.name}</span><small>${shell.description}</small></span><button data-shell="${shell.id}" ${shell.id===state.shotgunShellId?'disabled':''}>${shell.id===state.shotgunShellId?'LOADED':'LOAD'}</button></div>`).join(''):'')
-    +`<div class="mod-row"><span><span class="nm">THROWABLES</span><small>${THROWABLES.map(item=>`${item.name} x${state.throwables[item.id]||0}`).join(' · ')}</small></span></div>`;
-  const gun=GUNS[state.weaponIndex],worn=modOf(gun);
-  $('mod-list').innerHTML=MODS.map(mod=>{const fits=modFits(gun,mod.id),on=worn===mod.id;
-    return `<div class="mod-row ${on?'equipped':''} ${fits?'':'off'}">${strokeIcon(mod.id,'ico')}<span><span class="nm">${mod.name}</span>${on?' <em class="chip on">FITTED</em>':''}<small>${mod.info}</small>${fits?'':'<span class="why">DOES NOT FIT THIS GUN</span>'}</span></div>`;}).join('')
-    +`<div class="mod-row"><span><small>One mod per gun, no upgrades to buy. Walk up to a mod on the floor to see where it fits and what it replaces; fitting a new one drops the old one so you can swap back.</small></span></div>`;
+  const slotOf=(index,slot)=>{const gun=GUNS[index],mid=modOf(gun);return {slot,index,gun,active:slot===state.activeSlot,slotLabel:weaponSlotLabel(slot),mod:MOD_BY_ID.get(mid)||null,modDef:MOD_BY_ID.get(mid)||null,ammo:state.weaponAmmo[index],mag:magSize(gun),reserve:state.reserveAmmo[index],
+    swapText:(()=>{const sw=swapSeconds(gun,mid,maxWeaponSlots());return sw===0?'INSTANT':sw.toFixed(2)+' S';})(),color:categoryColor(gun.category)};};
+  const slots=state.weaponSlots.map(slotOf),handGun=slots.find(s=>s.active);
+  const shotgun=state.weaponSlots.some(i=>GUNS[i].id==='shotgun'),gun=GUNS[state.weaponIndex],worn=modOf(gun);
+  const html=[rackHtml(slots,GUNS,handGun),binsHtml({shells:shotgun?SHOTGUN_SHELLS:[],shellId:state.shotgunShellId,throwables:THROWABLES.map(item=>({id:item.id,name:item.name,count:state.throwables[item.id]||0}))}),
+    modDrawerHtml(MODS,{worn,fits:id=>modFits(gun,id)})+`<div class="mod-row note"><span><small>One mod per gun, no upgrades to buy. Walk up to a mod on the floor to see where it fits and what it replaces; fitting a new one drops the old one so you can swap back.</small></span></div>`];
+  if(renderLoadout.last?.join('\u0001')!==html.join('\u0001')){renderLoadout.last=html;$('loadout-gun').innerHTML=html[0];$('extras-list').innerHTML=html[1];$('mod-list').innerHTML=html[2];paintStacks($('loadout'));sweepNeedles($('loadout'));}
   {const co=$('carry-readout');co.innerHTML=`<span class="term" data-tip="Two guns in hand. Picking up a third swaps the one you are holding. The Third Slot upgrade adds a slot, but every swap gets slower.">GUNS</span> ${state.weaponSlots.length} / ${maxWeaponSlots()}`;}
   updateThrowableHud();
 }
@@ -649,16 +647,22 @@ function collect(pickup,manual=false){if(!pickup.available)return false;const d=
 }
 /* ---------- SUPPLY DROP: one pickup, three visible options, take one (replaces merchant, locker and cache) */
 function supplyContext(){return {scrap:state.scrap,ammoNeed:state.weaponSlots.some(i=>state.weaponAmmo[i]<magSize(GUNS[i])||state.reserveAmmo[i]<GUNS[i].reserve),health:state.health,maxHealth:state.maxHealth,activeModId:modOf(GUNS[state.weaponIndex]),hasGunInHand:true,carried:state.weaponSlots};}
+// True item silhouettes baked from the stacked models, sitting in the foam cut-out (see equip-art.js).
+function supplyArt(offer){
+  const stack=offer.kind==='gun'?`data-stack="gun" data-gun="${offer.gunIndex}"`:offer.kind==='ammo'?'data-stack="ammo"':offer.kind==='heal'?'data-stack="med"':offer.kind==='freq'?'data-stack="radio"':offer.kind==='mod'?`data-stack="mod" data-color="#${MOD_BY_ID.get(offer.modId).color.toString(16).padStart(6,'0')}"`:'';
+  return stack?`<canvas class="foam-art" ${stack} data-fit="${offer.kind==='gun'?.95:.8}" aria-hidden="true"></canvas>`:strokeIcon('pickup-mod','ico big');
+}
 function renderSupply(){
   const pickup=state.supplyPickup;if(!pickup?.offers)return;
   const ctx=supplyContext(),hand=GUNS[state.weaponIndex],full=state.weaponSlots.length>=maxWeaponSlots();
   const lid=pickup._opened?'':'<div class="lid" aria-hidden="true"><b>SUPPLY</b><i></i></div>';pickup._opened=true;
   $('supply-options').innerHTML=`<div class="crate">${lid}<div class="foam">`+pickup.offers.map((offer,i)=>{
     const status=offerStatus(offer,ctx),card=offerCard(offer,{activeGun:hand,activeModId:ctx.activeModId,handGun:full?hand:null});
-    const icon=offer.kind==='gun'?gunIcon(GUNS[offer.gunIndex],'gun-ico lg'):strokeIcon(card.icon,'ico big');
+    const icon=supplyArt(offer);
     const tag=offer.sold?'<span class="pricetag sold"><i></i><b>SOLD</b></span>':`<span class="pricetag"><i></i><b>${costHtml(offer.cost||0)}</b></span>`;
     return `<button type="button" class="cut cache-row ${offer.kind} ${status.ok?'':'poor'} ${offer.sold?'sold':''}" data-kind="${offer.kind}" data-supply="${i}" ${status.ok?'':'disabled'} aria-label="${card.title}${offer.sold?', sold':`, ${offer.cost||0} scrap`}"><span class="cut-art">${icon}</span><span class="cut-label"><kbd class="pushkey">${i+1}</kbd><strong>${card.title}</strong><small>${card.text}</small>${status.ok?'':`<span class="why">${status.reason}</span>`}</span>${tag}</button>`;
   }).join('')+'</div></div>'+supplyFooterHtml(pickup,ctx);
+  paintStacks($('supply-options'));
 }
 function supplyFooterHtml(pickup,ctx){
   const cost=reshuffleCost(pickup.rerolls||0),arms=pickup.offers.find(o=>o.slot==='arms'),can=arms&&!arms.sold&&ctx.scrap>=cost;
@@ -1027,7 +1031,7 @@ function detonateThrowable(projectile){({frag:playExplosion,flash:playFlashbang,
 function updateThrown(dt){for(let i=state.thrown.length-1;i>=0;i--){const projectile=state.thrown[i];projectile.fuse-=dt;const p=projectile.body.translation();projectile.x=p.x;projectile.y=p.y;if(projectile.fuse<=0){detonateThrowable(projectile);state.thrown.splice(i,1);}}}
 function updateEffects(dt){for(let i=state.effects.length-1;i>=0;i--){const effect=state.effects[i];effect.remaining-=dt;effect.elapsed+=dt;if(effect.id==='incendiary'&&effect.elapsed>=effect.nextTick){effect.nextTick=effect.elapsed+.48;for(const enemy of state.enemies){const d=distance(effect,enemy);if(enemy.alive&&isWithinThrowableRadius('incendiary',d)&&!lineBlocked(effect.x,effect.y,enemy.x,enemy.y)){enemy.hp-=effect.item.damage;enemy.stun=Math.max(enemy.stun,.12);view.fx.hitEnemy(enemy,effect.item.damage,0,-1,enemy.hp<=0);if(enemy.hp<=0)killEnemy(enemy,{vx:0,vy:0});}}}if(effect.remaining<=0){state.effects.splice(i,1);}}}
 function updateThrowableHud(){const sel=selectedThrowable();$('throwable-readout').innerHTML=THROWABLES.map(item=>{const n=state.throwables[item.id]||0;return `<div class="chip-throw ${item.id===sel.id?'sel':''} ${n?'':'none'}" title="${item.name}">${strokeIcon(item.id,'ico')}<b>${n}</b></div>`;}).join('')+`<span class="throw-name">${sel.name.toUpperCase()}</span>`;$('throwable-hint').innerHTML=`${keycap(keyLabel(binding('throwableCycle')))} SELECT ${keycap(keyLabel(binding('throwableUse')))} THROW`;}
-function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(state.loadoutOpen)renderLoadout();$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else view.canvas.focus();}
+function toggleLoadout(force){state.loadoutOpen=force??!state.loadoutOpen;if(state.loadoutOpen){renderLoadout.last=null;renderLoadout();}$('loadout').classList.toggle('show',state.loadoutOpen);$('loadout').setAttribute('aria-hidden',String(!state.loadoutOpen));if(state.loadoutOpen)$('close-loadout').focus();else view.canvas.focus();}
 function playerSpeedRatio(){const v=state.playerVel;if(!v)return 0;const top=state.walkTop||runStats().moveSpeed||112;return effectiveSpeedRatio(Math.hypot(v.x,v.y),state.actualSpeed,top);}
 // THE TIME RULE (time-rule.js): world rate follows the player's actual speed. Perks/interference only ever pull the rate DOWN (or lift the still floor).
 function getTimeScale(){if(state.peek)return 0;state.pressure=state.mode==='play'&&pressureThreat(state.enemies,state.player);const base0=timeScale({mode:state.mode,paused:state.paused||state.supplyOpen||!!state.runModal,loadoutOpen:state.loadoutOpen,speedRatio:playerSpeedRatio(),idleScale:runStats().idleScale}),base=pressureScale(base0,state.pressure);state.pressureK=1;if(base>0&&(state.freezeT>0||state.flourishT>0)){state.pressureK=0;return Math.min(base,TIME_RULE.stillFloor);}if(base>0&&(state.timeCredit>0||(state.health<=1&&freqStats(state.freq).lastStand>0))){state.pressureK=TIME_RULE.creditMult;return creditScale(base);}const ih=interferenceStats(state.progress);if(ih.lowHealthIdle&&state.health<=2&&base>0&&base<ih.lowHealthIdle&&playerSpeedRatio()<=TIME_RULE.deadSpeed)return ih.lowHealthIdle;return base;}

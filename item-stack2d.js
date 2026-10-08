@@ -354,3 +354,6 @@ export function drawExitMast(ctx, x, y, t, ready, col) {
   const a = 0.35 + 0.35 * Math.max(0, Math.sin(sw * 1.6 * 1)), ly = y - 40 * STACK_TILT;
   ctx.fillStyle = col; ctx.globalAlpha = a * 0.5; ctx.beginPath(); ctx.arc(x + Math.cos(sw * 1.6) * 5, ly, 5, 0, TAU); ctx.fill(); ctx.restore();
 }
+
+// The equipment UI (equip-art.js) bakes these same models into its rack, foam and tray canvases.
+export const UI_MODELS = {ammo: ammoModel, med: medModel, armor: armorModel, mod: modModel, radio: radioModel, supply: supplyModel};
