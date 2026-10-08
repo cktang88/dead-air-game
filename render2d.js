@@ -9,7 +9,7 @@ import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inO
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
-import {beginStackFrame, STACK_CONFIG, stackStats} from './stack2d.js';
+import {beginStackFrame, STACK_CONFIG, STACK_TILT, stackStats} from './stack2d.js';
 import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {warmEnemy, pumpWarm} from './stack-warm.js';
@@ -40,6 +40,9 @@ function lgrad(ctx, x0, y0, x1, y1, c0, c1) {
 
 export {hexStr};
 /** Distance from an enemy's centre to the drawn muzzle (bullets, flash, telegraph all start here). */
+/** Screen lift (px) of an actor's drawn barrel above the simulated muzzle point: bullets, flashes and telegraph lines start here (visual only). */
+const ENEMY_MUZZLE_LIFT = 4 * STACK_TILT;
+const muzzleLift = (e) => (STACK_CONFIG.enabled ? (e?.vis?.mLift ?? ENEMY_MUZZLE_LIFT) : 0);
 export const enemyMuzzle = (e) => (isHeavy(e) ? heavyMuzzle(e) : ENEMY_GUNS[e.type] ? gunMuzzle(ENEMY_GUNS[e.type]) : 13);
 const FONT = "'Barlow Condensed','Bahnschrift','Roboto Condensed','Arial Narrow','Liberation Sans Narrow','Inter',system-ui,sans-serif";
 const MONO = "'DM Mono',ui-monospace,monospace";
@@ -161,7 +164,7 @@ export function createRenderer(container, state) {
   function shot(owner, shooter, angle) {
     const dx = Math.cos(angle), dy = Math.sin(angle);
     const mzd = owner === 'enemy' ? enemyMuzzle(shooter) : 18;
-    fx.muzzle(shooter.x + dx * mzd, shooter.y + dy * mzd, angle, {color: '#ff7a6a', size: 0.75});
+    fx.muzzle(shooter.x + dx * mzd, shooter.y + dy * mzd - muzzleLift(shooter), angle, {color: '#ff7a6a', size: 0.75});
     shooter.vis ??= {}; shooter.vis.kick = 1;
   }
 
@@ -170,7 +173,7 @@ export function createRenderer(container, state) {
     for (const ev of events) {
       if (ev.type === 'shot') {
         const gun = GUNS.find((g) => g.id === ev.gun) || GUNS[0], a = Math.atan2(ev.dy, ev.dx);
-        fx.muzzle(ev.x, ev.y, a, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' || gun.category === 'LAUNCHER' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
+        fx.muzzle(ev.x, ev.y - (STACK_CONFIG.enabled ? vis.mLift || 0 : 0), a, {color: hexStr(gun.color), size: gun.category === 'SHOTGUN' || gun.category === 'ANTI-MATERIEL' || gun.category === 'LAUNCHER' ? 1.5 : gun.category === 'PISTOL' ? 0.8 : 1});
         const p = state.player;
         if (p) fx.casing(p.x + ev.dx * 8, p.y + ev.dy * 8, a);
         vis.kick = Math.max(vis.kick, Math.min(1.3, 0.5 + (ev.kick || 0.5)));
@@ -811,7 +814,7 @@ export function createRenderer(container, state) {
           ctx.save(); ctx.rotate(-ang);
           humanoidPose(kitFor(kind), {id: e.id || 0, t: vis.time, bodyYaw: ang, aimYaw: ang, moveYaw: mvAng, amp, phase: v.phase || 0, kick, hurt: Math.max(punch, (v.flash || 0) * 0.7, clamp(((v.alertT || 0) - 0.55) / 0.35)), flash: Math.min(1, (v.flash || 0) * 1.6), idleT: e.aware ? 0 : v.idleT || 0,
             gunModel: gunStack(gun, {enemy: true, noMag: !!erp && erp.mag > 0.02}), gunGeo: gunGeometry(gun), gunRot: gunRot - rel * 1.15 + (erp ? erp.tilt * (e.side || 1) : 0), gunDx: 0.1 - (1 - raise) * 1.4, reloadFrac: erf, mag: erp ? erp.mag : 0, magModel: kitFor(kind).mag, lunge, antennaX: v.antX || 0, antennaY: v.antY || 0}, _rig);
-          drawRig(ctx, _rig, 0, 0, {variant: floorStackVariant(state.floor)});
+          drawRig(ctx, _rig, 0, 0, {variant: floorStackVariant(state.floor)}); v.mLift = _rig.muzzleDz * STACK_TILT;
           ctx.restore();
         }
         if (e.type === 'sniper' && aimP === 0) {
@@ -963,7 +966,7 @@ export function createRenderer(container, state) {
   function drawSniperLaser(e) {
     const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
     const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : gunMuzzle(gun);
-    const sx = e.x + dx * m, sy = e.y + dy * m, len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
+    const sx = e.x + dx * m, sy = e.y + dy * m - muzzleLift(e), len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
     const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
     ctx.lineCap = 'round';
     ctx.globalCompositeOperation = 'lighter';
@@ -996,7 +999,7 @@ export function createRenderer(container, state) {
       } else if (e.aimTimer > 0) {
         const p = clamp(1 - e.aimTimer / (e.vis?.aimMax || 0.5), 0, 1), range = e.type === 'brute' ? 130 : Math.min(e.def.range, 280), dx = e.aim.x, dy = e.aim.y;
         const gun = ENEMY_GUNS[e.type], hvg = isHeavy(e) && gun, m = hvg ? heavyMuzzle(e) : gun ? gunMuzzle(gun) : 14;
-        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' && !hvg ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0);
+        const sx = e.x + dx * m, sy = e.y + dy * m + (e.type === 'guard' && !hvg ? Math.cos(Math.atan2(dy, dx)) * 3.5 : 0) - (gun ? muzzleLift(e) : 0);
         const len = rayWall(e.x, e.y, dx, dy, range);
         const ex = e.x + dx * len, ey = e.y + dy * len;
         const hot = mix('#ff8a5a', '#ff2a48', p);
@@ -1012,6 +1015,18 @@ export function createRenderer(container, state) {
         ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + p * 0.5; ctx.drawImage(glowSprite('#ff5a6a'), sx - 8 - p * 4, sy - 8 - p * 4, 16 + p * 8, 16 + p * 8); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
     }
+  }
+
+  // Tall cover is baked into the chunks (under every actor). occludeBegin snapshots the lit pixels of the cover standing in front of an actor
+  // before the living are drawn; occludeEnd pastes them back over the actors, ghosting them through (world2d.js).
+  const _occ = [];
+  function occludeBegin(b) {
+    if (!STACK_CONFIG.props || !state.player) return;
+    _occ.length = 0;
+    const fd = feetDrop(), p = state.player;
+    _occ.push({x: p.x + vis.fl.x, y: p.y + vis.fl.y, fd});
+    for (const e of state.enemies) if (e.alive && inView(e, b, 20)) _occ.push({x: e.x, y: e.y, fd});
+    world.occludeBegin(ctx, _occ);
   }
 
   function drawPlayer(now) {
@@ -1034,7 +1049,7 @@ export function createRenderer(container, state) {
       humanoidPose(kitFor('player'), {id: 1, t: vis.time, bodyYaw: bAng, aimYaw: ang, moveYaw: vis.mvAng, amp, phase: vis.pPhase, sprint, kick: Math.min(1, kick), hurt: vis.flashHit, flash: vis.flashHit > 0 ? Math.min(1, vis.flashHit * 1.4) : 0, idleT: vis.idleReal || 0,
         gunModel: gunStack(g0, {noMag: !!rpz && rpz.mag > 0.02}), gunGeo: gunGeometry(g0), gunRot: -sprint * 0.45 + (rpz ? rpz.tilt : 0) + (sw ? sw.rot : 0), gunDx: -(rpz ? rpz.seat * 1.2 : 0) + (sw ? sw.dx : 0),
         gunScale: sw ? sw.k : 1, reloadFrac: rpz ? Math.max(0.001, frac) : 0, mag: rpz ? rpz.mag : 0, magModel: kitFor('player').mag, antennaX: vis.antX || 0, antennaY: vis.antY || 0}, _rig);
-      drawRig(ctx, _rig, 0, 0, {});
+      drawRig(ctx, _rig, 0, 0, {}); vis.mLift = _rig.muzzleDz * STACK_TILT;
     } else {
     drawFeet(vis.mvAng, 10.5, vis.pPhase, amp, '#1d3a36');
     // body: breathes at rest, bobs and stretches along travel while walking, stretches more when sprinting
@@ -1083,7 +1098,7 @@ export function createRenderer(container, state) {
     const dx = state.aim.x, dy = state.aim.y, mz = gunMuzzle(gun);
     const maxLen = Math.min(150, rayWall(p.x, p.y, dx, dy, 150));
     ctx.save(); ctx.strokeStyle = 'rgba(255,240,220,0.16)'; ctx.lineWidth = 0.9; ctx.setLineDash([2, 6]);
-    ctx.beginPath(); ctx.moveTo(p.x + dx * (mz + 6), p.y + dy * (mz + 6)); ctx.lineTo(p.x + dx * maxLen, p.y + dy * maxLen); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(p.x + dx * (mz + 6), p.y + dy * (mz + 6) - (stk ? vis.mLift || 0 : 0)); ctx.lineTo(p.x + dx * maxLen, p.y + dy * maxLen); ctx.stroke(); ctx.restore();
   }
 
   function drawThrown() {
@@ -1154,6 +1169,7 @@ export function createRenderer(container, state) {
     for (const bl of state.bullets) {
       if (!inView(bl, b, 60)) continue;
       const sp = Math.hypot(bl.vx, bl.vy) || 1, dx = bl.vx / sp, dy = bl.vy / sp;
+      ctx.save(); ctx.translate(0, -(bl.owner === 'player' ? (STACK_CONFIG.enabled ? vis.mLift || 0 : 0) : muzzleLift(null)));   // drawn at barrel height (visual only)
       if (bl.owner === 'player') {
         const color = bl.color !== undefined ? mix(hexStr(bl.color), '#ffcf5c', 0.55) : '#ffd17c', born = Math.hypot(bl.x - (bl.ox ?? bl.x), bl.y - (bl.oy ?? bl.y));
         const pw = bl.power || 1, len = Math.min(clamp(sp * 0.04, 12, 40) * slowK * (0.85 + pw * 0.15), 6 + born * 1.1); // pw: RED LINE / charged shots draw bigger and brighter
@@ -1191,6 +1207,7 @@ export function createRenderer(container, state) {
         ctx.fillStyle = '#fff6ec'; ctx.beginPath(); ctx.arc(bl.x - dx * 0.6, bl.y - dy * 0.6, R * 0.52, 0, TAU); ctx.fill();
         if (bl.missed) { ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(bl.x, bl.y, R + 4, 0, TAU); ctx.stroke(); }
       }
+      ctx.restore();
     }
   }
 
@@ -1321,9 +1338,11 @@ export function createRenderer(container, state) {
     if (!vis.warmP) { vis.warmP = 1; warmEnemy('player', false, null, null); }
     for (const e of state.enemies) if (e.alive && !(e.vis && e.vis.warm)) warmFor(e);
     for (const e of state.enemies) if (!e.alive && inView(e, bp, 40)) drawEnemy(e, now);
+    occludeBegin(bp);
     for (const e of state.enemies) if (e.alive && inView(e, bp, 40)) drawEnemy(e, now);
     drawThrown();
     drawPlayer(now);
+    world.occludeEnd(ctx, 0.66);
     { const am = performance.now() - actorT0; stats.actorLast = am; stats.actorMs += (am - stats.actorMs) * 0.1; }
     pumpWarm(1.5);   // spread the enemy kits' background bakes over frames (outside the actor timing)
     drawEffects(bp);

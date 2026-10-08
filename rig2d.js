@@ -216,6 +216,7 @@ export function humanoidPose(kit, inp, out) {
   const gunKey = topK + 0.1;
   if (inp.gunModel) { const g = add(out, inp.gunModel, gx, gy, gz, gunYaw, gsc, gsc, fl); g.key = gunKey; }
   out.muzzleX = gx + gdx * gL * gsc; out.muzzleY = gy + gdy * gL * gsc;
+  out.muzzleDz = hasGun ? gz - kick * 0.9 - 0.18 * bob + 2.7 - RIG.anchorZ : 0;   // height of the barrel above the aim plane (world units; kick / bob left out so tracers do not wobble); drawn lift = muzzleDz * STACK_TILT
   const gpt = (p, o, dx = 0, dy = 0) => { const px = (p.x + dx) * gsc, py = (p.y + dy) * gsc; o.x = gx + gdx * px - gdy * py; o.y = gy + gdy * px + gdx * py; o.z = gz + 1.5; return o; };
   const G = geo || {trig: {x: 4, y: 0}, sup: {x: 12, y: 0}, mag: {x: 7, y: 0}, bolt: {x: 7, y: 0.5}, cls: 'rifle'};
   const hT = _hT, hS = _hS;
@@ -261,7 +262,7 @@ export function humanoidPose(kit, inp, out) {
     const H = side > 0 ? hT : hS, hxw = H.x, hyw = H.y, hz = H.z;
     const dx = hxw - shx, dy = hyw - shy, d = Math.hypot(dx, dy);
     // pistols are held at near full extension (isosceles): bones shorten instead of folding the elbows out
-    const L = Math.max(d * ((G.cls === 'pistol' && !rf && tuck < 0.5) ? 0.51 : side > 0 ? 0.58 : 0.525), 5.5);   // limbs are procedural: the bend follows the reach (support arm nearly straight, trigger elbow flared)
+    const L = Math.max(d * ((G.cls === 'pistol' && !rf && tuck < 0.5) ? 0.5 : side > 0 ? 0.545 : 0.505), 5.5);   // limbs are procedural: the bend follows the reach (support arm nearly straight, trigger elbow flared)
     solveElbow(shx, shy, hxw, hyw, L, side, torsoYaw, _e1);
     const z0 = RIG.shoulder.z + (tz - RIG.torsoZ) - 1.0, z1 = hz - 0.4;
     const zm = (z0 + (z0 + z1) / 2) / 2 - 1.5, zn = ((z0 + z1) / 2 + z1) / 2 - 1.5;
@@ -331,7 +332,7 @@ function limbPal(kit, variant) {
   }
   return p;
 }
-const R_UP = 1.3, R_EL = 1.1, R_WR = 0.85;
+const R_UP = 1.7, R_EL = 1.3, R_WR = 0.95;
 /** Adds a tapered capsule (circle r0 at A, circle r1 at B, tangent hull) to the current path. */
 export function capsule(ctx, ax, ay, r0, bx, by, r1) {
   const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);

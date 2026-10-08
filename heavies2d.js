@@ -263,9 +263,10 @@ export function drawHeavy(ctx, e, v, t, variant) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.16 + 0.1 * pulse + s.aimP * 0.45; ctx.drawImage(glowSprite(s.aimP > 0.4 ? '#ff6a5a' : '#6fe9f2'), lx - 6, ly - 4, 12, 8); ctx.restore();
     }
   }
+  v.mLift = out.muzzleDz * STACK_TILT;
   if (s.aimP > 0 && info.gun) {
     // the same aim dot + flare the legacy art had, at the true muzzle
-    const mx = out.muzzleX, my = out.muzzleY;
+    const mx = out.muzzleX, my = out.muzzleY - out.muzzleDz * STACK_TILT;
     ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = '#ff4a5e'; ctx.beginPath(); ctx.arc(mx, my, 1.7, 0, TAU); ctx.fill(); ctx.restore();
     if (e.type === 'sniper') { const flick = 0.65 + 0.35 * Math.sin(t * 34), g = (0.15 + s.aimP * s.aimP * 1.3) * flick + (e.locked ? 0.5 : 0); glint(ctx, mx - 3, my, 2 + g * 6, 0.9, '#fff0f0'); }
     else if (s.aimP > 0.55) glint(ctx, mx, my, 1.5 + (s.aimP - 0.55) * 5, 0.9, '#ffb0a0');

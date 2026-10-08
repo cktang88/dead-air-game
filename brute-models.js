@@ -6,7 +6,7 @@ import {BU, mixc, pitchedGrid} from './creature-models.js';
 export const BRUTE_SPEC = {
   id: 'brute', elite: false,
   c: {
-    skin: '#9b8296', skinDark: '#6f5a73', cloth: '#4b3d57', leather: '#5d3f36', leatherHi: '#7e5848', plate: '#586070', plateHi: '#98a2b6', rust: '#a1593a',
+    skin: '#80687b', skinDark: '#554457', cloth: '#3a2f46', leather: '#5d3f36', leatherHi: '#7e5848', plate: '#6c788c', plateHi: '#c4d0e4', rust: '#a1593a',
     hazard: '#e0b83c', hazardDark: '#2a2430', mask: '#34383f', lens: '#ff9a3a', lensHi: '#fff0b0', steel: '#767c8a', wood: '#7a5638', pants: '#3b3441', boot: '#2b2630',
     bootHi: '#4d4556', brass: '#d6b45f', tank: '#7d8a6e', tankHi: '#b2c19a', led: '#ff4a5e',
   },
@@ -14,7 +14,7 @@ export const BRUTE_SPEC = {
 export const ELITE_BRUTE_SPEC = {
   id: 'brute.elite', elite: true,
   c: {
-    skin: '#a07a6e', skinDark: '#6e4e48', cloth: '#3a2230', leather: '#4a2a28', leatherHi: '#74423a', plate: '#9a3c26', plateHi: '#f08a58', rust: '#c0552a',
+    skin: '#86645a', skinDark: '#583a38', cloth: '#2e1a28', leather: '#4a2a28', leatherHi: '#74423a', plate: '#b4452a', plateHi: '#ffae78', rust: '#c0552a',
     hazard: '#f2c453', hazardDark: '#2a1418', mask: '#2c2226', lens: '#ff3a2a', lensHi: '#ffd0a0', steel: '#b4a090', wood: '#5e3a28', pants: '#2e222c', boot: '#241a20',
     bootHi: '#4a3238', brass: '#f0c870', tank: '#8a4a3a', tankHi: '#d98a6a', led: '#ff4a5e',
   },

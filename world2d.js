@@ -5,7 +5,7 @@ import {INK, TAU, actorSprite, corpseSprite, hash2, makeCanvas, mix, rgba, seede
 import {blotch, carpetTile, dirtTile, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2d.js';
 import {paintFloorTile} from './floors2d.js';
 import {LIGHT, coverStyle, lampPool, paintCover, paintDecor, shadowKey, COVER_HEIGHT} from './props2d.js';
-import {paintPropStack, propLive, drawPropsLive} from './prop-stack2d.js';
+import {paintPropStack, propLive, drawPropsLive, propImage} from './prop-stack2d.js';
 import {STACK_CONFIG} from './stack2d.js';
 
 export const CHUNK_TILES = 12;
@@ -43,7 +43,7 @@ export class WorldLayer {
     if (cs === this.cs) return;
     if (Math.abs(cs - this.cs) / this.cs < 0.2 && this.chunks.size) return;
     this.cs = cs;
-    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.level = lv; }
+    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.level = lv; lv.propImg = null; }
   }
 
   textures() {
@@ -519,6 +519,64 @@ export class WorldLayer {
     const L = this.level;
     if (!L || !STACK_CONFIG.props || !L.live.props.length) return;
     drawPropsLive(ctx, L.live.props, t, bounds);
+  }
+
+  // Occlusion: tall cover is baked into the chunks, i.e. under every actor. occludeBegin() runs BEFORE the living actors are drawn: for every cover
+  // tile that overlaps an actor standing behind it (feet north of the prop's base line) it copies the already lit / graded canvas pixels of the
+  // prop (masked by the prop's own silhouette) into a scratch canvas; occludeEnd() pastes them back over the actors. The paste is slightly
+  // translucent so the actor shows through as a faint ghost: the player never loses himself and a telegraphing enemy stays readable.
+  // actors: [{x, y, fd}] (sim point + feet drop). Needs ctx transformed to world space. Returns the number of tiles captured.
+  occludeBegin(ctx, actors) {
+    const L = this.level, hits = this.occHits || (this.occHits = []);
+    hits.length = 0;
+    if (!L || !STACK_CONFIG.props || !L.cover.size || !actors.length) return 0;
+    const cache = L.propImg || (L.propImg = new Map()), seen = new Set();
+    for (const a of actors) {
+      const fy = a.y + a.fd, ax0 = a.x - 16, ax1 = a.x + 16, ay0 = a.y - 36, ay1 = fy + 4;
+      const r0 = Math.floor(fy / TILE), c0 = Math.floor(ax0 / TILE), c1 = Math.floor(ax1 / TILE);
+      for (let ty = r0; ty <= r0 + 2; ty++) for (let tx = c0; tx <= c1; tx++) {
+        const idx = ty * L.w + tx;
+        if (seen.has(idx)) continue;
+        const c = L.cover.get(idx);
+        if (!c || fy > (ty + 1) * TILE - 4) continue;
+        let e = cache.get(idx);
+        if (e === undefined) { e = propImage(this.coverCtx(L.cover, L.rooms, L.w, L.seed, tx, ty, c), this.cs) || null; if (e && e.skip) e = null; cache.set(idx, e); }
+        if (!e) continue;
+        const x = tx * TILE + e.dx, y = ty * TILE + e.dy;
+        if (x > ax1 || x + e.w < ax0 || y > ay1 || y + e.h < ay0) continue;
+        seen.add(idx); hits.push({e, x, y, ty});
+      }
+    }
+    if (!hits.length) return 0;
+    hits.sort((p, q) => p.ty - q.ty);
+    const m = ctx.getTransform(), pool = this.occPool || (this.occPool = []), src = ctx.canvas;
+    let n = 0;
+    for (const h of hits) {
+      const x0 = Math.max(0, Math.floor(h.x * m.a + m.e)), y0 = Math.max(0, Math.floor(h.y * m.d + m.f));
+      const x1 = Math.min(src.width, Math.ceil((h.x + h.e.w) * m.a + m.e)), y1 = Math.min(src.height, Math.ceil((h.y + h.e.h) * m.d + m.f));
+      const w = x1 - x0, hh = y1 - y0;
+      if (w < 1 || hh < 1) continue;
+      let cv = pool[n]; if (!cv) cv = pool[n] = makeCanvas(w, hh);
+      if (cv.width < w) cv.width = w; if (cv.height < hh) cv.height = hh;
+      const g = cv.getContext('2d');
+      g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.clearRect(0, 0, cv.width, cv.height);
+      g.drawImage(src, x0, y0, w, hh, 0, 0, w, hh);
+      g.globalCompositeOperation = 'destination-in';
+      g.drawImage(h.e.cv, h.x * m.a + m.e - x0, h.y * m.d + m.f - y0, h.e.w * m.a, h.e.h * m.d);
+      g.globalCompositeOperation = 'source-over';
+      h.cv = cv; h.dx = x0; h.dy = y0; h.dw = w; h.dh = hh; n++;
+    }
+    hits.length = n;
+    return n;
+  }
+
+  occludeEnd(ctx, alpha) {
+    const hits = this.occHits;
+    if (!hits || !hits.length) return;
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+    for (const h of hits) ctx.drawImage(h.cv, 0, 0, h.dw, h.dh, h.dx, h.dy, h.dw, h.dh);
+    ctx.restore();
+    hits.length = 0;
   }
 
   paintOpening(g, o, accent, kindAt) {
