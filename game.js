@@ -1318,7 +1318,7 @@ function setupControls(){
   mountDesk($('settings-panel'));
   controls.bindings=loadKeyBindings(localStorage);renderKeyBindings();renderKeyGuide();updateThrowableHud();
   $('key-bindings').addEventListener('click',event=>{const button=event.target.closest('[data-bind-action]');if(!button)return;controls.waitingFor=button.dataset.bindAction;$('binding-status').textContent=`Press a key for ${KEY_BINDING_ACTIONS.find(action=>action.id===controls.waitingFor)?.label.toLowerCase()}. Escape cancels.`;renderKeyBindings(controls.waitingFor);});
-  addEventListener('keydown',e=>{const key=normalizeKey(e.key);if(controls.waitingFor||key==='space'||key.startsWith('arrow')||Object.values(controls.bindings).includes(key))e.preventDefault();
+  addEventListener('keydown',e=>{const key=normalizeKey(e.key);const spaceNative=key==='space'&&!controls.waitingFor&&(/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||'')||e.target?.closest?.('[role=button]')||state.runModal||state.supplyOpen||state.loadoutOpen);if(!spaceNative&&(controls.waitingFor||key==='space'||key.startsWith('arrow')||Object.values(controls.bindings).includes(key)))e.preventDefault();
     if(controls.waitingFor){
       if(key==='escape'){controls.waitingFor=null;$('binding-status').textContent='Binding cancelled.';renderKeyBindings();return;}
       const action=controls.waitingFor,result=rebindKey(controls.bindings,action,key);
@@ -1600,6 +1600,7 @@ async function boot(){
   view=createRenderer($('game'),state);view.fx.onTink=(x,y)=>{const p=state.player;if(p)ambienceTink(Math.max(-1,Math.min(1,(x-p.x)/480)),Math.max(0,1-distance({x,y},p)/420));};
   ui.phase('stage',1,1);
   eggs=createEggs({state,view,toast,TILE,removeBody:body=>physics.removeRigidBody(body),sound:{break:()=>playCrateBreak(),pickup:()=>playPickup('scrap'),tape:()=>ambienceStatic(.22),hit:()=>playWallImpact({})}});
+  addEventListener('deadair-unlock-hat',e=>{e.preventDefault();eggs.unlock(e.detail);});
   addEventListener('keydown',e=>{if(e.repeat||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||''))return;if($('overlay').classList.contains('show'))eggs.key(e.code);});
   if(new URLSearchParams(location.search).has("debug"))window.__deadair={brainState,playerShove,PLAYER_BULLET_CLOCK,state,view,fitMod,takeGunIndex,openSupply,takeSupply,switchWeapon,igniteEnemy,detonateShell,playerShoot,spawnEnemy,hitPlayer,fireBullet,reachExit,startFloor:startFloorNow,beginRun,loadThen,startFloorAsync:startFloor,openFreqPick,finishRun,pickFreq,decide,newRun,killEnemy,checkRoomClear,collect,dropPickup,freeRoomPoint,saveProgress,renderMeta,kn,openDoorProp,enterSignalRoom,signalRoomFail,resetSignalRoom,finishSignal,pickAlcove,lineBlocked,startPeek,endPeek};
   state.physics=physics;setupControls();renderMeta();resize();$('start-button').disabled=false;$('start-button').innerHTML='<span>ENTER THE SECTOR</span><span class="arrow">↗</span>';ui.phase('tune',1,1);

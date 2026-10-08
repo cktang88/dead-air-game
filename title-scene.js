@@ -121,7 +121,10 @@ export function startTitleScene({reduced = false} = {}) {
     popped.set(i, t); pops.push({x: pt.x, y: pt.y, at: t});
     if (popped.size >= countBullets(bullets)) {
       caption = 5; popped.clear();
-      try { saveCosmetics(localStorage, unlockHat(loadCosmetics(localStorage), 'cone').cosmetics); } catch { /* no storage */ }
+      // the game owns the in-memory cosmetics (eggs.unlock): ask it first so the hat is worn now and the next save() keeps it
+      let handled = false;
+      try { handled = !window.dispatchEvent(new CustomEvent('deadair-unlock-hat', {detail: 'cone', cancelable: true})); } catch { /* no events */ }
+      if (!handled) try { saveCosmetics(localStorage, unlockHat(loadCosmetics(localStorage), 'cone').cosmetics); } catch { /* no storage */ }
     }
   };
   shell.addEventListener('pointerdown', onDown);
