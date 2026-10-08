@@ -5,9 +5,214 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0d0b14" />
     <title>DEAD AIR — Slowmo Dungeon</title>
-    <link rel="stylesheet" href="./style.css?v=4" />
+    <link rel="preconnect" href="https://esm.sh" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <style>
+      /* Boot loader: inline so it paints before any other file arrives. Self-contained (style.css tokens are not loaded yet). */
+      #boot{--bg:#0d0b14;--hi:#f4efe2;--low:#a39dae;--ok:#65dca8;--bad:#ff5367;position:fixed;inset:0;z-index:9990;display:grid;place-items:center;padding:24px 16px;background:var(--bg);color:var(--hi);font-family:'DM Mono',ui-monospace,'DejaVu Sans Mono',Consolas,monospace;opacity:1;visibility:visible;transition:opacity .36s cubic-bezier(.2,.8,.2,1)}
+      #boot[hidden]{display:grid;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .36s cubic-bezier(.2,.8,.2,1),visibility 0s linear .36s}
+      #boot::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.18) 3px 4px)}
+      #boot .boot-card{position:relative;width:min(440px,100%);display:grid;gap:16px}
+      #boot .boot-eyebrow{font-size:11px;letter-spacing:.22em;color:var(--low)}
+      #boot .boot-title{margin:0;font:800 clamp(44px,9vw,72px)/.9 'Barlow Condensed','Arial Narrow',system-ui,sans-serif;letter-spacing:.02em}
+      #boot .boot-title em{font-style:normal;color:var(--bad)}
+      #boot .boot-bars{display:grid;grid-template-columns:repeat(7,1fr);height:56px;border:1px solid rgba(241,236,221,.22);border-radius:3px;overflow:hidden;background:#000}
+      #boot .boot-bars i{background:var(--bar);opacity:.12;transition:opacity .2s cubic-bezier(.2,.8,.2,1)}
+      #boot .boot-bars i.on{opacity:.9}
+      #boot .boot-bars i.lead{opacity:1;animation:boot-flick .5s steps(2) infinite}
+      #boot .boot-meter{height:6px;border-radius:3px;background:#1f1a2b;overflow:hidden}
+      #boot .boot-meter b{display:block;height:100%;transform-origin:0 50%;transform:scaleX(var(--p,0));background:var(--ok);box-shadow:0 0 12px var(--ok);transition:transform .2s cubic-bezier(.2,.8,.2,1)}
+      #boot .boot-line{display:flex;justify-content:space-between;gap:12px;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+      #boot .boot-pct{color:var(--ok);font-variant-numeric:tabular-nums}
+      #boot .boot-err{display:none;gap:12px}
+      #boot .boot-err p{margin:0;font:500 15px/1.5 'DM Sans',system-ui,sans-serif;color:#cdc7d3}
+      #boot .boot-err b{color:var(--bad);letter-spacing:.14em;font-size:13px}
+      #boot .boot-err button{justify-self:start;padding:12px 22px;border:0;border-radius:6px;background:var(--hi);color:#0d0b14;font:700 13px 'DM Mono',monospace;letter-spacing:.14em;cursor:pointer}
+      #boot.failed .boot-err{display:grid}
+      #boot.failed .boot-line,#boot.failed .boot-meter{display:none}
+      #boot.failed .boot-bars i{--bar:#c00000;opacity:.35;animation:none}
+      @keyframes boot-flick{50%{opacity:.45}}
+      @media (prefers-reduced-motion:reduce){#boot .boot-bars i.lead{animation:none}#boot,#boot .boot-meter b{transition:none}}
+    </style>
+    <link rel="stylesheet" href="./style.css?v=4" media="print" onload="this.media='all';window.deadairBoot&&window.deadairBoot.css()" />
+    <noscript><link rel="stylesheet" href="./style.css?v=4" /></noscript>
+    <script>
+      /* Boot loader controller (classic script: runs at once, before any module). Counts the modulepreload links as they land. */
+      (function(){
+        var S={frac:0,label:'TUNING IN',plan:null,queue:[],failedHosts:[],fetched:0,dead:false},root=document.documentElement;
+        function el(){return document.getElementById('boot');}
+        function paint(){
+          var b=el();if(!b)return;
+          var p=Math.max(0,Math.min(1,S.frac)),on=Math.floor(p*7+1e-6);
+          b.style.setProperty('--p',p.toFixed(3));
+          b.querySelector('.boot-label').textContent=S.label;
+          b.querySelector('.boot-pct').textContent=Math.round(p*100)+'%';
+          b.setAttribute('aria-valuenow',String(Math.round(p*100)));b.setAttribute('aria-valuetext',S.label);
+          var bars=b.querySelectorAll('.boot-bars i');
+          for(var i=0;i<bars.length;i++){bars[i].className=i<on?'on':(i===on&&p<1?'lead':'');}
+        }
+        function set(frac,label){if(S.dead)return;S.frac=frac;S.label=label;paint();}
+        function show(){var b=el();if(!b)return;S.dead=false;b.hidden=false;b.classList.remove('failed');b.setAttribute('aria-hidden','false');paint();}
+        function css(){S.css=1;if(S.wantHide){S.wantHide=0;hide();}}
+        function hide(){var b=el();if(!b)return;if(!S.css){S.wantHide=1;return;}b.hidden=true;b.setAttribute('aria-hidden','true');}
+        function phase(id,done,total){
+          if(S.dead)return;
+          if(!S.plan){S.queue.push([id,done,total]);return;}
+          var s=S.plan.update(id,done,total);set(s.fraction,s.label);
+          if(s.done)hide();
+        }
+        function fail(err){
+          if(S.dead)return;S.dead=true;console.error(err);
+          var b=el();if(!b)return;
+          var host=S.failedHosts[0],msg=host?'Couldn’t reach '+host+'. Check your connection and RETRY.':'The game couldn’t load. Check your connection and RETRY.';
+          b.hidden=false;b.classList.add('failed');b.querySelector('.boot-eyebrow').textContent='STATION 0 \u00b7 NO CARRIER';b.querySelector('.boot-err p').textContent=msg;
+          var btn=b.querySelector('.boot-err button');if(btn)btn.focus();
+        }
+        window.deadairBoot={css:css,set:set,show:show,hide:hide,phase:phase,fail:fail};
+        document.addEventListener('DOMContentLoaded',paint);
+        function onLink(e,ok){
+          var t=e.target;if(!t||t.tagName!=='LINK'||t.rel!=='modulepreload')return;
+          if(!ok){try{S.failedHosts.push(new URL(t.href).host);}catch(x){S.failedHosts.push('the server');}fail(new Error('preload failed: '+t.href));return;}
+          S.fetched++;phase('fetch',S.fetched,document.querySelectorAll('link[rel=modulepreload]').length);
+        }
+        document.addEventListener('load',function(e){onLink(e,true);},true);
+        document.addEventListener('error',function(e){onLink(e,false);},true);
+        import('./boot-progress.js').then(function(m){
+          S.plan=m.createPlan(m.BOOT_PHASES);
+          var q=S.queue;S.queue=[];q.forEach(function(a){phase(a[0],a[1],a[2]);});
+          var s=S.plan.snapshot();set(s.fraction,s.label);
+        }).catch(fail);
+        import('./physics-init.js').then(function(m){return m.rapierReady;}).then(function(){phase('physics',1,1);}).catch(fail);
+        import('./game.js').catch(fail);
+        setTimeout(function(){if(!S.dead&&el()&&!el().hidden&&S.plan&&!S.plan.done()&&!S.slowNote){S.slowNote=1;var l=el().querySelector('.boot-label');if(l&&S.label.indexOf('STILL')<0)S.label+=' · STILL TRYING';paint();}},20000);
+      })();
+    </script>
+    <!-- preload:start (generated by scripts/gen-preload.mjs) -->
+    <link rel="modulepreload" href="https://esm.sh/@dimforge/rapier2d-compat@0.17.3" crossorigin />
+    <link rel="modulepreload" href="https://esm.sh/rot-js@2.1.3" crossorigin />
+    <link rel="modulepreload" href="./boot-progress.js" />
+    <link rel="modulepreload" href="./physics-init.js" />
+    <link rel="modulepreload" href="./game.js" />
+    <link rel="modulepreload" href="./title-intro.js" />
+    <link rel="modulepreload" href="./title-scene.js" />
+    <link rel="modulepreload" href="./render2d.js" />
+    <link rel="modulepreload" href="./camera2d.js" />
+    <link rel="modulepreload" href="./audio.js" />
+    <link rel="modulepreload" href="./music.js" />
+    <link rel="modulepreload" href="./ambience.js" />
+    <link rel="modulepreload" href="./easter-game.js" />
+    <link rel="modulepreload" href="./catalog.js" />
+    <link rel="modulepreload" href="./icons.js" />
+    <link rel="modulepreload" href="./hints.js" />
+    <link rel="modulepreload" href="./interaction.js" />
+    <link rel="modulepreload" href="./rules.js" />
+    <link rel="modulepreload" href="./progression.js" />
+    <link rel="modulepreload" href="./run-loop.js" />
+    <link rel="modulepreload" href="./unlocks.js" />
+    <link rel="modulepreload" href="./frequencies.js" />
+    <link rel="modulepreload" href="./goals.js" />
+    <link rel="modulepreload" href="./door-rewards.js" />
+    <link rel="modulepreload" href="./story.js" />
+    <link rel="modulepreload" href="./interference.js" />
+    <link rel="modulepreload" href="./boss-fight.js" />
+    <link rel="modulepreload" href="./boss.js" />
+    <link rel="modulepreload" href="./meta-ui.js" />
+    <link rel="modulepreload" href="./progress-storage.js" />
+    <link rel="modulepreload" href="./tactical.js" />
+    <link rel="modulepreload" href="./layout.js" />
+    <link rel="modulepreload" href="./room-props.js" />
+    <link rel="modulepreload" href="./room-templates.js" />
+    <link rel="modulepreload" href="./dungeon.js" />
+    <link rel="modulepreload" href="./enemy-brain.js" />
+    <link rel="modulepreload" href="./shove.js" />
+    <link rel="modulepreload" href="./stealth.js" />
+    <link rel="modulepreload" href="./economy.js" />
+    <link rel="modulepreload" href="./supply.js" />
+    <link rel="modulepreload" href="./floor-palette.js" />
+    <link rel="modulepreload" href="./room-roles.js" />
+    <link rel="modulepreload" href="./seeds.js" />
+    <link rel="modulepreload" href="./visual-settings.js" />
+    <link rel="modulepreload" href="./particles.js" />
+    <link rel="modulepreload" href="./projectile-impacts.js" />
+    <link rel="modulepreload" href="./loot.js" />
+    <link rel="modulepreload" href="./timefx.js" />
+    <link rel="modulepreload" href="./time-rule.js" />
+    <link rel="modulepreload" href="./warden.js" />
+    <link rel="modulepreload" href="./hud-ui.js" />
+    <link rel="modulepreload" href="./best-run.js" />
+    <link rel="modulepreload" href="./enemy-attacks.js" />
+    <link rel="modulepreload" href="./threat-indicators.js" />
+    <link rel="modulepreload" href="./dialog-focus.js" />
+    <link rel="modulepreload" href="./feel.js" />
+    <link rel="modulepreload" href="./weapon-burst.js" />
+    <link rel="modulepreload" href="./doors.js" />
+    <link rel="modulepreload" href="./signal-check.js" />
+    <link rel="modulepreload" href="./onboarding.js" />
+    <link rel="modulepreload" href="./knowledge-ui.js" />
+    <link rel="modulepreload" href="./keybindings.js" />
+    <link rel="modulepreload" href="./util.js" />
+    <link rel="modulepreload" href="./music-core.js" />
+    <link rel="modulepreload" href="./sprites2d.js" />
+    <link rel="modulepreload" href="./textures2d.js" />
+    <link rel="modulepreload" href="./title-scene-core.js" />
+    <link rel="modulepreload" href="./easter.js" />
+    <link rel="modulepreload" href="./fx2d.js" />
+    <link rel="modulepreload" href="./lighting2d.js" />
+    <link rel="modulepreload" href="./anim.js" />
+    <link rel="modulepreload" href="./world2d.js" />
+    <link rel="modulepreload" href="./stack2d.js" />
+    <link rel="modulepreload" href="./item-stack2d.js" />
+    <link rel="modulepreload" href="./actor-stack2d.js" />
+    <link rel="modulepreload" href="./stack-warm.js" />
+    <link rel="modulepreload" href="./models2d.js" />
+    <link rel="modulepreload" href="./rig2d.js" />
+    <link rel="modulepreload" href="./heavies2d.js" />
+    <link rel="modulepreload" href="./affordances2d.js" />
+    <link rel="modulepreload" href="./boss2d.js" />
+    <link rel="modulepreload" href="./creature-glue.js" />
+    <link rel="modulepreload" href="./conductor2d.js" />
+    <link rel="modulepreload" href="./meta-overlay2d.js" />
+    <link rel="modulepreload" href="./stealth2d.js" />
+    <link rel="modulepreload" href="./doors2d.js" />
+    <link rel="modulepreload" href="./stance-glyphs2d.js" />
+    <link rel="modulepreload" href="./details2d.js" />
+    <link rel="modulepreload" href="./secrets.js" />
+    <link rel="modulepreload" href="./icons-data.js" />
+    <link rel="modulepreload" href="./floor-topology.js" />
+    <link rel="modulepreload" href="./enemy-nav.js" />
+    <link rel="modulepreload" href="./enemy-tactics.js" />
+    <link rel="modulepreload" href="./enemy-instinct.js" />
+    <link rel="modulepreload" href="./theme.js" />
+    <link rel="modulepreload" href="./floors2d.js" />
+    <link rel="modulepreload" href="./props2d.js" />
+    <link rel="modulepreload" href="./prop-stack2d.js" />
+    <link rel="modulepreload" href="./stack-bake.js" />
+    <link rel="modulepreload" href="./heavy-models2d.js" />
+    <link rel="modulepreload" href="./creatures2d.js" />
+    <link rel="modulepreload" href="./creature-models.js" />
+    <link rel="modulepreload" href="./brute-models.js" />
+    <link rel="modulepreload" href="./conductor-models.js" />
+    <link rel="modulepreload" href="./hud-safe.js" />
+    <link rel="modulepreload" href="./conductor-pose.js" />
+    <link rel="modulepreload" href="./creature-core.js" />
+    <link rel="modulepreload" href="./rusher-pose.js" />
+    <link rel="modulepreload" href="./brute-pose.js" />
+    <!-- preload:end -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" /></noscript>
   </head>
   <body>
+    <div id="boot" role="progressbar" aria-label="Loading DEAD AIR" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="boot-card">
+        <div class="boot-eyebrow">STATION 0 · TUNING IN</div>
+        <div class="boot-title" aria-hidden="true">DEAD<br /><em>AIR</em></div>
+        <div class="boot-bars" aria-hidden="true"><i style="--bar:#c0c0c0"></i><i style="--bar:#c0c000"></i><i style="--bar:#00c0c0"></i><i style="--bar:#00c000"></i><i style="--bar:#c000c0"></i><i style="--bar:#c00000"></i><i style="--bar:#0000c0"></i></div>
+        <div class="boot-meter" aria-hidden="true"><b></b></div>
+        <div class="boot-line" role="status" aria-live="polite"><span class="boot-label">TUNING IN</span><span class="boot-pct">0%</span></div>
+        <div class="boot-err"><b>SIGNAL LOST</b><p></p><button type="button" onclick="location.reload()">RETRY</button></div>
+      </div>
+    </div>
     <main id="game-shell">
       <div id="game"></div>
       <div id="vignette"></div>
@@ -186,15 +391,6 @@
 
     <script type="module" src="./title-intro.js"></script>
     <script type="module" src="./title-scene.js"></script>
-<script type="module">
-      import('./game.js?v=2026-10-06').catch(error=>{
-        console.error(error);
-        const button=document.querySelector('#start-button');
-        button.disabled=true;
-        button.textContent='GAME COULD NOT LOAD';
-        document.querySelector('#overlay').classList.add('show');
-        document.querySelector('.title-card .tagline').textContent='The game could not load. Start a local web server and check that the three game libraries are reachable.';
-      });
-    </script>
+<!-- game.js itself is imported by the inline boot controller in <head> (so the loader can report its progress) -->
   </body>
 </html>

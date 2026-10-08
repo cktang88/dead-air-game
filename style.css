@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+/* Web fonts are loaded by <link>s in index.html (an @import here would chain the CSS fetch behind a second round trip). */
 
 /* ============================================================================================
    DEAD AIR design system
