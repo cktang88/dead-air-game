@@ -966,7 +966,14 @@ export function createRenderer(container, state) {
   function drawSniperLaser(e) {
     const total = e.vis?.aimMax || 1.6, p = clamp(1 - e.aimTimer / total, 0, 1), locked = !!e.locked;
     const dx = e.aim.x, dy = e.aim.y, gun = ENEMY_GUNS.sniper, m = isHeavy(e) ? heavyMuzzle(e) : gunMuzzle(gun);
-    const sx = e.x + dx * m, sy = e.y + dy * m - muzzleLift(e), len = rayWall(e.x, e.y, dx, dy, e.def.range), ex = e.x + dx * len, ey = e.y + dy * len;
+    let len = rayWall(e.x, e.y, dx, dy, e.def.range);
+    // the beam stops on the first body in the lane (you, or the ally it would hit) instead of painting the whole room
+    for (const t of [state.player, ...state.enemies]) {
+      if (!t || t === e || (t.alive === false)) continue;
+      const along = (t.x - e.x) * dx + (t.y - e.y) * dy; if (along <= m || along >= len) continue;
+      const off = Math.abs((t.y - e.y) * dx - (t.x - e.x) * dy); if (off < (t.radius || 11) + 3) len = along;
+    }
+    const sx = e.x + dx * m, sy = e.y + dy * m - muzzleLift(e), ex = e.x + dx * len, ey = e.y + dy * len;
     const flick = locked ? 1 : 0.55 + 0.45 * Math.sin(vis.time * 22);
     ctx.lineCap = 'round';
     ctx.globalCompositeOperation = 'lighter';
