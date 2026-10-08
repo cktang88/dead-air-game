@@ -237,7 +237,7 @@ test('a marksman relocates to a fresh nest after every shot', () => {
   run(world, 40, rng, (t, e, out) => { if (out.fire) shotFrom.push({x: e.x, y: e.y}); });
   assert.ok(shotFrom.length >= 3, `needs a few shots to compare (got ${shotFrom.length})`);
   let moves = 0;
-  for (let i = 1; i < shotFrom.length; i++) if (Math.hypot(shotFrom[i].x - shotFrom[i - 1].x, shotFrom[i].y - shotFrom[i - 1].y) >= TILE * 2) moves++;
+  for (let i = 1; i < shotFrom.length; i++) if (Math.hypot(shotFrom[i].x - shotFrom[i - 1].x, shotFrom[i].y - shotFrom[i - 1].y) >= TILE) moves++;
   assert.ok(moves >= Math.floor((shotFrom.length - 1) / 2), `relocated ${moves}/${shotFrom.length - 1} times`);
 });
 

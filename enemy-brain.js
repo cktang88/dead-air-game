@@ -44,7 +44,7 @@ export const PROFILES = {
   chaser: {dodge: 0.55, react: [0.02, 0.05], alertRadius: 280},
   gunner: {dodge: 0.5, react: [0.02, 0.05], windup: 0.18, fireGap: [0.3, 0.65], duck: [0.6, 1.3], burst: [1, 3], aimMul: 1, alertRadius: 320},
   guard: {dodge: 0.3, react: [0.03, 0.06], windup: 0.22, fireGap: [0.55, 1.0], duck: [0.9, 1.8], burst: [1, 1], aimMul: 0.85, alertRadius: 320},
-  sniper: {dodge: 0.35, react: [0.1, 0.2], windup: 1.3, lockTime: 0.4, trackRate: 1.5, fireGap: [2.4, 3.6], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 360},
+  sniper: {dodge: 0.35, react: [0.1, 0.2], windup: 0.7, lockTime: 0.2, trackRate: 2.2, fireGap: [2.8, 4.0], duck: [1.4, 2.6], burst: [1, 1], aimMul: 0.5, alertRadius: 360},
   riot: {dodge: 0.02, react: [0.03, 0.06], alertRadius: 280},
   brute: {dodge: 0.08, react: [0.03, 0.06], alertRadius: 260, chargeWindup: 0.3, chargeTime: 0.7, chargeSpeed: 2.8, chargeCooldown: [1.4, 2.4], recover: 0.9},
 };
@@ -950,11 +950,15 @@ export function stepEnemyBrain(e, world, dtIn, rng = Math.random) {
     }
     out.faceOverride = ai.aim;
     const lostSight = !ai.sees;
-    if (ai.windup <= 0 || (lostSight && (ai.lost > 0.3))) {
+    // a marksman's lock is a commitment: once locked it fires down the frozen lane even if you broke sight (the round hits the
+    // cover you ducked behind), so a laser on screen always ends in a shot
+    const committed = def.brain === 'sniper' && ai.windup <= prof.lockTime + dt;
+    if (ai.windup <= 0 || (lostSight && !committed && (ai.lost > 0.3))) {
       const finishing = ai.windup <= 0;
       ai.windup = 0;
-      const ok = finishing && ai.sees && d >= (def.minRange ?? 0) && d < def.range && !(world.fireAllowed && !world.fireAllowed(e)) &&
-        e.reloadTimer <= 0 && shotClear(c, ai.aim, Math.min(def.range, d));
+      const ok = finishing && (committed ? e.reloadTimer <= 0 && !(world.fireAllowed && !world.fireAllowed(e)) :
+        ai.sees && d >= (def.minRange ?? 0) && d < def.range && !(world.fireAllowed && !world.fireAllowed(e)) &&
+        e.reloadTimer <= 0 && shotClear(c, ai.aim, Math.min(def.range, d)));
       if (ok) {
         out.fire = true; ai.sinceFire = 0; ai.shotsLeft--;
         ai.cd = between(rng, ...prof.fireGap);

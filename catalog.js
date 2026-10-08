@@ -78,7 +78,7 @@ export const ENEMY_TYPES = {
   chaser:{name:'RUSHER', color:0xe95563, hp:30, speed:110, damage:1, range:26, brain:'rush', melee:{windup:.24, lunge:true}},
   gunner:{name:'GUNNER', color:0xe9a45a, hp:40, speed:40, damage:1, minRange:105, range:300, projectileSpeed:215, brain:'shoot'},
   brute:{name:'BRUTE', color:0xa17ae7, hp:100, speed:52, damage:2, range:25, brain:'rush', melee:{windup:.3}},
-  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:30, speed:24, damage:2, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
+  sniper:{name:'MARKSMAN', color:0x6fe0d2, hp:30, speed:24, damage:3, minRange:150, range:520, sightRange:560, projectileSpeed:340, brain:'sniper', longSight:true},
   riot:{name:'RIOT', color:0x8aa0b4, hp:70, speed:50, damage:1, range:26, brain:'rush', melee:{windup:.26, lunge:true}, shield:true, shieldHalfArc:1.15},
   boss:{name:'THE CONDUCTOR', color:0x8a2f7a, hp:700, speed:38, damage:2, range:30, brain:'boss', hitRadius:22},
   guard:{name:'WARDEN', color:0x58aeca, hp:60, speed:28, damage:1, minRange:88, range:210, projectileSpeed:220, brain:'guard'},
