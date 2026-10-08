@@ -173,8 +173,8 @@ export function rusherPose(kit, inp, out) {
 }
 
 function legBones(out, kit, hx, hy, hz, k, fl) {
-  pieceChain(out, kit.femur, hx, hy, hz, k.x, k.y, k.z, 3, fl);
-  pieceChain(out, kit.tibia, k.x, k.y, k.z, k.fx, k.fy, k.fz, 4, fl, kit.tip);
+  pieceChain(out, kit.femur, hx, hy, hz, k.x, k.y, k.z, 2, fl);
+  pieceChain(out, kit.tibia, k.x, k.y, k.z, k.fx, k.fy, k.fz, 3, fl, kit.tip);
   const kn = add(out, kit.knob, k.x, k.y, k.z - 0.7, 0, fl); kn.key = k.y + k.z * 0.03 + 0.02;
 }
 

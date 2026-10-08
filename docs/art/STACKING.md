@@ -186,3 +186,10 @@ Same tilt, light and ink as the actors. `?props=0` (or `STACK_CONFIG.props = fal
 
 How the baked tiles stay seamless: each prop is built in a grid with a 3-cell margin that holds the neighbour's continuation, composited with the engine's edge light and outline, then cropped exactly on the tile edge on every side that joins a neighbour. Tall props lift into the chunk above, so `world2d.paintStackedCover` also blits tiles from the rows below a chunk. Collision footprints are untouched (everything stays inside its tile; desks 2x1, beds 1x2).
 Screenshots: `world-stack-rooms.png` (before / after, 6 room types), `world-stack-pickups.png`, `world-stack-crate-break.png`, `world-stack-prop-sheet.png`, `world-stack-item-sheet.png`.
+
+## Occlusion and muzzle height
+
+* Tall cover is baked into the chunks (under every actor). `world2d.occludeBegin/occludeEnd` (called around the living actors in `render2d`) snapshot the lit pixels of
+  any cover tile an actor stands behind (feet north of the tile's base line), masked by the prop's silhouette, and paste them back over the actors at alpha 0.66, so the
+  actor ghosts through. Cost: a few small canvas copies only while someone is behind cover. Wall south lips are not handled.
+* Bullets, tracers, muzzle flashes, aim guide and telegraph lines are drawn lifted by `rig.muzzleDz * STACK_TILT` (about 3 px for shouldered guns); simulation positions are unchanged.

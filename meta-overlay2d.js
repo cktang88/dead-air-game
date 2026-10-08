@@ -48,7 +48,9 @@ export function drawMetaWorld(ctx, state, now, tile = 32) {
   // Plates keep out from under the DOM HUD and out of each other's way (a nudged plate used to land its icon on a neighbour's label).
   // Markers the HUD does not touch are placed first; the rest then treat those placed plates as extra obstacles.
   const sc = tf && cssW ? tf.a / k : 0, toScreenPt = (x, y) => [(tf.a * x + tf.c * y + tf.e) / k, (tf.b * x + tf.d * y + tf.f) / k];
-  const items = (state.doorMarkers || []).map(m => {
+  // a freq reward marker sitting on its own radio pickup is a duplicate: the pickup model is the marker
+  const dupFreq = (m) => (m.reward === 'freq' || m.info?.glyph === 'wave') && state.pickups.some(pk => pk.kind === 'freq' && pk.available && Math.hypot(pk.x - m.x * tile, pk.y - m.y * tile) < 48);
+  const items = (state.doorMarkers || []).filter(m => !dupFreq(m)).map(m => {
     const info = m.info || REWARDS[m.reward];
     let x = m.x * tile, y = m.y * tile - 6;
     const halfW = Math.max(16, (info.label || '').length * 3.4) * sc + 6;
@@ -70,8 +72,7 @@ export function drawMetaWorld(ctx, state, now, tile = 32) {
     const info = REWARDS.freq, bob = Math.sin(t * 3 + pk.x) * 2.4;
     ctx.save(); ctx.translate(pk.x, pk.y + bob);
     for (let i = 0; i < 3; i++) { const r = 10 + ((t * 18 + i * 9) % 27); ctx.globalAlpha = Math.max(0, 0.6 - r / 45); ctx.strokeStyle = pk.elite ? REWARDS.elite.color : info.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke(); }
-    ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(14,10,22,.9)'; ctx.strokeStyle = pk.elite ? REWARDS.elite.color : info.color; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(0, 0, 11, 0, TAU); ctx.fill(); ctx.stroke(); glyph(ctx, pk.elite ? 'skull' : 'wave', 7, pk.elite ? REWARDS.elite.color : info.color);
+    ctx.globalAlpha = 1;   // the radio pickup model is the marker; the old disc + glyph hid it
     ctx.restore();
   }
 }
