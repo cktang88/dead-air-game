@@ -12,7 +12,7 @@ import {SUSPICION, visionFor} from './stealth.js';
 const TAU = Math.PI * 2;
 const TILE = 32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const RING_LIFE = 0.32, STEP_LIFE = 0.45, ALERT_LIFE = 0.8;
+const RING_LIFE = 0.28, STEP_LIFE = 0.45, ALERT_LIFE = 0.8;
 
 const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 function mixHex(a, b, t) {
@@ -137,8 +137,8 @@ export function createStealthLayer() {
       if (r.skip) continue;
       const col = r.kind === 'kick' ? COLORS.sprint : r.kind === 'suppressed' || r.kind === 'door' ? COLORS.slow : COLORS.ammo;
       ctx.beginPath(); ctx.arc(r.x, r.y, r.R * k, 0, TAU);
-      ctx.strokeStyle = 'rgba(10,8,16,' + 0.25 * fade + ')'; ctx.lineWidth = 2.4; ctx.stroke();
-      ctx.strokeStyle = withAlpha(col, 0.6 * fade); ctx.lineWidth = 1.1; ctx.stroke();
+      // faint, brief pulse (the ring is a hint, not a HUD line): quick fade, no dark underlay, and a long reach fades out sooner
+      const f2 = fade * fade; ctx.strokeStyle = withAlpha(col, 0.14 * f2); ctx.lineWidth = 1; ctx.stroke();
     }
   }
 

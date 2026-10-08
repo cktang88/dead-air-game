@@ -56,10 +56,23 @@ export function createAffordances() {
     let cx = sp.x, top = sp.y - 44 - h * scaleIn - (1 - scaleIn) * 8;
     const sh = clearShift({x0: cx - w / 2 - 6, x1: cx + w / 2 + 6, y0: top - 4, y1: top + h + 12}, hudSafeRects(4), cam.w, cam.h, 160);
     if (sh && (sh.dx || sh.dy)) { cx += sh.dx; top += sh.dy; }
+    top = yieldToBanner(cx, top, w, h, cam);
     ctx.save(); ctx.globalAlpha = a; ctx.translate(cx, top + h / 2); ctx.scale((0.85 + 0.15 * scaleIn) * k, (0.85 + 0.15 * scaleIn) * k); ctx.translate(-TRAY_W / 2, -trayHeight(target) / 2);
     drawTray(ctx, target, 0, 0, {accent: target.color, ok, key: parts_key(target, key), t, drawKey: (label, x, y) => keycap(ctx, label, x, y, 15, ok, 0.5 + 0.5 * Math.sin(t * 6))});
     ctx.restore();
   }
+  // The room-entry banner (DOM) always wins the centre: when the tray would overlap it, slide the tray below it, or above if no room.
+  function yieldToBanner(cx, top, w, h, cam) {
+    try {
+      const el = typeof document !== 'undefined' && document.querySelector('#room-banner.show');
+      if (!el) return top;
+      const b = el.getBoundingClientRect(), cv = ctx_canvasRect(), bx0 = b.left - cv.left, bx1 = b.right - cv.left, by0 = b.top - cv.top, by1 = b.bottom - cv.top;
+      if (cx + w / 2 < bx0 - 6 || cx - w / 2 > bx1 + 6 || top + h < by0 - 6 || top > by1 + 6) return top;
+      const below = by1 + 10;
+      return below + h <= cam.h - 8 ? below : Math.max(8, by0 - 10 - h);
+    } catch { return top; }
+  }
+  const ctx_canvasRect = () => { const c = document.querySelector('canvas'); return c ? c.getBoundingClientRect() : {left: 0, top: 0}; };
   const parts_key = (target, key) => (target.keyed ? key : '');
   function drawPrompt(ctx, target, sp, key, a, scaleIn, cam) {
     if (hasTray(target)) return drawTrayPrompt(ctx, target, sp, key, a, scaleIn, cam);
@@ -123,7 +136,7 @@ export function createAffordances() {
     const dx = to.x - from.x, dy = to.y - from.y, ang = Math.atan2(dy, dx);
     const M = 30;   // marker radius + breathing room: the arrow hugs the real viewport edge
     const hx = cam.w / 2 - M, hy = cam.h / 2 - M, k = Math.min(Math.abs(hx / (Math.cos(ang) || 1e-6)), Math.abs(hy / (Math.sin(ang) || 1e-6)));
-    const lw = textW(ctx, label, 13) + 30;
+    const lw = textW(ctx, label, 12, MONO, 700) + 30;
     const boxFor = (x, y) => (x > cam.w / 2 ? {x0: x - 17 - lw, x1: x + 17, y0: y - 18, y1: y + 18} : {x0: x - 17, x1: x + 17 + lw, y0: y - 18, y1: y + 18});
     const {x: ax, y: ay} = placeEdgeArrow({x: cam.w / 2 + Math.cos(ang) * k, y: cam.h / 2 + Math.sin(ang) * k}, cam.w, cam.h, M, boxFor, hudSafeRects());
     const pulse = 0.5 + 0.5 * Math.sin(t * 4);
@@ -132,7 +145,7 @@ export function createAffordances() {
     ctx.fillStyle = PANEL; ctx.beginPath(); ctx.arc(0, 0, 17, 0, TAU); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.rotate(ang); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(9 + pulse * 2, 0); ctx.lineTo(-4, -7); ctx.lineTo(-1, 0); ctx.lineTo(-4, 7); ctx.closePath(); ctx.fill(); ctx.rotate(-ang);
     const right = ax > cam.w / 2;
-    outlinedText(ctx, label, right ? -25 : 25, 0, color, 13, right ? 'right' : 'left');
+    outlinedText(ctx, label, right ? -25 : 25, 0, color, 12, right ? 'right' : 'left', MONO, 700);
     ctx.restore();
   }
 
