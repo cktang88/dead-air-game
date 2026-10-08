@@ -26,3 +26,21 @@ test('build-site copies every preloaded file (plain *.js at the root)', () => {
   assert.ok(sh.includes('for f in *.js'));
   for (const f of importGraph().local) assert.ok(!f.includes('/'), f);
 });
+
+test('build-site ships every stylesheet index.html links', async () => {
+  const {execFileSync} = await import('node:child_process');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const sheets = [...html.matchAll(/href="\.\/([^"?]+\.css)/g)].map((m) => m[1]);
+  assert.ok(sheets.length > 0);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'site-root-'));
+  for (const s of sheets) fs.copyFileSync(new URL('./' + s, import.meta.url), path.join(root, s));
+  for (const f of ['index.html', 'CREDITS.md']) fs.copyFileSync(new URL('./' + f, import.meta.url), path.join(root, f));
+  fs.mkdirSync(path.join(root, 'assets'));
+  fs.writeFileSync(path.join(root, 'game.js'), '');
+  fs.mkdirSync(path.join(root, 'scripts'));
+  fs.copyFileSync(new URL('./scripts/build-site.sh', import.meta.url), path.join(root, 'scripts/build-site.sh'));
+  execFileSync('sh', ['scripts/build-site.sh'], {cwd: root});
+  for (const s of sheets) assert.ok(fs.existsSync(path.join(root, 'dist', s)), s);
+  fs.rmSync(root, {recursive: true, force: true});
+});

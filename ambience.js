@@ -212,7 +212,7 @@ export function ambienceSync(state,dt=1/60){
   if(A.lastRoom!==null&&state.currentRoom!==A.lastRoom&&playing)ambienceStatic();
   A.lastRoom=state.currentRoom;
   if(!playing){numberStation(false,[]);return;}
-  numberStation(!!state.numberRooms?.has(state.currentRoom),state.numberDigits||(state.numberDigits=Array.from({length:9},(_,i)=>(i*7+(state.seed|0)+state.floor*3)%10)));
+  numberStation(!!state.numberRooms?.has(state.currentRoom),numberDigitsFor(state));
   A.machine-=dt;
   if(A.machine<=0){const ev=nextMachineryEvent(A.rng);A.machine=ev.delay;machinery(ev.type);}
   const p=state.player;if(!p)return;
@@ -233,4 +233,11 @@ export function ambienceSync(state,dt=1/60){
     }
     A.cool.set(e.id,cd);
   }
+}
+
+let digitsKey='',digitsVal=null;
+function numberDigitsFor(state){
+  const key=`${state.seed|0}:${state.floor}`;
+  if(key!==digitsKey){digitsKey=key;digitsVal=Array.from({length:9},(_,i)=>(i*7+(state.seed|0)+state.floor*3)%10);}
+  return digitsVal;
 }
