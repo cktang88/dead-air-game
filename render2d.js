@@ -9,7 +9,7 @@ import {angDiff, cameraZoom, clamp, damp, dampAngle, pulse as hump, inCubic, inO
 import {ACTOR_LOOK, INK, TAU, actorSprite, corpseSprite, crateSprite, drawBlobShadow, drawBoxShadow, drawGun, drawHand, drawMagSprite, glowSprite, gunMuzzle, hexStr, makeCanvas, mix, pillarSprite, puffSprite, rgba, seeded, setSpriteScale, shade, tint} from './sprites2d.js';
 import {WorldLayer} from './world2d.js';
 import {floorLook} from './floor-palette.js';
-import {beginStackFrame, STACK_CONFIG} from './stack2d.js';
+import {beginStackFrame, STACK_CONFIG, stackStats} from './stack2d.js';
 import {drawCrates as drawCrateStacks, drawDebris, stepDebris, drawPickupStack, drawPanel, drawPost, drawExitMast} from './item-stack2d.js';
 import {isStacked, feetDrop, RIG, floorStackVariant} from './actor-stack2d.js';
 import {warmEnemy, pumpWarm} from './stack-warm.js';
@@ -135,7 +135,9 @@ export function createRenderer(container, state) {
     vignetteKey = '';
   }
 
-  function setLevel() {
+  let deferred = null;
+  // opts.defer: skip the synchronous chunk bake; take view.prewarmSteps() afterwards (loading screen shows chunk counts)
+  function setLevel(opts) {
     const look = state.signal?.active ? null : floorLook(state.floor);
     world.setLevel({tileMap: state.tileMap, rooms: state.rooms, doors: state.doors, seed: state.seed, look});
     lighting.setLevel({tileMap: state.tileMap, rooms: state.rooms, look});
@@ -149,7 +151,7 @@ export function createRenderer(container, state) {
     if (p) {
       cam.x = p.x; cam.y = p.y;
       // bake what the player can see now so the first frame is complete
-      world.prewarm(p.x, p.y, 1);
+      if (opts && opts.defer) deferred = [p.x, p.y]; else world.prewarm(p.x, p.y, 1);
     }
   }
 
@@ -739,6 +741,12 @@ export function createRenderer(container, state) {
     const v = e.vis ??= {}; v.warm = 1;
     warmEnemy(e.type, !!e.elite, e.type === 'boss' ? null : floorStackVariant(state.floor, e.type === 'chaser' || e.type === 'brute' ? 0.06 : 0.1), ENEMY_GUNS[e.type]);
   }
+  // loading screen hooks: queue this level's kits now, pump the queue with a bigger budget, and report the worker's backlog
+  function warmLevel() {
+    if (!vis.warmP) { vis.warmP = 1; warmEnemy('player', false, null, null); }
+    for (const e of state.enemies) if (e.alive && !(e.vis && e.vis.warm)) warmFor(e);
+  }
+  const warmPump = (ms) => pumpWarm(ms), bakePending = () => stackStats.pending;
   function drawEnemy(e, now) {
     if (e.type === 'boss') { drawBoss(ctx, e, now); return; }
     const v = e.vis ??= {}, kind = kindOf(e), spr = actorSprite(kind), look = ACTOR_LOOK[kind];
@@ -1375,7 +1383,9 @@ export function createRenderer(container, state) {
 
   resize();
   window.addEventListener('resize', resize);
-  return {canvas, fx, timeFx, world, lighting, stats, vis, resize, setLevel, screenToWorld, update, render, shot, consume, hurtFlash, cam};
+  function prewarmSteps() { const d = deferred; deferred = null; return d ? world.prewarmSteps(d[0], d[1], 1) : (function* () {})(); }
+
+  return {canvas, fx, timeFx, world, lighting, stats, vis, resize, setLevel, prewarmSteps, warmLevel, warmPump, bakePending, screenToWorld, update, render, shot, consume, hurtFlash, cam};
 }
 
 function hexPath(ctx, r) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }

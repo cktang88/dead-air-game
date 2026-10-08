@@ -163,14 +163,19 @@ export class WorldLayer {
   bake(chunk) { while (!chunk.baked) this.bakeStep(chunk); }
 
   // Level start: bake the chunks around (x,y) synchronously (behind the title / loading screen) so the first frames don't hitch.
-  prewarm(x, y, radius = 1) {
+  prewarm(x, y, radius = 1) { for (const _ of this.prewarmSteps(x, y, radius)); }
+
+  // Same bake, one chunk per step: yields {done, total} so a loading screen can show real progress between chunks.
+  *prewarmSteps(x, y, radius = 1) {
     const L = this.level;
     if (!L) return;
-    const cx = Math.floor(x / CW), cy = Math.floor(y / CW);
+    const cx = Math.floor(x / CW), cy = Math.floor(y / CW), todo = [];
     for (let j = cy - radius; j <= cy + radius; j++) for (let i = cx - radius; i <= cx + radius; i++) {
       const chunk = this.chunkAt(i, j);
-      if (chunk && this.chunkHasContent(i, j)) this.bake(chunk);
+      if (chunk && this.chunkHasContent(i, j)) todo.push(chunk);
     }
+    yield {done: 0, total: todo.length};
+    for (let k = 0; k < todo.length; k++) { this.bake(todo[k]); yield {done: k + 1, total: todo.length}; }
   }
 
   // Spend up to budgetMs baking chunk steps: first the neighbourhood around the player's look-ahead point
