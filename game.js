@@ -25,6 +25,8 @@ import {spawnBoss, updateBossEnemy, bossDamageFor, bossLights, bossCamShift} fro
 import {BOSS_ROOM_NAME} from './boss.js';
 import {BOSS,BOSS_BULLET_FLOOR} from './boss.js';
 import {decisionHtml, freqOfferHtml, buildStripHtml, bossBarHtml, metaPanelHtml, kitChipHtml, storyHtml} from './meta-ui.js';
+import {mountTuner} from './tuner-ui.js';
+import {mountPanel, pullLever} from './panel-ui.js';
 import {clearSavedProgress, readSavedProgress, writeSavedProgress} from './progress-storage.js';
 import {consumeThrowable, isWithinThrowableRadius, THROWABLES, throwableAffectsTarget, throwableById} from './tactical.js';
 import {shapeDungeon} from './layout.js';
@@ -660,15 +662,17 @@ function supplyContext(){return {scrap:state.scrap,ammoNeed:state.weaponSlots.so
 function renderSupply(){
   const pickup=state.supplyPickup;if(!pickup?.offers)return;
   const ctx=supplyContext(),hand=GUNS[state.weaponIndex],full=state.weaponSlots.length>=maxWeaponSlots();
-  $('supply-options').innerHTML=pickup.offers.map((offer,i)=>{
+  const lid=pickup._opened?'':'<div class="lid" aria-hidden="true"><b>SUPPLY</b><i></i></div>';pickup._opened=true;
+  $('supply-options').innerHTML=`<div class="crate">${lid}<div class="foam">`+pickup.offers.map((offer,i)=>{
     const status=offerStatus(offer,ctx),card=offerCard(offer,{activeGun:hand,activeModId:ctx.activeModId,handGun:full?hand:null});
-    const icon=offer.kind==='gun'?gunIcon(GUNS[offer.gunIndex],'gun-ico md'):strokeIcon(card.icon,'ico big');
-    return `<div class="merchant-row cache-row ${offer.kind} ${status.ok?'':'poor'} ${offer.sold?'sold':''}" data-kind="${offer.kind}"><div class="mr-icon">${icon}</div><span><strong>${keycap(String(i+1))} ${card.title}</strong><small>${card.text}</small>${status.ok?'':`<span class="why">${status.reason}</span>`}</span><button data-supply="${i}" ${status.ok?'':'disabled'}>${offer.sold?'BOUGHT':costHtml(offer.cost||0)}</button></div>`;
-  }).join('')+supplyFooterHtml(pickup,ctx);
+    const icon=offer.kind==='gun'?gunIcon(GUNS[offer.gunIndex],'gun-ico lg'):strokeIcon(card.icon,'ico big');
+    const tag=offer.sold?'<span class="pricetag sold"><i></i><b>SOLD</b></span>':`<span class="pricetag"><i></i><b>${costHtml(offer.cost||0)}</b></span>`;
+    return `<button type="button" class="cut cache-row ${offer.kind} ${status.ok?'':'poor'} ${offer.sold?'sold':''}" data-kind="${offer.kind}" data-supply="${i}" ${status.ok?'':'disabled'} aria-label="${card.title}${offer.sold?', sold':`, ${offer.cost||0} scrap`}"><span class="cut-art">${icon}</span><span class="cut-label"><kbd class="pushkey">${i+1}</kbd><strong>${card.title}</strong><small>${card.text}</small>${status.ok?'':`<span class="why">${status.reason}</span>`}</span>${tag}</button>`;
+  }).join('')+'</div></div>'+supplyFooterHtml(pickup,ctx);
 }
 function supplyFooterHtml(pickup,ctx){
   const cost=reshuffleCost(pickup.rerolls||0),arms=pickup.offers.find(o=>o.slot==='arms'),can=arms&&!arms.sold&&ctx.scrap>=cost;
-  return `<div class="supply-foot"><span class="supply-purse">${costHtml(Math.floor(ctx.scrap))} <small>YOU HAVE</small></span>${arms&&!arms.sold?`<button type="button" class="supply-reshuffle" data-supply-reshuffle ${can?'':'disabled'}>${keycap('R')} RESHUFFLE ARMS ${costHtml(cost)}</button>`:''}</div>`;
+  return `<div class="supply-foot"><span class="supply-purse"><small>SCRAP</small><span class="nixie-win">${String(Math.floor(ctx.scrap)).padStart(3,'0')}</span></span>${arms&&!arms.sold?`<button type="button" class="supply-reshuffle" data-supply-reshuffle ${can?'':'disabled'}>${keycap('R')} RESHUFFLE ARMS ${costHtml(cost)}</button>`:''}</div>`;
 }
 function reshuffleSupply(){
   const pickup=state.supplyPickup;if(!pickup?.offers)return;
@@ -872,13 +876,15 @@ function roomClearTracking(room){
 }
 
 /* ---------- run modal (decision + frequency pick) */
-let runModalClear=0;
+let runModalClear=0,tunerH=null,runModalBusy=false;
 function setRunModal(kind,html){
-  state.runModal=kind;input.keys.clear();input.firing=false;
-  const el=$('run-modal');clearTimeout(runModalClear);el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');el.querySelector('button')?.focus();
+  state.runModal=kind;input.keys.clear();input.firing=false;runModalBusy=false;tunerH?.dispose();tunerH=null;
+  const el=$('run-modal');clearTimeout(runModalClear);el.classList.remove('committing');el.innerHTML=html;el.hidden=false;el.setAttribute('aria-hidden','false');
+  if(kind==='freq')tunerH=mountTuner(el);else mountPanel(el);
+  el.querySelector('button')?.focus();
 }
 function closeRunModal(){
-  state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
+  tunerH?.dispose();tunerH=null;state.runModal=null;const el=$('run-modal');el.hidden=true;el.setAttribute('aria-hidden','true');runModalClear=setTimeout(()=>{if(el.hidden)el.innerHTML='';},320);dialogClosedAt=performance.now();view?.canvas.focus();
 }
 const runCoinMult=()=>runStats().coinMult*(1+interferenceStats(state.progress).coinBonus);
 function reachExit(){
@@ -890,6 +896,16 @@ function reachExit(){
   setRunModal('decision',decisionHtml({floor:state.floor,gross,kept:gross+scrapToCoins(state.scrap),scrap:state.scrap,scrapCoins:scrapToCoins(state.scrap),cashRate:SCRAP.cashRate,deathKeep:st.deathKeep,nextClear:COIN_RATES.floorBonus[state.floor+1]||0,hp:state.health,maxHp:state.maxHealth,build:buildSummaryForUi(),interference:interferenceStats(state.progress).coinBonus}));
 }
 function buildSummaryForUi(){return Object.entries(state.freq).filter(([,rank])=>rank>0).map(([id,rank])=>({name:upgradeById(id)?.name||id,rank}));}
+function commitDecision(choice){
+  if(state.runModal!=='decision'||runModalBusy)return;
+  runModalBusy=true;playUiClick();
+  if(!pullLever($('run-modal'),choice,()=>decide(choice))){runModalBusy=false;decide(choice);}
+}
+function commitFreq(id){
+  if(state.runModal!=='freq'||runModalBusy||!state.freqOffers.some(o=>o.id===id))return;
+  runModalBusy=true;playUiClick();
+  if(tunerH?.lock(id,()=>{runModalBusy=false;pickFreq(id);}))ambienceStatic(.35);else{runModalBusy=false;pickFreq(id);}
+}
 function decide(choice){
   if(state.runModal!=='decision')return;
   closeRunModal();
@@ -919,8 +935,8 @@ function pickFreq(id){
 }
 function runModalKey(e,key){
   if(key==='tab'){trapDialogTab(e,$('run-modal'),document.activeElement);return;}
-  if(state.runModal==='decision'){if(key==='1')decide('extract');else if(key==='2')decide('descend');}
-  else if(state.runModal==='freq'){const n=Number(key);if(n>=1&&n<=state.freqOffers.length)pickFreq(state.freqOffers[n-1].id);}
+  if(state.runModal==='decision'){if(key==='1')commitDecision('extract');else if(key==='2')commitDecision('descend');}
+  else if(state.runModal==='freq'){const n=Number(key);if(n>=1&&n<=state.freqOffers.length)commitFreq(state.freqOffers[n-1].id);}
 }
 function startFloor(n){void loadThen(n,()=>startFloorNow(n));}
 function startFloorNow(n){
@@ -964,7 +980,7 @@ function finishRunImpl(result,causeArg){
 function wireMacroUi(){
   $('run-modal').addEventListener('click',event=>{
     const act=event.target.closest('[data-act]'),freq=event.target.closest('[data-freq]');
-    if(act?.dataset.act==='extract')decide('extract');else if(act?.dataset.act==='descend')decide('descend');else if(freq)pickFreq(freq.dataset.freq);
+    if(act?.dataset.act==='extract')commitDecision('extract');else if(act?.dataset.act==='descend')commitDecision('descend');else if(freq)commitFreq(freq.dataset.freq);
   });
   $('meta-list').addEventListener('click',event=>{
     const up=event.target.closest('[data-upgrade]'),buy=event.target.closest('[data-buy]'),act=event.target.closest('[data-act]');
