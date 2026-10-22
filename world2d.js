@@ -1,7 +1,7 @@
 // Static world art: floor, walls, shadows and door frames baked into offscreen canvas chunks.
 // A frame only blits the visible chunks; persistent decals (blood, scorch, casings) are stamped onto the floor chunks.
 import {TILE} from './catalog.js';
-import {INK, TAU, actorSprite, corpseSprite, hash2, makeCanvas, mix, rgba, seeded, shade} from './sprites2d.js';
+import {INK, TAU, actorSprite, corpseSprite, freeCanvas, hash2, makeCanvas, mix, rgba, seeded, shade} from './sprites2d.js';
 import {blotch, carpetTile, dirtTile, grimeTile, steelPlateTile, voidTile, wallTile} from './textures2d.js';
 import {paintFloorTile} from './floors2d.js';
 import {LIGHT, coverStyle, lampPool, paintCover, paintDecor, shadowKey, COVER_HEIGHT} from './props2d.js';
@@ -10,6 +10,8 @@ import {STACK_CONFIG} from './stack2d.js';
 
 export const CHUNK_TILES = 12;
 const CW = CHUNK_TILES * TILE;
+// Baked chunk canvases are capped (least recently drawn go first); Safari caps a page's total canvas memory and draws blank past it.
+const CHUNK_BUDGET_BYTES = 96 * 1024 * 1024;
 const FLOOR = '#6a5f56';
 const WALL_LIP = 5;
 const WALL_LIP_E = 3.4;
@@ -35,6 +37,7 @@ export class WorldLayer {
     this.version = 0;
     this.bakeMs = 0;
     this.cs = 2; // chunk pixels per world unit, quantised to quarters so TILE * cs is an integer
+    this.frame = 0;
   }
 
   // Bake at (roughly) the on-screen scale so a frame blits chunks 1:1.
@@ -43,7 +46,7 @@ export class WorldLayer {
     if (cs === this.cs) return;
     if (Math.abs(cs - this.cs) / this.cs < 0.2 && this.chunks.size) return;
     this.cs = cs;
-    if (this.level) { const lv = this.level; this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.level = lv; lv.propImg = null; }
+    if (this.level) { const lv = this.level; this.clearChunks(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.level = lv; lv.propImg = null; }
   }
 
   textures() {
@@ -60,7 +63,7 @@ export class WorldLayer {
   }
 
   setLevel({tileMap, rooms, doors, seed, look = null}) {
-    this.chunks.clear(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.version++;
+    this.clearChunks(); this.queue = []; this.queueDone = false; this.pendingDecals = new Map(); this.version++;
     const h = tileMap.length, w = tileMap[0].length;
     const kind = new Uint8Array(w * h).fill(2);
     const tileRoom = new Int16Array(w * h).fill(-1);
@@ -131,7 +134,7 @@ export class WorldLayer {
       L.kind[y * w + x] = near ? 1 : 2;
     }
     void tileMap;
-    for (let cy = Math.floor((y0 - 3) / CHUNK_TILES); cy <= Math.floor((y1 + 3) / CHUNK_TILES); cy++) for (let cx = Math.floor((x0 - 3) / CHUNK_TILES); cx <= Math.floor((x1 + 3) / CHUNK_TILES); cx++) this.chunks.delete(cy * 1000 + cx);
+    for (let cy = Math.floor((y0 - 3) / CHUNK_TILES); cy <= Math.floor((y1 + 3) / CHUNK_TILES); cy++) for (let cx = Math.floor((x0 - 3) / CHUNK_TILES); cx <= Math.floor((x1 + 3) / CHUNK_TILES); cx++) this.dropChunk(cy * 1000 + cx);
     this.queue = []; this.queueDone = false; this.version++;
   }
 
@@ -142,6 +145,37 @@ export class WorldLayer {
     let chunk = this.chunks.get(key);
     if (!chunk) this.chunks.set(key, chunk = {cx, cy, floor: null, g: null, baked: false, step: 0});
     return chunk;
+  }
+
+  clearChunks() {
+    for (const chunk of this.chunks.values()) freeCanvas(chunk.floor);
+    this.chunks.clear();
+  }
+
+  // Frees a chunk's canvas; the decals already painted on it are queued again so a rebake gets them back.
+  dropChunk(key) {
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    if (chunk.log && chunk.log.length) {
+      const list = this.pendingDecals.get(key);
+      this.pendingDecals.set(key, list ? chunk.log.concat(list) : chunk.log);
+    }
+    freeCanvas(chunk.floor);
+    this.chunks.delete(key);
+  }
+
+  maxChunks() { const side = CW * this.cs; return Math.max(16, Math.floor(CHUNK_BUDGET_BYTES / (side * side * 4))); }
+
+  // Evicts the least recently drawn baked chunks past the budget (never one drawn this frame).
+  trimChunks() {
+    const max = this.maxChunks();
+    let n = 0;
+    for (const c of this.chunks.values()) if (c.floor) n++;
+    if (n <= max) return;
+    const old = [];
+    for (const [key, c] of this.chunks) if (c.floor && c.used !== this.frame) old.push([c.used || 0, key]);
+    old.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < old.length && n > max; i++, n--) this.dropChunk(old[i][1]);
   }
 
   // Cached 2D context of a chunk's floor canvas (getContext on every stamp was measurable).
@@ -155,7 +189,7 @@ export class WorldLayer {
     if (step === 0) { this.bakeFloor(chunk); chunk.step = chunk.floor ? 1 : 3; }
     else if (step === 1) { this.bakeWalls(chunk); chunk.step = 2; }
     else { this.bakeProps(chunk); chunk.step = 3; }
-    if (chunk.step >= 3) { chunk.baked = true; this.flushPending(chunk); }
+    if (chunk.step >= 3) { chunk.baked = true; chunk.used = this.frame; this.flushPending(chunk); }
     this.bakeMs += performance.now() - t0;
     return chunk.baked;
   }
@@ -201,12 +235,15 @@ export class WorldLayer {
     for (const {chunk} of pending) {
       while (!chunk.baked) { if (performance.now() >= end) return; this.bakeStep(chunk); }
     }
-    while (this.queue.length) {
+    let baked = 0;
+    for (const c of this.chunks.values()) if (c.floor) baked++;
+    const cap = this.maxChunks() * 0.75;
+    while (this.queue.length && baked < cap) {
       const {cx, cy} = this.queue[0];
       const chunk = this.chunkAt(cx, cy);
       if (!chunk || chunk.baked || !this.chunkHasContent(cx, cy)) { this.queue.shift(); continue; }
       if (performance.now() >= end) return;
-      this.bakeStep(chunk);
+      if (this.bakeStep(chunk) && chunk.floor) baked++;
     }
   }
 
@@ -556,6 +593,7 @@ export class WorldLayer {
       const x1 = Math.min(src.width, Math.ceil((h.x + h.e.w) * m.a + m.e)), y1 = Math.min(src.height, Math.ceil((h.y + h.e.h) * m.d + m.f));
       const w = x1 - x0, hh = y1 - y0;
       if (w < 1 || hh < 1) continue;
+      hits[n] = h;
       let cv = pool[n]; if (!cv) cv = pool[n] = makeCanvas(w, hh);
       if (cv.width < w) cv.width = w; if (cv.height < hh) cv.height = hh;
       const g = cv.getContext('2d');
@@ -728,6 +766,9 @@ export class WorldLayer {
     g.clip();
     for (const r of list) drawDecal(g, r.d);
     g.restore();
+    const log = chunk.log || (chunk.log = []);
+    for (const r of list) log.push(r);
+    if (log.length > 400) log.splice(0, log.length - 400);
   }
 
   // ---- drawing
@@ -735,6 +776,7 @@ export class WorldLayer {
     const L = this.level;
     if (!L) return;
     this.flushDecals();
+    this.frame++;
     const cx0 = Math.max(0, Math.floor(bounds.x0 / CW)), cx1 = Math.floor(bounds.x1 / CW), cy0 = Math.max(0, Math.floor(bounds.y0 / CW)), cy1 = Math.floor(bounds.y1 / CW);
     const s = cam.scale * dpr, ox = cam.w / 2 * dpr - cam.x * s, oy = cam.h / 2 * dpr - cam.y * s;
     ctx.save();
@@ -750,6 +792,7 @@ export class WorldLayer {
       while (!chunk.baked && performance.now() < bakeEnd) this.bakeStep(chunk);
       const img = chunk.floor;
       if (!img) { covered = false; continue; }
+      chunk.used = this.frame;
       draws.push([img, Math.round(ox + cx * CW * s), Math.round(oy + cy * CW * s), Math.round(ox + (cx + 1) * CW * s), Math.round(oy + (cy + 1) * CW * s)]);
     }
     if (!covered) { // outside the dungeon (and chunks without content): solid bedrock instead of flat black
@@ -761,6 +804,7 @@ export class WorldLayer {
     for (const [img, l, t, r, b] of draws) ctx.drawImage(img, 0, 0, img.width, img.height, l, t, r - l, b - t);
     ctx.imageSmoothingEnabled = true;
     ctx.restore();
+    this.trimChunks();
   }
 }
 

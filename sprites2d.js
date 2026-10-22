@@ -29,6 +29,8 @@ export function makeCanvas(w, h) {
   c.height = Math.max(1, Math.ceil(h));
   return c;
 }
+// Safari keeps a canvas's backing store until GC and caps total canvas memory per page; shrinking a scratch canvas frees it now.
+export function freeCanvas(c) { if (c && c.width !== undefined) { c.width = 0; c.height = 0; } }
 
 // ---------------------------------------------------------------- sprite cache
 let PX = 2;
@@ -41,7 +43,7 @@ export function setSpriteScale(pxPerUnit) {
   if (px !== PX) { PX = px; cache.clear(); }
   for (const fn of scaleListeners) fn(pxPerUnit);
 }
-function cached(key, build) { let v = cache.get(key); if (!v) cache.set(key, v = build(PX)); return v; }
+function cached(key, build) { let v = cache.get(key); if (!v) { if (cache.size > 512) cache.clear(); cache.set(key, v = build(PX)); } return v; }
 
 function paint(half, draw, extra = 0) {
   const side = (half + extra) * 2;
@@ -94,9 +96,12 @@ export function puffSprite(color = '#b9b4bd') {
 
 export const LIGHT = {x: 0.62, y: 0.78};
 
-export function blobShadow(radius) {
-  return cached('blob|' + radius, (px) => {
-    const reach = radius * 1.5;
+// The fade is proportional to the radius, so one sprite scaled per draw serves every size (a bobbing pickup or a falling grenade
+// passes a new radius each frame; caching per radius minted a canvas per frame).
+const BLOB_R = 16;
+export function blobShadow() {
+  return cached('blob', (px) => {
+    const radius = BLOB_R, reach = radius * 1.5;
     const c = makeCanvas(reach * 2 * px, reach * 2 * px), g = c.getContext('2d');
     g.scale(px, px);
     const fade = g.createRadialGradient(reach, reach, radius * 0.45, reach, reach, reach);
@@ -110,7 +115,7 @@ export function blobShadow(radius) {
 export function drawBlobShadow(ctx, x, y, radius, lift = 0, alpha = 1) {
   const reach = radius * 1.5, k = radius * (0.5 + lift * 0.04);
   ctx.globalAlpha = alpha;
-  ctx.drawImage(blobShadow(radius), x + LIGHT.x * k - reach, y + LIGHT.y * k - reach, reach * 2, reach * 2);
+  ctx.drawImage(blobShadow(), x + LIGHT.x * k - reach, y + LIGHT.y * k - reach, reach * 2, reach * 2);
   ctx.globalAlpha = 1;
 }
 

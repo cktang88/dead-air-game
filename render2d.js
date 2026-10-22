@@ -1275,7 +1275,23 @@ export function createRenderer(container, state) {
   }
 
   // ------------------------------------------------------------------ main frame
-  function render(frame = {}) {
+  // A throw mid-frame used to leave save()s, alpha and composite modes behind, so the next frames drew translucently over the
+  // last one (ghost trails) or not at all. Reset the context and carry on; each distinct error is logged once.
+  const seenErrors = new Set();
+  function render(frame) {
+    try { renderFrame(frame); } catch (err) {
+      const msg = String(err && err.stack || err);
+      if (!seenErrors.has(msg) && seenErrors.size < 20) { seenErrors.add(msg); console.error('render failed', err); }
+      if (ctx.reset) ctx.reset();
+      else {
+        for (let i = 0; i < 64; i++) ctx.restore();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.imageSmoothingEnabled = true; ctx.setLineDash([]);
+        if ('filter' in ctx) ctx.filter = 'none';
+      }
+      ctx.fillStyle = '#0d0b13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+  function renderFrame(frame = {}) {
     const t0 = performance.now();
     const dt = clamp(frame.dt ?? 1 / 60, 0, 0.1), dpr = vis.dpr, now = performance.now() / 1000;
     const w = cam.w, h = cam.h;

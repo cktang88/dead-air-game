@@ -3,7 +3,7 @@
 //
 // bakeVoxSlice(n, k, zFrac, cell, mk): one voxel layer to a canvas (n.palette must already be variant-mapped).
 // bakeComposite(mk, e, bi): all slices of an entry rotated to yaw bucket `bi`, edge-lit / edge-shaded, outlined.
-import {shade, tint, LIGHT, TAU} from './sprites2d.js';
+import {shade, tint, LIGHT, TAU, freeCanvas} from './sprites2d.js';
 
 export const INK_OUTLINE = '#120f18';
 /** Lower slices are darker: 0.72 at the floor, 1.0 at the top. */
@@ -101,13 +101,14 @@ export function bakeComposite(mk, e, bi) {
   // outline: the silhouette stamped in 8 directions behind the composite. Only the used region is touched and returned: the
   // result is cropped to the slices' union box (+ the outline), so an arm bucket is a thin sliver instead of a full 2R x 2R square.
   const o = e.o;
-  if (ux1 <= ux0 || uy1 <= uy0) return {cv: mk(1, 1), cx: 0, cy: 0};
+  if (ux1 <= ux0 || uy1 <= uy0) { freeCanvas(comp); return {cv: mk(1, 1), cx: 0, cy: 0}; }
   const rx = Math.max(0, ux0 - o - 1), ry = Math.max(0, uy0 - o - 1), rw = Math.min(W, ux1 + o + 1) - rx, rh = Math.min(H, uy1 + o + 1) - ry;
   tb.globalCompositeOperation = 'source-over'; tb.clearRect(rx, ry, rw, rh); tb.drawImage(comp, rx, ry, rw, rh, rx, ry, rw, rh);
   tb.globalCompositeOperation = 'source-in'; tb.fillStyle = INK_OUTLINE; tb.fillRect(rx, ry, rw, rh); tb.globalCompositeOperation = 'source-over';
   const out = mk(rw, rh), og = out.getContext('2d');
   for (let i = 0; i < 8; i++) { const a = i * TAU / 8; og.drawImage(tmpB, rx, ry, rw, rh, Math.round(Math.cos(a) * o), Math.round(Math.sin(a) * o), rw, rh); }
   og.drawImage(comp, rx, ry, rw, rh, 0, 0, rw, rh);
+  freeCanvas(comp);
   return {cv: out, cx: rx, cy: ry};
 }
 

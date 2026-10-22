@@ -26,7 +26,7 @@
 //
 // Drawing: drawStack(ctx, model, x, y, {yaw, z, variant, flash, sx, sy, alpha}). (x, y) is the ground point under the
 // pivot, z lifts it (world units of height). Cost per call: one drawImage (two while flashing).
-import {makeCanvas, shade, getSpriteScale, onSpriteScale, TAU} from './sprites2d.js';
+import {makeCanvas, freeCanvas, shade, getSpriteScale, onSpriteScale, TAU} from './sprites2d.js';
 import {bakeComposite, bakeVoxSlices, spreadOrder, layerShade, voxelColor, INK_OUTLINE, bucketYaw} from './stack-bake.js';
 export {layerShade, voxelColor, INK_OUTLINE, bucketYaw};
 
@@ -129,7 +129,7 @@ export function setStackScale(pxPerUnit) {
   if (lv !== PX) { PX = lv; clearStackCache(); }
 }
 export function clearStackCache() {
-  for (const e of cache.values()) { e.dead = true; for (const b of e.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } } }
+  for (const e of cache.values()) release(e);
   cache.clear(); byId.clear(); bytes = 0; stackStats.pending = 0; if (worker) worker.postMessage({t: 'clear'});
 }
 onSpriteScale(setStackScale);
@@ -280,6 +280,15 @@ function whiteOf(e, bi, img, color) {
   }
   return w;
 }
+// Drop an entry's pixels now rather than at the next GC: bitmaps close, canvases shrink to nothing.
+function release(e) {
+  e.dead = true;
+  for (const b of e.buckets) if (b) { if (b.close) { try { b.close(); } catch { /* ok */ } } else freeCanvas(b); }
+  for (const w of e.whites) freeCanvas(w);
+  if (e.slices) for (const sl of e.slices) freeCanvas(sl.cv);
+  freeCanvas(e.tmpA); freeCanvas(e.tmpB);
+  e.buckets.fill(null); e.whites.fill(null); e.slices = null; e.tmpA = e.tmpB = null;
+}
 function evict(keep) {
   const list = [...cache.values()].filter((v) => v !== keep).sort((a, b) => a.tick - b.tick);
   const dropped = [];
@@ -288,7 +297,7 @@ function evict(keep) {
     bytes -= v.size; v.dead = true; cache.delete(v.key); byId.delete(v.id); dropped.push(v.id);
     for (const p of v.pend) if (p) stackStats.pending--;
     if (v.model._ee === v) v.model._ee = null;
-    for (const b of v.buckets) if (b && b.close) { try { b.close(); } catch { /* ok */ } }
+    release(v);
   }
   if (dropped.length && worker) worker.postMessage({t: 'drop', ids: dropped});
   stackStats.entries = cache.size;

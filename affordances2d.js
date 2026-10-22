@@ -1,7 +1,7 @@
 // Screen-space affordance layer: world interaction prompts, name tags, target highlight, off-screen arrows.
 // Pure presentation; all "what can I do here" decisions come from interaction.js via state.interact.
 import {drawIcon, ENEMY_ICON} from './icons.js';
-import {hudSafeRects, placeEdgeArrow, clearShift} from './hud-safe.js';
+import {hudSafeRects, placeEdgeArrow, clearShift, canvasCssSize} from './hud-safe.js';
 import {nearestHostileRoom, promptParts} from './interaction.js';
 import {hasTray, drawTray, trayHeight, TRAY_W} from './tray2d.js';
 
@@ -114,7 +114,7 @@ export function createAffordances() {
     const label = target.kind === 'gate' ? `${target.cost} SCRAP` : target.kind === 'exit' ? (target.enabled ? 'EXTRACT' : 'EXIT · LOCKED') : target.subject;
     const size = 13, iconSz = 14, tw = textW(ctx, label, size), w = tw + iconSz + 18 + (withKey ? 25 : 0), h = 23;
     let x = sp.x - w / 2, y = sp.y - 34;
-    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), ctx.canvas.clientWidth || 1e5, ctx.canvas.clientHeight || 1e5, 100);
+    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), canvasCssSize(ctx.canvas).w || 1e5, canvasCssSize(ctx.canvas).h || 1e5, 100);
     if (sh) { x += sh.dx; y += sh.dy; } else return;
     ctx.save(); ctx.globalAlpha = alpha;
     rr(ctx, x, y, w, h, RADII.md); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = target.kind === 'exit' && !target.enabled ? BAD : target.color; ctx.lineWidth = 1; ctx.stroke();
@@ -210,7 +210,7 @@ export function createAffordances() {
     if (a <= 0.02) return;
     const label = tg.subject, size = 11, iconSz = 12, w = textW(ctx, label, size) + iconSz + 14, h = 17;
     let x = sp.x - w / 2, y = sp.y - 28;
-    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), ctx.canvas.clientWidth || 1e5, ctx.canvas.clientHeight || 1e5, 80);   // pickup tags never print under the HUD panels
+    const sh = clearShift({x0: x, x1: x + w, y0: y, y1: y + h}, hudSafeRects(4), canvasCssSize(ctx.canvas).w || 1e5, canvasCssSize(ctx.canvas).h || 1e5, 80);   // pickup tags never print under the HUD panels
     if (sh) { x += sh.dx; y += sh.dy; } else return;
     ctx.save(); ctx.globalAlpha = a;
     rr(ctx, x, y, w, h, RADII.sm); ctx.fillStyle = PANEL; ctx.fill(); ctx.strokeStyle = tg.color; ctx.lineWidth = 1; ctx.globalAlpha = a * 0.7; ctx.stroke(); ctx.globalAlpha = a;

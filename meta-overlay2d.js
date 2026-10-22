@@ -1,7 +1,7 @@
 // World-space glyphs for the roguelike layer: door reward markers (Hades-style) and the UPGRADE pickup.
 // Hooked once from render2d.js after the lighting pass, so these read clearly in the dark.
 import {REWARDS} from './door-rewards.js';
-import {hudSafeRects, clearShift, boxHits} from './hud-safe.js';
+import {hudSafeRects, clearShift, boxHits, canvasCssSize} from './hud-safe.js';
 
 const TAU = Math.PI * 2;
 const INK = '#120d1a';
@@ -46,7 +46,7 @@ function plate(ctx, x, y, info, t, label) {
 // markers: state.doorMarkers ([{x,y (tiles),reward,info}]); pickups of kind 'freq' glow in the world.
 export function drawMetaWorld(ctx, state, now, tile = 32) {
   const t = now;
-  const tf = ctx.getTransform?.(), canvas = ctx.canvas, cssW = canvas?.clientWidth || 0, cssH = canvas?.clientHeight || 0;
+  const tf = ctx.getTransform?.(), canvas = ctx.canvas, css = canvasCssSize(canvas), cssW = css.w, cssH = css.h;
   const k = tf && cssW ? canvas.width / cssW : 1, rects = tf && cssW ? hudSafeRects() : [];
   // Plates keep out from under the DOM HUD and out of each other's way (a nudged plate used to land its icon on a neighbour's label).
   // Markers the HUD does not touch are placed first; the rest then treat those placed plates as extra obstacles.

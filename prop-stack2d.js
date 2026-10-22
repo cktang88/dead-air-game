@@ -7,7 +7,7 @@
 // Collision footprints never change: every prop lives inside its tile (desks 2x1, beds 1x2). Animated parts
 // (LEDs, CRT flicker, fans, tape reels, heart monitor) are NOT baked: propLive() lists them and drawPropsLive() draws them.
 import {VoxelGrid, STACK_TILT, INK_OUTLINE, voxelColor, hexMix, hexMul, drawStack} from './stack2d.js';
-import {hash2, makeCanvas, TAU, LIGHT} from './sprites2d.js';
+import {hash2, makeCanvas, freeCanvas, TAU, LIGHT} from './sprites2d.js';
 
 export const M = 3;                       // margin cells on every side (the neighbour's continuation, cropped away on join)
 const L_X = LIGHT.x > 0.3 ? 1 : 0, L_Y = LIGHT.y > 0.3 ? 1 : 0;
@@ -477,7 +477,7 @@ export function bakeProp(built, joins, px) {
     const sc = sliceCanvas(grid, k, H > 1 ? k / (H - 1) : 1, normPal(pal), px);
     if (!sc) continue;
     const dy = Math.round(k * dz);
-    ta.clearRect(0, 0, FW, FH); ta.drawImage(sc, pad, pad + up - dy);
+    ta.clearRect(0, 0, FW, FH); ta.drawImage(sc, pad, pad + up - dy); freeCanvas(sc);
     g.drawImage(tA, 0, 0);
     tb.globalCompositeOperation = 'source-over'; tb.clearRect(0, 0, FW, FH); tb.drawImage(tA, 0, 0);
     tb.globalCompositeOperation = 'destination-out'; tb.drawImage(tA, L_X, L_Y);
@@ -499,6 +499,7 @@ export function bakeProp(built, joins, px) {
   const cy0 = Math.round(topY - (joins.n ? 1 : o + 1)), cy1 = Math.round(Ty + td * px + (joins.s ? 0 : o + 1));
   const cv = makeCanvas(cx1 - cx0, cy1 - cy0);
   cv.getContext('2d').drawImage(out, cx0, cy0, cx1 - cx0, cy1 - cy0, 0, 0, cx1 - cx0, cy1 - cy0);
+  freeCanvas(comp); freeCanvas(tA); freeCanvas(tB); freeCanvas(out);
   return {cv, dx: (cx0 - Tx) / px, dy: (cy0 - Ty) / px, w: cv.width / px, h: cv.height / px};
 }
 const palCache = new WeakMap();

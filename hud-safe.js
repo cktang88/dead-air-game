@@ -17,6 +17,17 @@ export function hudSafeRects(pad = 10, now = typeof performance !== 'undefined' 
   return cache;
 }
 
+// The canvas's CSS size, read once per resize: reading clientWidth after the frame's HUD text writes forced a layout every frame.
+let cssSize = null;
+if (typeof window !== 'undefined') window.addEventListener('resize', () => { cssSize = null; });
+export function canvasCssSize(canvas) {
+  if (!canvas || canvas.clientWidth === undefined) return {w: 0, h: 0};
+  if (cssSize && cssSize.c === canvas) return cssSize;
+  const size = {c: canvas, w: canvas.clientWidth, h: canvas.clientHeight};
+  if (size.w > 0) cssSize = size;   // a hidden canvas reads 0: measure again next time
+  return size;
+}
+
 export const boxHits = (b, rects) => rects.some(r => b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0);
 
 /** Smallest shift (dx,dy) of box `b` that clears every rect while staying inside [0,w]x[0,h]; null when none within `max` px. */
